@@ -4,5 +4,6 @@
         <file>DSH-Hub-Logo-Tiny.png</file>
         <file>DSH-Hub-Logo-Tiny@2x.png</file>
         <file>Setting-Icon.png</file>
+        <file>highlight_rules.json</file>
     </qresource>
 </RCC>

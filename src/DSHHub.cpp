@@ -322,14 +322,10 @@ DSHHub::DSHHub(QWidget *parent)
     m_initOverlay->raise();
     m_initOverlay->show();
 
-    // 初始化时一次性加载代码高亮规则
+    // 初始化时从 Qt 资源中加载代码高亮规则
     {
-        const QString appDir = QCoreApplication::applicationDirPath();
-        if (!CodeHighlighter::instance().loadFromFile(appDir + QStringLiteral("/highlight_rules.json"))
-            && !CodeHighlighter::instance().loadFromFile(appDir + QStringLiteral("/resources/highlight_rules.json"))
-            && !CodeHighlighter::instance().loadFromFile(QStringLiteral("highlight_rules.json"))
-            && !CodeHighlighter::instance().loadFromFile(QStringLiteral("resources/highlight_rules.json"))) {
-            qWarning().noquote() << QStringLiteral("[DSH Hub] 未找到 highlight_rules.json，代码高亮不可用");
+        if (!CodeHighlighter::instance().loadFromFile(QStringLiteral(":/DSHHub/highlight_rules.json"))) {
+            qWarning().noquote() << QStringLiteral("[DSH Hub] 未找到内置资源 highlight_rules.json，代码高亮不可用");
         }
     }
 
