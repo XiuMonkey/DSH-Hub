@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 200" width="560" height="200">
+  <!-- 黑色圆形底 -->
+  <circle cx="100" cy="100" r="72" fill="#111111"/>
+
+  <!-- 白色鲸鱼剪影 -->
+  <path d="M55 105
+           C55 75 95 68 125 80
+           C145 86 155 95 162 100
+           L188 78
+           L194 116
+           L166 104
+           C156 118 135 126 105 126
+           C75 126 55 120 55 105 Z"
+        fill="#FFFFFF"/>
+
+  <!-- 鲸鱼眼睛 -->
+  <circle cx="82" cy="96" r="4" fill="#111111"/>
+
+  <!-- 文字部分 -->
+  <text x="200" y="112"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="60"
+        font-weight="bold"
+        fill="#111111">
+    DSH Hub
+  </text>
+
+  <text x="202" y="150"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="20"
+        letter-spacing="1"
+        fill="#666666">
+    DeepSeek Harness Hub
+  </text>
+</svg>
