@@ -13,6 +13,8 @@ class QPushButton;
 class QNetworkAccessManager;
 class QTabWidget;
 class QVBoxLayout;
+class QProgressBar;
+class QProcess;
 
 class PluginsPopup : public PopupWindow
 {
@@ -30,12 +32,12 @@ private slots:
     void changePage(int delta);
 
 private:
+    void checkAndInstallMarketIfNeeded();
     void loadRegistry();
     void loadInstalled();
     void populateMarket();
     void populateInstalled();
     void renderMarketPage();
-    void renderInstalled();
     void sendPost(const QString &path, const QJsonObject &body);
     QWidget *createMarketCard(const QJsonObject &plugin);
     QWidget *createInstalledCard(const QString &name, const QString &version);
@@ -51,6 +53,8 @@ private:
     QWidget *m_installedContainer = nullptr;
     QVBoxLayout *m_installedCardsLayout = nullptr;
     QLabel *m_statusLabel = nullptr;
+    QProgressBar *m_progressBar = nullptr;
+    QProcess *m_installer = nullptr;
     QPushButton *m_prevButton = nullptr;
     QPushButton *m_nextButton = nullptr;
     QLabel *m_pageLabel = nullptr;

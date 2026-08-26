@@ -1,4 +1,5 @@
 #include "DSHHub.h"
+#include "Logger.h"
 #include "ThemeManager.h"
 
 #include <QFont>
@@ -8,6 +9,8 @@
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+
+    Logger::init();
 
     // 根据系统颜色模式自动切换亮色/暗色主题
     Theme::setMode(app.styleHints()->colorScheme() == Qt::ColorScheme::Dark

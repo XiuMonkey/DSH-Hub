@@ -32,7 +32,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
-#include <QLineEdit>
 #include <QPixmap>
 
 
@@ -105,6 +104,7 @@ DSHHub::DSHHub(QWidget *parent)
     : QMainWindow(parent)
     , m_api(new DshApiClient(this))
 {
+    qInfo().noquote() << QStringLiteral("[DSH Hub] constructor started");
     setWindowTitle(QStringLiteral("DSH Hub"));
 
     // 创建界面
@@ -355,6 +355,7 @@ void DSHHub::finishInitialization()
         return;
 
     m_initializationComplete = true;
+    qInfo().noquote() << QStringLiteral("[DSH Hub] initialization complete");
 
     if (m_initOverlay) {
         m_initOverlay->hide();
@@ -481,12 +482,11 @@ void DSHHub::startBundledServer()
     QString dshEntry = appDir + QStringLiteral("/resources/server/node_modules/@deepseek-ai/dsh/lib/bin.js");
     QString cwd = appDir + QStringLiteral("/resources/server/launch-root");
     QString dshHome = appDir + QStringLiteral("/resources/server/harness");
-    m_connectionSource = QStringLiteral("内置服务");
 
+    qInfo().noquote() << QStringLiteral("[DSH Hub] startBundledServer, dshHome=") << dshHome;
     m_dshHome = dshHome;
 
     if (!QFile::exists(nodePath) || !QFile::exists(entryPath) || !QFile::exists(dshEntry)) {
-        m_connectionSource = QStringLiteral("外部服务 (127.0.0.1:3080)");
         m_statusLabel->setText(QStringLiteral("未找到内置 DSH 服务端，尝试连接 3080..."));
         m_api->setBaseUrl(QUrl(QStringLiteral("http://127.0.0.1:3080")));
 
@@ -497,12 +497,168 @@ void DSHHub::startBundledServer()
     QDir().mkpath(cwd);
     QDir().mkpath(dshHome);
 
+    // 如果 profile 里引用的插件包不存在（例如插件市场被删除），自动从 bundles 中移除，
+    // 避免 DSH 因为缺少可选插件而无法启动。
+    {
+        const QString profileDir = dshHome + QStringLiteral("/profiles/web");
+        const QString manifestPath = profileDir + QStringLiteral("/package.json");
+
+        if (!QFile::exists(manifestPath)) {
+            // profile 不存在时，先创建最小可启动配置，避免 dsh 自动重建出 dsh-web-app
+            QDir().mkpath(profileDir);
+
+            QJsonObject root;
+            root.insert(QStringLiteral("name"), QStringLiteral("dsh-profile-web"));
+            root.insert(QStringLiteral("private"), true);
+            root.insert(QStringLiteral("dependencies"), QJsonObject());
+
+            QJsonArray bundles;
+            bundles.append(QStringLiteral("@deepseek-ai/dsh-base"));
+
+            const QString marketPkg = profileDir + QStringLiteral("/node_modules/dshmarket/package.json");
+            if (QFile::exists(marketPkg))
+                bundles.append(QStringLiteral("dshmarket"));
+
+            QJsonObject profile;
+            profile.insert(QStringLiteral("bundles"), bundles);
+
+            QJsonObject dsh;
+            dsh.insert(QStringLiteral("profile"), profile);
+
+            root.insert(QStringLiteral("dsh"), dsh);
+
+            QFile out(manifestPath);
+            if (out.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                out.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+                out.close();
+            }
+
+            // 创建本地 URL 打印插件，DSH Hub 依赖它输出来发现服务端口
+            const QString urlPrinterDir = profileDir + QStringLiteral("/node_modules/dsh-url-printer");
+            QDir().mkpath(urlPrinterDir);
+
+            QFile urlPkg(urlPrinterDir + QStringLiteral("/package.json"));
+            if (urlPkg.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                urlPkg.write("{\n  \"name\": \"dsh-url-printer\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"main\": \"index.js\"\n}\n");
+                urlPkg.close();
+            }
+
+            QFile urlIndex(urlPrinterDir + QStringLiteral("/index.js"));
+            if (urlIndex.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                urlIndex.write("import z from \"@deepseek-ai/schemastery\";\n");
+                urlIndex.write("const name = \"dsh-url-printer\";\n");
+                urlIndex.write("const inject = [\"webServer\"];\n");
+                urlIndex.write("const Config = z.object({});\n");
+                urlIndex.write("function apply(ctx) {\n");
+                urlIndex.write("  const printUrl = () => {\n");
+                urlIndex.write("    const port = ctx.webServer?.port;\n");
+                urlIndex.write("    if (port !== undefined) console.log(`dsh web: http://127.0.0.1:${port}`);\n");
+                urlIndex.write("  };\n");
+                urlIndex.write("  const settled = ctx.get(\"loader\")?.await();\n");
+                urlIndex.write("  if (settled === undefined) printUrl();\n");
+                urlIndex.write("  else settled.then(() => { if (ctx.get(\"webServer\") !== undefined) printUrl(); }, () => {});\n");
+                urlIndex.write("}\n");
+                urlIndex.write("export { Config, apply, inject, name };\n");
+                urlIndex.close();
+            }
+
+            QFile patch(profileDir + QStringLiteral("/cordis.patch.yml"));
+            if (patch.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                patch.write("# Minimal API-only profile for the DSH Hub Qt client.\n");
+                patch.write("- id: hmr\n  disabled: true\n\n");
+                patch.write("- insert:\n");
+                patch.write("    - id: storage\n      name: '@deepseek-ai/dsh-storage'\n\n");
+                patch.write("    - id: storage-json\n      name: '@deepseek-ai/dsh-storage-json'\n      config:\n        root: !!js dshHomePath('storages')\n\n");
+                patch.write("    - id: storage-domain\n      name: '@deepseek-ai/dsh-storage-domain'\n      config:\n        backend: json\n\n");
+                patch.write("    - id: workspace\n      name: '@deepseek-ai/dsh-workspace'\n\n");
+                patch.write("    - id: session-projection-cache\n      name: '@deepseek-ai/dsh-session-projection-cache'\n      config:\n        writeEveryEvents: 200\n        writeIntervalMs: 5000\n\n");
+                patch.write("    - id: plugin-inventory\n      name: '@deepseek-ai/dsh-host-plugin-inventory'\n\n");
+                patch.write("    - id: api-gateway\n      name: '@deepseek-ai/dsh-host-apiproxy'\n\n");
+                patch.write("    - id: cordis-host-runner\n      name: '@deepseek-ai/dsh-cordis-host-runner'\n\n");
+                patch.write("    - id: web-startup\n      name: '@deepseek-ai/dsh-web-app/startup'\n\n");
+                patch.write("    - id: webserver\n      name: '@deepseek-ai/dsh-host-webserver'\n      inject: [webStartup]\n      config:\n        host: !!js ctx.webStartup.host ?? '127.0.0.1'\n        port: !!js ctx.webStartup.port ?? 3080\n\n");
+                patch.write("    - id: url-printer\n      name: 'dsh-url-printer'\n      inject: [webServer]\n\n");
+                patch.write("    - id: connection\n      name: '@deepseek-ai/dsh-client-connection'\n      inject: []\n      config:\n        trustedHosts: []\n\n");
+                patch.write("    - id: api-remotes\n      name: '@deepseek-ai/dsh-api-remotes'\n\n");
+                patch.write("    - id: agent-presets\n      name: '@deepseek-ai/dsh-agent-presets'\n      config:\n        default: standard\n");
+                patch.close();
+            }
+
+            QFile cordis(profileDir + QStringLiteral("/cordis.yml"));
+            if (cordis.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                cordis.write("[]\n");
+                cordis.close();
+            }
+
+            QFile workspace(profileDir + QStringLiteral("/pnpm-workspace.yaml"));
+            if (workspace.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                workspace.write("packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n");
+                workspace.close();
+            }
+        } else {
+            QFile manifestFile(manifestPath);
+            if (manifestFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                const QJsonDocument doc = QJsonDocument::fromJson(manifestFile.readAll());
+                manifestFile.close();
+                if (doc.isObject()) {
+                    QJsonObject root = doc.object();
+                    QJsonObject dsh = root.value(QStringLiteral("dsh")).toObject();
+                    QJsonObject profile = dsh.value(QStringLiteral("profile")).toObject();
+                    QJsonArray bundles = profile.value(QStringLiteral("bundles")).toArray();
+                    QJsonArray validBundles;
+                    QJsonObject dependencies = root.value(QStringLiteral("dependencies")).toObject();
+                    bool changed = false;
+
+                    for (const auto &value : bundles) {
+                        const QString name = value.toString();
+
+                        if (name == QStringLiteral("@deepseek-ai/dsh-web-app")) {
+                            changed = true;
+                            dependencies.remove(name);
+                            continue;
+                        }
+
+                        const QString profilePkg = profileDir + QStringLiteral("/node_modules/") + name + QStringLiteral("/package.json");
+                        const QString serverPkg = appDir + QStringLiteral("/resources/server/node_modules/") + name + QStringLiteral("/package.json");
+                        if (QFile::exists(profilePkg) || QFile::exists(serverPkg)) {
+                            validBundles.append(value);
+                        } else {
+                            changed = true;
+                            dependencies.remove(name);
+                        }
+                    }
+
+                    if (changed) {
+                        profile.insert(QStringLiteral("bundles"), validBundles);
+                        dsh.insert(QStringLiteral("profile"), profile);
+                        root.insert(QStringLiteral("dsh"), dsh);
+                        root.insert(QStringLiteral("dependencies"), dependencies);
+
+                        QFile out(manifestPath);
+                        if (out.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                            out.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+                            out.close();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    launchBundledServer(nodePath, entryPath, dshEntry, cwd, dshHome);
+}
+
+void DSHHub::launchBundledServer(const QString &nodePath,
+                                 const QString &entryPath,
+                                 const QString &dshEntry,
+                                 const QString &cwd,
+                                 const QString &dshHome)
+{
     // 如果 3080 已经被占用，说明可能已有 DSH 服务在运行，直接连接，避免 EADDRINUSE
     {
         QTcpSocket probe;
         probe.connectToHost(QStringLiteral("127.0.0.1"), 3080);
         if (probe.waitForConnected(500)) {
-            m_connectionSource = QStringLiteral("外部服务 (127.0.0.1:3080)");
             m_statusLabel->setText(QStringLiteral("检测到 3080 已有服务，直接连接..."));
             qDebug().noquote() << QStringLiteral("[DSH Hub] 使用端口: 3080");
             m_api->setBaseUrl(QUrl(QStringLiteral("http://127.0.0.1:3080")));
@@ -531,6 +687,7 @@ void DSHHub::startBundledServer()
         entryPath, dshEntry, QStringLiteral("web"),
         QStringLiteral("--port"), QStringLiteral("0")
     });
+    qInfo().noquote() << QStringLiteral("[DSH Hub] bundled server process started");
 }
 
 void DSHHub::handleServerOutput()
@@ -540,6 +697,8 @@ void DSHHub::handleServerOutput()
 
     while (m_serverProcess->canReadLine()) {
         const QString line = QString::fromUtf8(m_serverProcess->readLine()).trimmed();
+
+        qInfo().noquote() << QStringLiteral("[server]") << line;
 
         QRegularExpression re(QStringLiteral("dsh web: http://127\\.0\\.0\\.1:(\\d+)"));
         const QRegularExpressionMatch match = re.match(line);
@@ -569,6 +728,8 @@ void DSHHub::handleServerOutput()
 void DSHHub::handleServerFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     Q_UNUSED(exitStatus)
+
+    qInfo().noquote() << QStringLiteral("[DSH Hub] server finished, code=") << exitCode;
 
     if (m_api && !m_api->isConnected()) {
         m_statusLabel->setText(QStringLiteral("DSH 服务端已退出"));
@@ -611,8 +772,7 @@ void DSHHub::onSendClicked()
     m_api->callMethod(
         QStringLiteral("session.prompt"),
         payload,
-        [this](const QJsonObject &value) {
-            Q_UNUSED(value)
+        [this](const QJsonObject &) {
         },
         [this](const DshApiClient::RpcError &error) {
             m_messages->addSystemMessage(
@@ -1034,6 +1194,7 @@ void DSHHub::onClearConversationClicked()
 
 void DSHHub::handleConnected()
 {
+    qInfo().noquote() << QStringLiteral("[DSH Hub] connected to DSH");
     m_statusLabel->setText(QStringLiteral("已连接 DSH"));
 
     ensureSession();
@@ -1111,10 +1272,6 @@ void DSHHub::handleMuxFrame(const QJsonObject &frame)
             }
         } else if (eventType == QStringLiteral("user/message")) {
             // 用户消息已在 onSendClicked 中创建 UserMessageUnit，这里避免重复显示。
-            // 如果以后需要展示其它端发来的用户消息，可以改成：
-            // const QString text = extractEventText(event);
-            // if (!text.isEmpty())
-            //     m_messages->addUserMessage(text, m_messagesLayout);
         } else if (eventType == QStringLiteral("tool/call")) {
             const ToolCallInfo tool = extractToolCall(event);
             if (tool.valid && m_messages) {
@@ -1236,6 +1393,7 @@ void DSHHub::loadHistory()
     if (m_sessionId.isEmpty() || m_history.isLoading())
         return;
 
+    qInfo().noquote() << QStringLiteral("[DSH Hub] loadHistory session=") << m_sessionId;
     const QString requestedSessionId = m_sessionId;
     m_history.setLoading(true);
 
@@ -1422,6 +1580,7 @@ void DSHHub::loadSessionList()
         {},
         [this](const QJsonObject &value) {
             const QJsonArray items = value.value(QStringLiteral("items")).toArray();
+            qInfo().noquote() << QStringLiteral("[DSH Hub] session.list loaded, count=") << items.size();
             bool autoSelected = false;
 
             for (const auto &item : items) {

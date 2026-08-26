@@ -146,8 +146,6 @@ protected:
 
 private:
     QString m_title;
-    bool m_expanded = true;
-    bool m_showPlus = true;
     bool m_plusHovered = false;
 };
 

@@ -5,7 +5,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayoutItem>
-#include <QPainter>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -81,12 +80,4 @@ void PopupWindow::closeEvent(QCloseEvent *event)
 {
     emit closed();
     QWidget::closeEvent(event);
-}
-
-void PopupWindow::paintEvent(QPaintEvent *event)
-{
-    Q_UNUSED(event)
-
-    // 可选：这里不再额外绘制，透明背景由 body 的圆角样式负责
-    QWidget::paintEvent(event);
 }

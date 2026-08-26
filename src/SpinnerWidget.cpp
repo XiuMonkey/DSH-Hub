@@ -20,11 +20,6 @@ void SpinnerWidget::start()
         m_timer->start();
 }
 
-void SpinnerWidget::stop()
-{
-    m_timer->stop();
-}
-
 void SpinnerWidget::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event)

@@ -8,7 +8,6 @@
 #include <QLabel>
 #include <QObject>
 #include <QScreen>
-#include <QTimer>
 #include <QVBoxLayout>
 
 namespace Theme
@@ -19,11 +18,6 @@ Mode g_mode = Mode::Light;
 void setMode(Mode mode)
 {
     g_mode = mode;
-}
-
-Mode mode()
-{
-    return g_mode;
 }
 
 bool isDark()

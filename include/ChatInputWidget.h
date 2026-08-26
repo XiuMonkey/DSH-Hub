@@ -26,18 +26,6 @@ public:
     // 清空输入框并复位高度
     void clear();
 
-    // 设置占位提示文字
-    void setPlaceholderText(const QString &placeholderText);
-
-    // 让焦点回到输入框
-    void focusInput();
-
-    // 输入框控件（如需要直接操作 document / viewport 时可使用）
-    QPlainTextEdit *editor() const;
-
-    // 发送按钮（如需要调整样式/显隐时可使用）
-    QPushButton *sendButton() const;
-
 signals:
     // 点击发送按钮或按 Enter 时发出，携带当前输入框内容（未 trim）
     void sendRequested(const QString &text);

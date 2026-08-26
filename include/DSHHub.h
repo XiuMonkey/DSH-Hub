@@ -12,11 +12,6 @@
 #include <QJsonArray>
 #include "CacheHistoryManager.h"
 
-
-
-#include <QHash>
-
-
 #include <QMainWindow>
 #include <QProcess>
 #include <QString>
@@ -25,18 +20,12 @@
 class DshApiClient;
 class QLabel;
 class QResizeEvent;
-
-
 class SessionPrefetcher;
-
-
 class ChatInputWidget;
 class Sidebar;
 class TopBar;
 class Settings;
 class PluginsPopup;
-
-
 class QPushButton;
 class AgentMessageUnit;
 class MessageQuery;
@@ -45,8 +34,6 @@ class QScrollArea;
 class QTimer;
 class LoadingCard;
 class LoadMoreButton;
-
-
 
 /**
  * DSH Hub 主窗口。
@@ -64,13 +51,9 @@ public:
 signals:
     void initializationComplete();
 
-
-
-
 private slots:
     // 点击发送按钮
     void onSendClicked();
-
 
     // 新建工作区
     void onNewWorkspaceClicked();
@@ -128,10 +111,8 @@ private:
     // 设置弹窗
     void openSettings();
     void closeSettings();
-    // 插件弹窗（暂为占位）
+    // 插件弹窗
     void openPlugins();
-
-
 
     // 控件缓存：把当前会话的消息控件从布局摘下并保存
     void cacheCurrentMessages();
@@ -148,12 +129,15 @@ private:
     void callSessionCreate();
     // 启动内置的 DSH 服务端
     void startBundledServer();
+    void launchBundledServer(const QString &nodePath,
+                             const QString &entryPath,
+                             const QString &dshEntry,
+                             const QString &cwd,
+                             const QString &dshHome);
     // 读取服务端输出，解析实际端口
     void handleServerOutput();
     // 服务端进程退出
     void handleServerFinished(int exitCode, QProcess::ExitStatus exitStatus);
-
-
 
     // 历史消息加载状态
     HistoryManager m_history;
@@ -162,18 +146,14 @@ private:
     // 当前选中的会话 ID
     QString m_sessionId;
 
-    // 当前 DSH 服务来源：内置服务 / 已安装 DSH Desktop / 外部服务
-    QString m_connectionSource;
     // 当前 DSH 数据目录（用于本地删除 session）
     QString m_dshHome;
 
     // 是否正在通过 assistant/chunk 流式输出
     bool m_streaming = false;
 
-
     // 流式渲染节流定时器，避免每个 chunk 都全量重渲染导致卡顿
     QTimer *m_streamTimer = nullptr;
-
 
     // 内置 DSH 服务端进程
     QProcess *m_serverProcess = nullptr;
@@ -192,7 +172,6 @@ private:
 
     bool m_initializationComplete = false;
     bool m_scrollToBottomScheduled = false;
-
 
     QScrollArea *m_scrollArea = nullptr;
 
@@ -215,14 +194,10 @@ private:
     QStringList m_prebuildQueue;
     bool m_prebuilding = false;
 
-Sidebar *m_sidebar = nullptr;
-    
-
+    Sidebar *m_sidebar = nullptr;
 
     QVBoxLayout *m_messagesLayout = nullptr;
     ChatInputWidget *m_chatInput = nullptr;
-
-
 
     // DSH API 客户端
     DshApiClient *m_api = nullptr;

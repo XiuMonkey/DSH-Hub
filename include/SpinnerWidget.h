@@ -18,7 +18,6 @@ public:
     explicit SpinnerWidget(QWidget *parent = nullptr);
 
     void start();
-    void stop();
 
 protected:
     void paintEvent(QPaintEvent *event) override;

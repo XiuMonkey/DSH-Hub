@@ -12,7 +12,6 @@
 #include <QScrollBar>
 #include <QSize>
 #include <QSizePolicy>
-#include <QTextCursor>
 #include <QTextOption>
 #include <QTimer>
 
@@ -74,30 +73,6 @@ void ChatInputWidget::clear()
 
     m_editor->clear();
     adjustHeight();
-}
-
-void ChatInputWidget::setPlaceholderText(const QString &placeholderText)
-{
-    if (m_editor)
-        m_editor->setPlaceholderText(placeholderText);
-}
-
-void ChatInputWidget::focusInput()
-{
-    if (m_editor) {
-        m_editor->setFocus();
-        m_editor->moveCursor(QTextCursor::End);
-    }
-}
-
-QPlainTextEdit *ChatInputWidget::editor() const
-{
-    return m_editor;
-}
-
-QPushButton *ChatInputWidget::sendButton() const
-{
-    return m_sendButton;
 }
 
 void ChatInputWidget::handleSendClicked()

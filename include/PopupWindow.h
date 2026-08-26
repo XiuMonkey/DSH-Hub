@@ -32,7 +32,6 @@ signals:
     void closed();
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
 
 private:

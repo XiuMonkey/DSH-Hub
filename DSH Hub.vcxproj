@@ -136,8 +136,10 @@
     <ClCompile Include="src\PopupWindow.cpp" />
     <ClCompile Include="src\Settings.cpp" />
       <ClCompile Include="src\ThemeManager.cpp" />
+      <ClCompile Include="src\Logger.cpp" />
       <ClCompile Include="src\PluginsPopup.cpp" />
     <None Include="resources\highlight_rules.json" />
+    <None Include="resources\registry-snapshot.json" />
     <None Include="resources\DSH-Hub-Logo.png" />
     <None Include="resources\DSH-Hub-Logo-Tiny.png" />
     <None Include="resources\DSH-Hub-Logo-Tiny@2x.png" />
@@ -167,6 +169,7 @@
     <ClInclude Include="include\CodeHighlighter.h" />
     <ClInclude Include="include\CacheHistoryManager.h" />
       <ClInclude Include="include\ThemeManager.h" />
+      <ClInclude Include="include\Logger.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

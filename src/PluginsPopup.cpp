@@ -1,6 +1,10 @@
 #include "PluginsPopup.h"
 #include "ThemeManager.h"
 
+#include <QCoreApplication>
+#include <QDebug>
+#include <QDir>
+#include <QFile>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QJsonDocument>
@@ -9,6 +13,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QProcess>
+#include <QProcessEnvironment>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QTabWidget>
@@ -128,6 +135,13 @@ PluginsPopup::PluginsPopup(const QUrl &baseUrl, QWidget *parent)
 
     m_tabs->addTab(installedPage, QStringLiteral("已安装"));
 
+    // 安装进度
+    m_progressBar = new QProgressBar(content);
+    m_progressBar->setRange(0, 0);
+    m_progressBar->setTextVisible(false);
+    m_progressBar->hide();
+    rootLayout->addWidget(m_progressBar);
+
     // 状态栏
     m_statusLabel = new QLabel(QStringLiteral("正在加载插件市场..."), content);
     m_statusLabel->setStyleSheet(QStringLiteral("QLabel {") + QStringLiteral("  background: transparent;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textSecondary")) + QStringLiteral(";") + QStringLiteral("  font-size: 12px;") + QStringLiteral("}"));
@@ -147,6 +161,129 @@ PluginsPopup::PluginsPopup(const QUrl &baseUrl, QWidget *parent)
     connect(m_nextButton, &QPushButton::clicked, this, [this]() { changePage(1); });
 
     refresh();
+    checkAndInstallMarketIfNeeded();
+}
+
+void PluginsPopup::checkAndInstallMarketIfNeeded()
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString marketPkg = appDir + QStringLiteral("/resources/server/harness/profiles/web/node_modules/dshmarket/package.json");
+    if (QFile::exists(marketPkg))
+        return;
+
+    m_progressBar->show();
+    m_statusLabel->setText(QStringLiteral("未检测到插件市场，正在自动安装..."));
+
+    const QString nodePath = appDir + QStringLiteral("/resources/server/node.exe");
+    const QString dshHome = appDir + QStringLiteral("/resources/server/harness");
+
+    // 确保 pnpm 可用：如果 PATH 里没有 pnpm，就创建一个本地 shim
+    const QString pnpmEntry = QDir::toNativeSeparators(appDir + QStringLiteral("/resources/server/node_modules/pnpm/bin/pnpm.cjs"));
+    const QString binDir = QDir::toNativeSeparators(dshHome + QStringLiteral("/.desktop-bin"));
+    QDir().mkpath(binDir);
+    const QString pnpmCmdPath = binDir + QStringLiteral("/pnpm.cmd");
+    if (!QFile::exists(pnpmCmdPath)) {
+        QFile shim(pnpmCmdPath);
+        if (shim.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+            shim.write(QStringLiteral("@echo off\r\n\"%1\" \"%2\" %*\r\n")
+                           .arg(QDir::toNativeSeparators(nodePath), pnpmEntry)
+                           .toUtf8());
+            shim.close();
+        }
+    }
+
+    m_installer = new QProcess(this);
+    m_installer->setProcessChannelMode(QProcess::MergedChannels);
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("DSH_HOME"), dshHome);
+
+    // 把本地 pnpm shim 目录加入 PATH
+    QString path = env.value(QStringLiteral("Path"));
+    if (!path.isEmpty())
+        path = binDir + QLatin1Char(';') + path;
+    else
+        path = binDir;
+    env.insert(QStringLiteral("Path"), path);
+    env.insert(QStringLiteral("PATH"), path);
+
+    m_installer->setProcessEnvironment(env);
+
+    connect(m_installer, &QProcess::readyReadStandardOutput, this, [this]() {
+        while (m_installer->canReadLine()) {
+            const QString line = QString::fromUtf8(m_installer->readLine()).trimmed();
+            if (line.isEmpty())
+                continue;
+            qInfo().noquote() << QStringLiteral("[market-installer]") << line;
+            m_statusLabel->setText(QStringLiteral("正在安装插件市场: %1").arg(line.left(60)));
+        }
+    });
+
+    const QString profileDir = QDir::toNativeSeparators(dshHome + QStringLiteral("/profiles/web"));
+
+    connect(m_installer, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, profileDir](int exitCode, QProcess::ExitStatus exitStatus) {
+                Q_UNUSED(exitStatus)
+                m_progressBar->hide();
+                m_installer->deleteLater();
+                m_installer = nullptr;
+
+                qInfo().noquote() << QStringLiteral("[market-installer] finished, exitCode=") << exitCode;
+
+                if (exitCode == 0) {
+                    // pnpm 只写 dependencies，需要手动把 dshmarket 加入 profile bundles
+                    QFile manifestFile(profileDir + QStringLiteral("/package.json"));
+                    if (manifestFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        QJsonDocument doc = QJsonDocument::fromJson(manifestFile.readAll());
+                        manifestFile.close();
+                        if (doc.isObject()) {
+                            QJsonObject root = doc.object();
+                            QJsonObject dependencies = root.value(QStringLiteral("dependencies")).toObject();
+                            dependencies.insert(QStringLiteral("dshmarket"), QStringLiteral("1.9.0"));
+                            root.insert(QStringLiteral("dependencies"), dependencies);
+
+                            QJsonObject dsh = root.value(QStringLiteral("dsh")).toObject();
+                            QJsonObject profile = dsh.value(QStringLiteral("profile")).toObject();
+                            QJsonArray bundles = profile.value(QStringLiteral("bundles")).toArray();
+                            bool found = false;
+                            for (const auto &value : bundles) {
+                                if (value.toString() == QStringLiteral("dshmarket")) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found)
+                                bundles.append(QStringLiteral("dshmarket"));
+                            profile.insert(QStringLiteral("bundles"), bundles);
+                            dsh.insert(QStringLiteral("profile"), profile);
+                            root.insert(QStringLiteral("dsh"), dsh);
+
+                            QFile out(profileDir + QStringLiteral("/package.json"));
+                            if (out.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+                                out.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+                                out.close();
+                            }
+                        }
+                    }
+
+                    m_statusLabel->setText(QStringLiteral("插件市场安装完成"));
+                    refresh();
+                } else {
+                    m_statusLabel->setText(QStringLiteral("插件市场安装失败，请检查网络或稍后重试"));
+                }
+            });
+
+    m_installer->setWorkingDirectory(profileDir);
+
+    qInfo().noquote() << QStringLiteral("[market-installer] starting pnpm install for dshmarket@1.9.0");
+
+    // 直接使用 node 运行 pnpm，避免依赖系统 PATH 里的 pnpm
+    m_installer->start(nodePath, QStringList{
+        pnpmEntry,
+        QStringLiteral("add"),
+        QStringLiteral("--save-exact"),
+        QStringLiteral("dshmarket@1.9.0")
+    });
 }
 
 void PluginsPopup::refresh()

@@ -205,21 +205,18 @@ WorkspaceButton::WorkspaceButton(const QString &title, QWidget *parent)
 
 void WorkspaceButton::setExpanded(bool expanded)
 {
-    m_expanded = expanded;
     setText((expanded ? QStringLiteral("▾ ") : QStringLiteral("▸ ")) + m_title);
     update();
 }
 
 void WorkspaceButton::enterEvent(QEnterEvent *event)
 {
-    m_showPlus = true;
     update();
     QPushButton::enterEvent(event);
 }
 
 void WorkspaceButton::leaveEvent(QEvent *event)
 {
-    m_showPlus = true;
     m_plusHovered = false;
     update();
     QPushButton::leaveEvent(event);
@@ -238,7 +235,7 @@ void WorkspaceButton::mouseMoveEvent(QMouseEvent *event)
 void WorkspaceButton::mouseReleaseEvent(QMouseEvent *event)
 {
     // 点击右侧加号区域时只触发新建会话，不折叠/展开工作区
-    if (m_showPlus && event->pos().x() >= width() - 30) {
+    if (event->pos().x() >= width() - 30) {
         emit addSessionRequested();
         return;
     }
@@ -248,9 +245,6 @@ void WorkspaceButton::mouseReleaseEvent(QMouseEvent *event)
 void WorkspaceButton::paintEvent(QPaintEvent *event)
 {
     QPushButton::paintEvent(event);
-
-    if (!m_showPlus)
-        return;
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
