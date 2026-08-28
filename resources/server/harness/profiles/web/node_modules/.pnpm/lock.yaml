@@ -1,0 +1,24 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: false
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      dshmarket:
+        specifier: 1.9.0
+        version: 1.9.0
+
+packages:
+
+  dshmarket@1.9.0:
+    resolution: {integrity: sha512-WUeo31GkItN1V2P3Uo8IwMqLzApws7Sk7Q8/1zPMy5tgDCJG3SmZlfSNeG/2uzfygPmnAOI4hjZ6MAqC2k+IVw==}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.1
+
+snapshots:
+
+  dshmarket@1.9.0: {}

@@ -1,0 +1,150 @@
+{
+  "languages": {
+    "c": [
+      { "pattern": "\\b(if|else|for|while|do|return|break|continue|switch|case|default|struct|union|enum|typedef|static|extern|const|volatile|register|sizeof|int|char|float|double|void|long|short|unsigned|signed|true|false|NULL)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "#\\s*(include|define|ifdef|ifndef|endif|pragma|error|warning)\\b", "color": "#c586c0", "bold": true },
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ],
+    "cpp": [
+      { "pattern": "\\b(alignas|alignof|and|and_eq|asm|auto|bitand|bitor|bool|break|case|catch|char|char8_t|char16_t|char32_t|class|compl|concept|const|consteval|constexpr|constinit|const_cast|continue|co_await|co_return|co_yield|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|not|not_eq|nullptr|operator|or|or_eq|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while|xor|xor_eq)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "#\\s*(include|define|ifdef|ifndef|endif|pragma|error|warning|import|module)\\b", "color": "#c586c0", "bold": true },
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ],
+    "csharp": [
+      { "pattern": "\\b(abstract|as|base|bool|break|byte|case|catch|char|checked|class|const|continue|decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|foreach|goto|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|out|override|params|private|protected|public|readonly|ref|return|sbyte|sealed|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unsafe|ushort|using|virtual|void|volatile|while|async|await|var|record|init|get|set|value)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "@\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "\\b(\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ],
+    "java": [
+      { "pattern": "\\b(abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|void|volatile|while|true|false|null|var|record|sealed|permits)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "@[A-Za-z_][A-Za-z0-9_]*", "color": "#c586c0" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*[fFdD]?)\\b", "color": "#b5cea8" }
+    ],
+    "go": [
+      { "pattern": "\\b(break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var|true|false|iota|nil|append|cap|close|complex|copy|delete|imag|len|make|new|panic|print|println|real|recover)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "`[^`\\n]*`", "color": "#ce9178" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ],
+    "rust": [
+      { "pattern": "\\b(as|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while|async|await|dyn)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ],
+    "python": [
+      { "pattern": "\\b(False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield|print|len|range|type|str|int|float|bool|list|dict|set|tuple|object|super|self|__init__|__name__|__main__)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "#[^\\n]*", "color": "#6a9955" },
+      { "pattern": "\"\"\"[\\s\\S]*?\"\"\"", "color": "#6a9955" },
+      { "pattern": "'''[\\s\\S]*?'''", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*[jJ]?)\\b", "color": "#b5cea8" }
+    ],
+    "javascript": [
+      { "pattern": "\\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|import|export|from|async|await|try|catch|finally|throw|true|false|null|undefined|typeof|instanceof|this|delete|in|of|yield|static|get|set|super)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "`[^`\\n]*`", "color": "#ce9178" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ],
+    "typescript": [
+      { "pattern": "\\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|implements|import|export|from|async|await|try|catch|finally|throw|true|false|null|undefined|typeof|instanceof|this|interface|type|enum|namespace|declare|readonly|public|private|protected|static|get|set|super|yield|delete|in|of|keyof|infer|is|never|unknown|any|string|number|boolean|void|symbol|bigint|object)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "`[^`\\n]*`", "color": "#ce9178" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ],
+    "html": [
+      { "pattern": "<!--[\\s\\S]*?-->", "color": "#6a9955" },
+      { "pattern": "</?[A-Za-z][A-Za-z0-9-]*(\\s+[A-Za-z_:][A-Za-z0-9_.:-]*\\s*=\\s*(\"[^\"]*\"|'[^']*'))*\\s*/?>", "color": "#569cd6" },
+      { "pattern": "\"[^\"]*\"", "color": "#ce9178" },
+      { "pattern": "'[^']*'", "color": "#ce9178" }
+    ],
+    "css": [
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "#[A-Za-z_][A-Za-z0-9_-]*", "color": "#d7ba7d" },
+      { "pattern": "\\.[A-Za-z_][A-Za-z0-9_-]*", "color": "#d7ba7d" },
+      { "pattern": "[A-Za-z-]+(?=\\s*:)", "color": "#9cdcfe" },
+      { "pattern": "#[0-9a-fA-F]{3,8}\\b", "color": "#b5cea8" },
+      { "pattern": "\\b(\\d+(\\.\\d+)?(px|em|rem|vh|vw|%|s|ms)?)\\b", "color": "#b5cea8" }
+    ],
+    "json": [
+      { "pattern": "\"(\\\\u[0-9a-fA-F]{4}|[^\"\\\\])*\"(?=\\s*:)", "color": "#9cdcfe" },
+      { "pattern": "\"(\\\\u[0-9a-fA-F]{4}|[^\"\\\\])*\"", "color": "#ce9178" },
+      { "pattern": "\\b(true|false|null)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "-?\\b\\d+\\.?\\d*([eE][+-]?\\d+)?\\b", "color": "#b5cea8" }
+    ],
+    "yaml": [
+      { "pattern": "#[^\\n]*", "color": "#6a9955" },
+      { "pattern": "^\\s*-\\s+", "color": "#d7ba7d" },
+      { "pattern": "^\\s*[A-Za-z_][A-Za-z0-9_-]*(?=\\s*:)", "color": "#9cdcfe" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "\\b(true|false|null|yes|no|on|off)\\b", "color": "#0000ff", "bold": true }
+    ],
+    "bash": [
+      { "pattern": "\\b(if|then|else|elif|fi|for|while|do|done|case|esac|function|return|exit|echo|export|source|cd|ls|mkdir|rm|cp|mv|sudo|apt|yum|npm|pnpm|node|python|python3|git|curl|wget|grep|sed|awk|cat|chmod|chown|tar|unzip|zip|kill|ps|top|htop|systemctl|docker|kubectl)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "#[^\\n]*", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "\\$[A-Za-z_][A-Za-z0-9_]*", "color": "#9cdcfe" }
+    ],
+    "powershell": [
+      { "pattern": "\\b(if|else|elseif|for|foreach|while|do|switch|function|return|param|begin|process|end|break|continue|try|catch|finally|throw|class|enum|filter|trap|until|in|not|and|or|true|false|null)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "#[^\\n]*", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "\\$[A-Za-z_][A-Za-z0-9_]*", "color": "#9cdcfe" }
+    ],
+    "sql": [
+      { "pattern": "\\b(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|CREATE|TABLE|INDEX|VIEW|ALTER|DROP|AND|OR|NOT|NULL|IS|IN|EXISTS|BETWEEN|LIKE|AS|DISTINCT|UNION|ALL|CASE|WHEN|THEN|ELSE|END|PRIMARY|KEY|FOREIGN|REFERENCES|CONSTRAINT|DEFAULT|UNIQUE|CHECK)\\b", "color": "#0000ff", "bold": true },
+      { "pattern": "--[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "\\b(\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ],
+    "markdown": [
+      { "pattern": "^#{1,6}\\s.*$", "color": "#0000ff", "bold": true },
+      { "pattern": "`[^`\\n]*`", "color": "#ce9178" },
+      { "pattern": "\\*\\*[^*\\n]+\\*\\*", "color": "#d7ba7d", "bold": true },
+      { "pattern": "\\*[^*\\n]+\\*", "color": "#d7ba7d", "italic": true },
+      { "pattern": "\\[([^\\]]+)\\]\\([^\\)]+\\)", "color": "#569cd6" }
+    ],
+    "default": [
+      { "pattern": "//[^\\n]*", "color": "#6a9955" },
+      { "pattern": "#[^\\n]*", "color": "#6a9955" },
+      { "pattern": "/\\*[\\s\\S]*?\\*/", "color": "#6a9955" },
+      { "pattern": "\"[^\"\\n]*\"", "color": "#ce9178" },
+      { "pattern": "'[^'\\n]*'", "color": "#ce9178" },
+      { "pattern": "`[^`\\n]*`", "color": "#ce9178" },
+      { "pattern": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*)\\b", "color": "#b5cea8" }
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Test Files">
+      <UniqueIdentifier>{B2A1F22E-7C08-4B7D-8E0A-4E1B0D2F0C11}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;h;hh;hpp;hxx</Extensions>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="unit_test\UnitTestMain.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestDshEventParser.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestCodeHighlighter.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestHistoryManager.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\network\DshEventParser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\CodeHighlighter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <QtMoc Include="unit_test\TestDshEventParser.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestCodeHighlighter.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestHistoryManager.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+  </ItemGroup>
+</Project>
