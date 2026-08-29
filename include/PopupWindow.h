@@ -20,23 +20,23 @@ class QVBoxLayout;
 
 class PopupWindow : public QWidget
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit PopupWindow(QWidget *parent = nullptr);
+	explicit PopupWindow(QWidget* parent = nullptr);
 
-    void setTitle(const QString &title);
-    void setContent(QWidget *content);
+	void setTitle(const QString& title);
+	void setContent(QWidget* content);
 
 signals:
-    void closed();
+	void closed();
 
 protected:
-    void closeEvent(QCloseEvent *event) override;
+	void closeEvent(QCloseEvent* event) override;
 
 private:
-    QLabel *m_titleLabel = nullptr;
-    QPushButton *m_closeButton = nullptr;
-    QVBoxLayout *m_mainLayout = nullptr;
-    QVBoxLayout *m_contentLayout = nullptr;
+	QLabel* m_titleLabel = nullptr;
+	QPushButton* m_closeButton = nullptr;
+	QVBoxLayout* m_mainLayout = nullptr;
+	QVBoxLayout* m_contentLayout = nullptr;
 };

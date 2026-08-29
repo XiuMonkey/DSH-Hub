@@ -15,31 +15,37 @@ class QPushButton;
 
 class ChatInputWidget : public QWidget
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit ChatInputWidget(QWidget *parent = nullptr);
+	explicit ChatInputWidget(QWidget* parent = nullptr);
 
-    // 获取当前输入内容（未 trim）
-    QString text() const;
+	// 获取当前输入内容（未 trim）
+	QString text() const;
 
-    // 清空输入框并复位高度
-    void clear();
+	// 清空输入框并复位高度
+	void clear();
 
 signals:
-    // 点击发送按钮或按 Enter 时发出，携带当前输入框内容（未 trim）
-    void sendRequested(const QString &text);
+	// 点击发送按钮或按 Enter 时发出，携带当前输入框内容（未 trim）
+	void sendRequested(const QString& text);
 
 protected:
-    bool eventFilter(QObject *obj, QEvent *event) override;
+	bool eventFilter(QObject* obj, QEvent* event) override;
 
 private slots:
-    void handleSendClicked();
+	void handleSendClicked();
 
 private:
-    // 输入框随内容自动增高
-    void adjustHeight();
+	// 输入框随内容自动增高
+	void adjustHeight();
 
-    QPlainTextEdit *m_editor = nullptr;
-    QPushButton *m_sendButton = nullptr;
+	// 根据悬停/按下状态显示发送按钮上方的圆形灰色蒙版
+	void updateSendOverlay();
+
+	QPlainTextEdit* m_editor = nullptr;
+	QPushButton* m_sendButton = nullptr;
+	QWidget* m_sendOverlay = nullptr;
+	bool m_sendHovered = false;
+	bool m_sendPressed = false;
 };

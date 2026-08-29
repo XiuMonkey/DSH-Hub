@@ -20,6 +20,7 @@
 // 工具参数 args 会先被序列化成 JSON 字符串，再传给 DLL。
 // ------------------------------------------------------------------
 
+#include <QHash>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QLibrary>
@@ -30,66 +31,75 @@
 class DllJsonCaller
 {
 public:
-    struct ParameterSpec
-    {
-        QString name;
-        QString type;
-        QString from;
-        QJsonValue defaultValue;
-    };
+	struct ParameterSpec
+	{
+		QString name;
+		QString type;
+		QString from;
+		QJsonValue defaultValue;
+	};
 
-    struct FunctionSpec
-    {
-        QString function;   // DLL 导出函数名
-        QString tool;       // DSH 工具名
-        QString style;      // "json"（当前支持）
-        QString returnType; // "int" / "void" / "string"
-        bool resultIsJson = true;
-        QVector<ParameterSpec> parameters;
-    };
+	struct FunctionSpec
+	{
+		QString function;       // DLL 导出函数名
+		QString tool;           // DSH 工具名
+		QString loadingSource;  // 函数从哪个 DLL 导出，例如 "main.dll" / "bin/foo.dll"
+		QString style;          // "json"（当前支持）
+		QString returnType;     // "int" / "void" / "string"
+		bool resultIsJson = true;
+		QVector<ParameterSpec> parameters;
+	};
 
-    struct Descriptor
-    {
-        QString name;
-        QString description;
-        QVector<FunctionSpec> functions;
-    };
+	struct Descriptor
+	{
+		QString name;
+		QString description;
+		QVector<FunctionSpec> functions;
+	};
 
-    DllJsonCaller();
-    ~DllJsonCaller();
+	DllJsonCaller();
+	~DllJsonCaller();
 
-    // 读取并解析 JSON5 描述文件
-    bool loadDescriptor(const QString &json5Path);
+	// 读取并解析 JSON5 描述文件
+	bool loadDescriptor(const QString& json5Path);
 
-    // 加载 DLL 文件
-    bool loadLibrary(const QString &dllPath);
+	// 加载 DLL 文件
+	bool loadLibrary(const QString& dllPath);
 
-    bool isReady() const;
-    QStringList tools() const;
-    QString errorString() const;
+	// 卸载当前 DLL，释放文件占用（移除扩展前调用）
+	void unloadLibrary();
 
-    // 按 tool 名调用 DLL；args 会转成 JSON 字符串传给 DLL
-    bool callTool(const QString &tool,
-                  const QJsonObject &args,
-                  QJsonObject &result,
-                  QString *errorMessage = nullptr);
+	bool isReady() const;
+	QStringList tools() const;
+	QString errorString() const;
+
+	// 按 tool 名调用 DLL；args 会转成 JSON 字符串传给 DLL
+	bool callTool(const QString& tool,
+		const QJsonObject& args,
+		QJsonObject& result,
+		QString* errorMessage = nullptr);
 
 private:
-    bool parseDescriptor(const QByteArray &json5, Descriptor *out, QString *error);
-    bool invokeJsonFunction(const FunctionSpec &fn,
-                            const QJsonObject &args,
-                            QJsonObject &result,
-                            QString *error);
-    bool invokeNativeFunction(const FunctionSpec &fn,
-                              const QJsonObject &args,
-                              QJsonObject &result,
-                              QString *error);
+	bool parseDescriptor(const QByteArray& json5, Descriptor* out, QString* error);
+	bool invokeJsonFunction(const FunctionSpec& fn,
+		const QJsonObject& args,
+		QJsonObject& result,
+		QString* error);
+	bool invokeNativeFunction(const FunctionSpec& fn,
+		const QJsonObject& args,
+		QJsonObject& result,
+		QString* error);
 
-    QByteArray stripJson5Comments(const QByteArray &input);
-    QByteArray removeTrailingCommas(const QByteArray &input);
+	// 根据 LoadingSource 返回对应的 QLibrary；不存在时按描述文件所在目录加载
+	QLibrary* libraryForSource(const QString& source);
 
-    Descriptor m_descriptor;
-    QLibrary *m_library = nullptr;
-    QString m_errorString;
-    QString m_dllPath;
+	QByteArray stripJson5Comments(const QByteArray& input);
+	QByteArray removeTrailingCommas(const QByteArray& input);
+
+	Descriptor m_descriptor;
+	QLibrary* m_library = nullptr;                  // 主 DLL（main.dll）
+	QHash<QString, QLibrary*> m_libraries;         // LoadingSource -> QLibrary
+	QString m_descriptorDir;                       // regulation.json5 所在目录
+	QString m_errorString;
+	QString m_dllPath;
 };

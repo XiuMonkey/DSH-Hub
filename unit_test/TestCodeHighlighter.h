@@ -12,22 +12,22 @@
 
 class TestCodeHighlighter : public QObject
 {
-    Q_OBJECT
+	Q_OBJECT
 
 private:
-    QTemporaryDir m_tempDir;
-    QString m_rulesPath;
+	QTemporaryDir m_tempDir;
+	QString m_rulesPath;
 
 private slots:
-    void initTestCase();
-    void cleanupTestCase();
+	void initTestCase();
+	void cleanupTestCase();
 
-    void loadFromFile_nonExistentReturnsFalse();
-    void loadFromFile_validJson();
-    void loadFromFile_invalidJson();
+	void loadFromFile_nonExistentReturnsFalse();
+	void loadFromFile_validJson();
+	void loadFromFile_invalidJson();
 
-    void highlight_unknownLanguageUsesDefault();
-    void highlight_htmlEscapesPlainText();
-    void highlight_keywordSpan();
-    void highlight_sameInputReturnsConsistentResult();
+	void highlight_unknownLanguageUsesDefault();
+	void highlight_htmlEscapesPlainText();
+	void highlight_keywordSpan();
+	void highlight_sameInputReturnsConsistentResult();
 };

@@ -32,62 +32,62 @@
  *
  * 同时连接 WebSocket 的文本消息、错误、连接、断开信号。
  */
-DshApiClient::DshApiClient(QObject *parent)
-    : QObject(parent)
-    , m_nam(new QNetworkAccessManager(this))
-    , m_mux(new QWebSocket)
-    , m_host(new QWebSocket)
+DshApiClient::DshApiClient(QObject* parent)
+	: QObject(parent)
+	, m_nam(new QNetworkAccessManager(this))
+	, m_mux(new QWebSocket)
+	, m_host(new QWebSocket)
 {
-    connect(m_mux, &QWebSocket::textMessageReceived,
-            this, &DshApiClient::onMuxTextMessageReceived);
-    connect(m_host, &QWebSocket::textMessageReceived,
-            this, &DshApiClient::onHostTextMessageReceived);
+	connect(m_mux, &QWebSocket::textMessageReceived,
+		this, &DshApiClient::onMuxTextMessageReceived);
+	connect(m_host, &QWebSocket::textMessageReceived,
+		this, &DshApiClient::onHostTextMessageReceived);
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    connect(m_mux, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
-        emit transportError(QStringLiteral("mux"), m_mux->errorString());
-        qWarning().noquote() << "[DshApi] mux error:" << m_mux->errorString();
-    });
-    connect(m_host, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
-        emit transportError(QStringLiteral("host"), m_host->errorString());
-        qWarning().noquote() << "[DshApi] host error:" << m_host->errorString();
-    });
+	connect(m_mux, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
+		emit transportError(QStringLiteral("mux"), m_mux->errorString());
+		qWarning().noquote() << "[DshApi] mux error:" << m_mux->errorString();
+		});
+	connect(m_host, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
+		emit transportError(QStringLiteral("host"), m_host->errorString());
+		qWarning().noquote() << "[DshApi] host error:" << m_host->errorString();
+		});
 #else
-    connect(m_mux, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
-            this, [this](QAbstractSocket::SocketError) {
-        emit transportError(QStringLiteral("mux"), m_mux->errorString());
-        qWarning().noquote() << "[DshApi] mux error:" << m_mux->errorString();
-    });
-    connect(m_host, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
-            this, [this](QAbstractSocket::SocketError) {
-        emit transportError(QStringLiteral("host"), m_host->errorString());
-        qWarning().noquote() << "[DshApi] host error:" << m_host->errorString();
-    });
+	connect(m_mux, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
+		this, [this](QAbstractSocket::SocketError) {
+			emit transportError(QStringLiteral("mux"), m_mux->errorString());
+			qWarning().noquote() << "[DshApi] mux error:" << m_mux->errorString();
+		});
+	connect(m_host, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
+		this, [this](QAbstractSocket::SocketError) {
+			emit transportError(QStringLiteral("host"), m_host->errorString());
+			qWarning().noquote() << "[DshApi] host error:" << m_host->errorString();
+		});
 #endif
 
-    connect(m_mux, &QWebSocket::connected, this, [this] {
-        m_muxConnected = true;
-        qInfo().noquote() << "[DshApi] mux stream connected";
-        if (m_muxConnected && m_hostConnected)
-            emit connected();
-    });
-    connect(m_host, &QWebSocket::connected, this, [this] {
-        m_hostConnected = true;
-        qInfo().noquote() << "[DshApi] host stream connected";
-        if (m_muxConnected && m_hostConnected)
-            emit connected();
-    });
+	connect(m_mux, &QWebSocket::connected, this, [this] {
+		m_muxConnected = true;
+		qInfo().noquote() << "[DshApi] mux stream connected";
+		if (m_muxConnected && m_hostConnected)
+			emit connected();
+		});
+	connect(m_host, &QWebSocket::connected, this, [this] {
+		m_hostConnected = true;
+		qInfo().noquote() << "[DshApi] host stream connected";
+		if (m_muxConnected && m_hostConnected)
+			emit connected();
+		});
 
-    auto emitDisconnected = [this] {
-        const bool wasConnected = m_muxConnected && m_hostConnected;
-        m_muxConnected = false;
-        m_hostConnected = false;
-        if (wasConnected)
-            emit disconnected();
-        qInfo().noquote() << "[DshApi] DSH disconnected";
-    };
-    connect(m_mux, &QWebSocket::disconnected, this, emitDisconnected);
-    connect(m_host, &QWebSocket::disconnected, this, emitDisconnected);
+	auto emitDisconnected = [this] {
+		const bool wasConnected = m_muxConnected && m_hostConnected;
+		m_muxConnected = false;
+		m_hostConnected = false;
+		if (wasConnected)
+			emit disconnected();
+		qInfo().noquote() << "[DshApi] DSH disconnected";
+		};
+	connect(m_mux, &QWebSocket::disconnected, this, emitDisconnected);
+	connect(m_host, &QWebSocket::disconnected, this, emitDisconnected);
 }
 
 /**
@@ -96,33 +96,33 @@ DshApiClient::DshApiClient(QObject *parent)
  */
 DshApiClient::~DshApiClient()
 {
-    m_destroyed = true;
+	m_destroyed = true;
 
-    // 先断开 WebSocket 信号，避免析构过程中触发 lambda
-    if (m_mux)
-        disconnect(m_mux, nullptr, this, nullptr);
-    if (m_host)
-        disconnect(m_host, nullptr, this, nullptr);
+	// 先断开 WebSocket 信号，避免析构过程中触发 lambda
+	if (m_mux)
+		disconnect(m_mux, nullptr, this, nullptr);
+	if (m_host)
+		disconnect(m_host, nullptr, this, nullptr);
 
-    closeStreams();
-    delete m_mux;
-    delete m_host;
+	closeStreams();
+	delete m_mux;
+	delete m_host;
 }
 
 /**
  * 设置 DSH 服务基础 URL。
  * 后续所有 HTTP 和 WebSocket 请求都会基于这个地址拼接。
  */
-void DshApiClient::setBaseUrl(const QUrl &url)
+void DshApiClient::setBaseUrl(const QUrl& url)
 {
-    m_baseUrl = url;
-        qInfo().noquote() << "[DshApi] baseUrl set:" << m_baseUrl.toString();
+	m_baseUrl = url;
+	qInfo().noquote() << "[DshApi] baseUrl set:" << m_baseUrl.toString();
 }
 
 /** 返回当前设置的基础 URL。 */
 QUrl DshApiClient::baseUrl() const
 {
-    return m_baseUrl;
+	return m_baseUrl;
 }
 
 /**
@@ -131,17 +131,17 @@ QUrl DshApiClient::baseUrl() const
  */
 void DshApiClient::openStreams()
 {
-    if (m_baseUrl.isEmpty()) {
-        qWarning().noquote() << "[DshApi] openStreams ignored: baseUrl is empty";
-        return;
-    }
+	if (m_baseUrl.isEmpty()) {
+		qWarning().noquote() << "[DshApi] openStreams ignored: baseUrl is empty";
+		return;
+	}
 
-    // 避免重复打开/残留旧连接
-    closeStreams();
+	// 避免重复打开/残留旧连接
+	closeStreams();
 
-    m_mux->open(makeUrl(QStringLiteral("/api/events.mux")));
-    m_host->open(makeUrl(QStringLiteral("/api/events.host")));
-    qInfo().noquote() << "[DshApi] opening WebSocket streams:" << m_baseUrl.toString();
+	m_mux->open(makeUrl(QStringLiteral("/api/events.mux")));
+	m_host->open(makeUrl(QStringLiteral("/api/events.host")));
+	qInfo().noquote() << "[DshApi] opening WebSocket streams:" << m_baseUrl.toString();
 }
 
 /**
@@ -149,13 +149,13 @@ void DshApiClient::openStreams()
  */
 void DshApiClient::closeStreams()
 {
-    qInfo().noquote() << "[DshApi] closing WebSocket streams";
-    if (m_mux)
-        m_mux->close();
-    if (m_host)
-        m_host->close();
-    m_muxConnected = false;
-    m_hostConnected = false;
+	qInfo().noquote() << "[DshApi] closing WebSocket streams";
+	if (m_mux)
+		m_mux->close();
+	if (m_host)
+		m_host->close();
+	m_muxConnected = false;
+	m_hostConnected = false;
 }
 
 /**
@@ -164,7 +164,7 @@ void DshApiClient::closeStreams()
  */
 bool DshApiClient::isConnected() const
 {
-    return m_muxConnected && m_hostConnected;
+	return m_muxConnected && m_hostConnected;
 }
 
 /**
@@ -181,22 +181,22 @@ bool DshApiClient::isConnected() const
  * 然后 POST 到 /api/<method>。
  */
 void DshApiClient::callMethod(
-    const QString &method,
-    const QJsonObject &payload,
-    std::function<void(const QJsonObject &value)> onSuccess,
-    std::function<void(const RpcError &error)> onError)
+	const QString& method,
+	const QJsonObject& payload,
+	std::function<void(const QJsonObject& value)> onSuccess,
+	std::function<void(const RpcError& error)> onError)
 {
-    const QString rpcId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+	const QString rpcId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
-    QJsonObject body;
-    body.insert(QStringLiteral("type"), QStringLiteral("client-request"));
-    body.insert(QStringLiteral("rpcId"), rpcId);
-    body.insert(QStringLiteral("method"), method);
-    body.insert(QStringLiteral("payload"), payload);
+	QJsonObject body;
+	body.insert(QStringLiteral("type"), QStringLiteral("client-request"));
+	body.insert(QStringLiteral("rpcId"), rpcId);
+	body.insert(QStringLiteral("method"), method);
+	body.insert(QStringLiteral("payload"), payload);
 
-    qInfo().noquote() << "[DshApi] RPC ->" << method << " rpcId=" << rpcId;
+	qInfo().noquote() << "[DshApi] RPC ->" << method << " rpcId=" << rpcId;
 
-    post(QStringLiteral("/api/") + method, body, std::move(onSuccess), std::move(onError));
+	post(QStringLiteral("/api/") + method, body, std::move(onSuccess), std::move(onError));
 }
 
 /**
@@ -212,23 +212,23 @@ void DshApiClient::callMethod(
  * POST 到 /api/respond。
  */
 void DshApiClient::respond(
-    const QString &rpcId,
-    const QJsonObject &value,
-    std::function<void(const QJsonObject &receipt)> onSuccess,
-    std::function<void(const RpcError &error)> onError)
+	const QString& rpcId,
+	const QJsonObject& value,
+	std::function<void(const QJsonObject& receipt)> onSuccess,
+	std::function<void(const RpcError& error)> onError)
 {
-    QJsonObject result;
-    result.insert(QStringLiteral("ok"), true);
-    result.insert(QStringLiteral("value"), value);
+	QJsonObject result;
+	result.insert(QStringLiteral("ok"), true);
+	result.insert(QStringLiteral("value"), value);
 
-    QJsonObject body;
-    body.insert(QStringLiteral("type"), QStringLiteral("client-response"));
-    body.insert(QStringLiteral("rpcId"), rpcId);
-    body.insert(QStringLiteral("result"), result);
+	QJsonObject body;
+	body.insert(QStringLiteral("type"), QStringLiteral("client-response"));
+	body.insert(QStringLiteral("rpcId"), rpcId);
+	body.insert(QStringLiteral("result"), result);
 
-    qInfo().noquote() << "[DshApi] respond rpcId=" << rpcId;
+	qInfo().noquote() << "[DshApi] respond rpcId=" << rpcId;
 
-    post(QStringLiteral("/api/respond"), body, std::move(onSuccess), std::move(onError));
+	post(QStringLiteral("/api/respond"), body, std::move(onSuccess), std::move(onError));
 }
 
 /**
@@ -238,15 +238,15 @@ void DshApiClient::respond(
  *   http://127.0.0.1:3080  ->  ws://127.0.0.1:3080/api/events.mux
  *   https://example.com     ->  wss://example.com/api/events.mux
  */
-QUrl DshApiClient::makeUrl(const QString &path) const
+QUrl DshApiClient::makeUrl(const QString& path) const
 {
-    QUrl url = m_baseUrl;
-    url.setPath(path);
-    if (url.scheme() == QStringLiteral("https"))
-        url.setScheme(QStringLiteral("wss"));
-    else
-        url.setScheme(QStringLiteral("ws"));
-    return url;
+	QUrl url = m_baseUrl;
+	url.setPath(path);
+	if (url.scheme() == QStringLiteral("https"))
+		url.setScheme(QStringLiteral("wss"));
+	else
+		url.setScheme(QStringLiteral("ws"));
+	return url;
 }
 
 /**
@@ -258,31 +258,31 @@ QUrl DshApiClient::makeUrl(const QString &path) const
  * 4. 在 reply 上记录 rpcId，finished 时交给 onReplyFinished 统一处理。
  */
 void DshApiClient::post(
-    const QString &path,
-    const QJsonObject &body,
-    std::function<void(const QJsonObject &value)> onSuccess,
-    std::function<void(const RpcError &error)> onError)
+	const QString& path,
+	const QJsonObject& body,
+	std::function<void(const QJsonObject& value)> onSuccess,
+	std::function<void(const RpcError& error)> onError)
 {
-    const QString rpcId = body.value(QStringLiteral("rpcId")).toString();
-    m_pending.insert(rpcId, PendingCall{
-        path,
-        std::move(onSuccess),
-        std::move(onError),
-    });
+	const QString rpcId = body.value(QStringLiteral("rpcId")).toString();
+	m_pending.insert(rpcId, PendingCall{
+		path,
+		std::move(onSuccess),
+		std::move(onError),
+		});
 
-    QUrl url = m_baseUrl;
-    url.setPath(path);
+	QUrl url = m_baseUrl;
+	url.setPath(path);
 
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader,
-                      QStringLiteral("application/json"));
+	QNetworkRequest request(url);
+	request.setHeader(QNetworkRequest::ContentTypeHeader,
+		QStringLiteral("application/json"));
 
-    QNetworkReply *reply = m_nam->post(
-        request,
-        QJsonDocument(body).toJson(QJsonDocument::Compact));
+	QNetworkReply* reply = m_nam->post(
+		request,
+		QJsonDocument(body).toJson(QJsonDocument::Compact));
 
-    reply->setProperty("rpcId", rpcId);
-    connect(reply, &QNetworkReply::finished, this, &DshApiClient::onReplyFinished);
+	reply->setProperty("rpcId", rpcId);
+	connect(reply, &QNetworkReply::finished, this, &DshApiClient::onReplyFinished);
 }
 
 /**
@@ -298,107 +298,108 @@ void DshApiClient::post(
  */
 void DshApiClient::onReplyFinished()
 {
-    QNetworkReply *reply = qobject_cast<QNetworkReply *>(sender());
-    if (!reply)
-        return;
+	QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
+	if (!reply)
+		return;
 
-    // 析构期间忽略回调，避免调用已经析构的 MainWindow 等接收方
-    if (m_destroyed) {
-        reply->deleteLater();
-        return;
-    }
+	// 析构期间忽略回调，避免调用已经析构的 MainWindow 等接收方
+	if (m_destroyed) {
+		reply->deleteLater();
+		return;
+	}
 
-    const QString rpcId = reply->property("rpcId").toString();
-    const auto it = m_pending.constFind(rpcId);
-    if (it == m_pending.constEnd()) {
-        qWarning().noquote() << "[DshApi] unknown rpcId:" << rpcId;
-        reply->deleteLater();
-        return;
-    }
+	const QString rpcId = reply->property("rpcId").toString();
+	const auto it = m_pending.constFind(rpcId);
+	if (it == m_pending.constEnd()) {
+		qWarning().noquote() << "[DshApi] unknown rpcId:" << rpcId;
+		reply->deleteLater();
+		return;
+	}
 
-    PendingCall pending = it.value();
-    m_pending.erase(it);
+	PendingCall pending = it.value();
+	m_pending.erase(it);
 
-    if (reply->error() != QNetworkReply::NoError) {
+	if (reply->error() != QNetworkReply::NoError) {
+		qWarning().noquote() << "[DshApi] HTTP transport error path=" << pending.path << " rpcId=" << rpcId << " error=" << reply->errorString();
+		if (pending.onError) {
+			pending.onError(RpcError{
+				QStringLiteral("transport"),
+				reply->errorString(),
+				QJsonObject(),
+				});
+		}
+		reply->deleteLater();
+		return;
+	}
 
-        qWarning().noquote() << "[DshApi] HTTP transport error path=" << pending.path << " rpcId=" << rpcId << " error=" << reply->errorString();
-        if (pending.onError) {
-            pending.onError(RpcError{
-                QStringLiteral("transport"),
-                reply->errorString(),
-                QJsonObject(),
-            });
-        }
-        reply->deleteLater();
-        return;
-    }
+	const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
 
-    const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+	qInfo().noquote() << "[DshApi] HTTP response path=" << pending.path << " rpcId=" << rpcId;
 
-    qInfo().noquote() << "[DshApi] HTTP response path=" << pending.path << " rpcId=" << rpcId;
+	// /api/respond returns the carrier receipt directly, not a server-response
+	// envelope. Success looks like { "accepted": true }; failure looks like
+	// { "accepted": false, "reason": "not-pending" | "bad-response" }.
+	if (pending.path == QStringLiteral("/api/respond")) {
+		if (root.value(QStringLiteral("accepted")).toBool()) {
+			if (pending.onSuccess)
+				pending.onSuccess(root);
+		}
+		else if (pending.onError) {
+			pending.onError(RpcError{
+				QStringLiteral("respond-rejected"),
+				root.value(QStringLiteral("reason")).toString(),
+				QJsonObject(),
+				});
+		}
+		reply->deleteLater();
+		return;
+	}
 
-    // /api/respond returns the carrier receipt directly, not a server-response
-    // envelope. Success looks like { "accepted": true }; failure looks like
-    // { "accepted": false, "reason": "not-pending" | "bad-response" }.
-    if (pending.path == QStringLiteral("/api/respond")) {
-        if (root.value(QStringLiteral("accepted")).toBool()) {
-            if (pending.onSuccess)
-                pending.onSuccess(root);
-        } else if (pending.onError) {
-            pending.onError(RpcError{
-                QStringLiteral("respond-rejected"),
-                root.value(QStringLiteral("reason")).toString(),
-                QJsonObject(),
-            });
-        }
-        reply->deleteLater();
-        return;
-    }
+	const QJsonObject result = root.value(QStringLiteral("result")).toObject();
+	if (result.value(QStringLiteral("ok")).toBool()) {
+		if (pending.onSuccess)
+			pending.onSuccess(result.value(QStringLiteral("value")).toObject());
+	}
+	else {
+		const QJsonObject errorObj = result.value(QStringLiteral("error")).toObject();
+		if (pending.onError) {
+			pending.onError(RpcError{
+				errorObj.value(QStringLiteral("code")).toString(),
+				errorObj.value(QStringLiteral("message")).toString(),
+				errorObj.value(QStringLiteral("details")).toObject(),
+				});
+		}
+	}
 
-    const QJsonObject result = root.value(QStringLiteral("result")).toObject();
-    if (result.value(QStringLiteral("ok")).toBool()) {
-        if (pending.onSuccess)
-            pending.onSuccess(result.value(QStringLiteral("value")).toObject());
-    } else {
-        const QJsonObject errorObj = result.value(QStringLiteral("error")).toObject();
-        if (pending.onError) {
-            pending.onError(RpcError{
-                errorObj.value(QStringLiteral("code")).toString(),
-                errorObj.value(QStringLiteral("message")).toString(),
-                errorObj.value(QStringLiteral("details")).toObject(),
-            });
-        }
-    }
-
-    reply->deleteLater();
+	reply->deleteLater();
 }
 
 /**
  * mux WebSocket 收到文本消息。
  * 把 JSON 解析成 QJsonObject 后通过 muxFrameReceived 信号发出。
  */
-void DshApiClient::onMuxTextMessageReceived(const QString &message)
+void DshApiClient::onMuxTextMessageReceived(const QString& message)
 {
-    const QJsonObject frame = QJsonDocument::fromJson(message.toUtf8()).object();
-    if (frame.isEmpty()) {
-        qWarning().noquote() << "[DshApi] empty frame received";
-        return;
-    }
-    if (!frame.isEmpty())
-        emit muxFrameReceived(frame);
+	const QJsonObject frame = QJsonDocument::fromJson(message.toUtf8()).object();
+	if (frame.isEmpty()) {
+		qWarning().noquote() << "[DshApi] empty frame received";
+		return;
+	}
+	if (!frame.isEmpty())
+		emit muxFrameReceived(frame);
 }
 
 /**
  * host WebSocket 收到文本消息。
  * 把 JSON 解析成 QJsonObject 后通过 hostFrameReceived 信号发出。
  */
-void DshApiClient::onHostTextMessageReceived(const QString &message)
+void DshApiClient::onHostTextMessageReceived(const QString& message)
 {
-    const QJsonObject frame = QJsonDocument::fromJson(message.toUtf8()).object();
-    if (frame.isEmpty()) {
-        qWarning().noquote() << "[DshApi] empty frame received";
-        return;
-    }
-    if (!frame.isEmpty())
-        emit hostFrameReceived(frame);
+	const QJsonObject frame = QJsonDocument::fromJson(message.toUtf8()).object();
+	if (frame.isEmpty()) {
+		qWarning().noquote() << "[DshApi] empty frame received";
+		return;
+	}
+	if (!frame.isEmpty())
+		emit hostFrameReceived(frame);
 }

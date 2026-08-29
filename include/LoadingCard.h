@@ -13,12 +13,12 @@ class QTimer;
 
 class LoadingCard : public QLabel
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit LoadingCard(QWidget *parent = nullptr);
+	explicit LoadingCard(QWidget* parent = nullptr);
 
 private:
-    QTimer *m_timer = nullptr;
-    int m_dots = 0;
+	QTimer* m_timer = nullptr;
+	int m_dots = 0;
 };

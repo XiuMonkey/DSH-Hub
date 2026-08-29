@@ -11,26 +11,26 @@
 #include "TestCodeHighlighter.h"
 #include "TestHistoryManager.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    QCoreApplication app(argc, argv);
+	QCoreApplication app(argc, argv);
 
-    int status = 0;
+	int status = 0;
 
-    {
-        TestDshEventParser test;
-        status |= QTest::qExec(&test, argc, argv);
-    }
+	{
+		TestDshEventParser test;
+		status |= QTest::qExec(&test, argc, argv);
+	}
 
-    {
-        TestCodeHighlighter test;
-        status |= QTest::qExec(&test, argc, argv);
-    }
+	{
+		TestCodeHighlighter test;
+		status |= QTest::qExec(&test, argc, argv);
+	}
 
-    {
-        TestHistoryManager test;
-        status |= QTest::qExec(&test, argc, argv);
-    }
+	{
+		TestHistoryManager test;
+		status |= QTest::qExec(&test, argc, argv);
+	}
 
-    return status;
+	return status;
 }

@@ -14,7 +14,6 @@
 
 #include <future>
 
-
 #include <QString>
 #include <QStringList>
 
@@ -26,43 +25,47 @@ class QVBoxLayout;
 
 class ExtensionManagerPopup : public PopupWindow
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit ExtensionManagerPopup(const QString &serverProfilePath,
-                                   QWidget *parent = nullptr);
+	explicit ExtensionManagerPopup(const QString& serverProfilePath,
+		QWidget* parent = nullptr);
+
+	// 清理 cordis.patch.yml 中指向不存在包的残留条目
+	void cleanupResiduals();
 
 signals:
-    void extensionInstalled(const QString &jsonPath, const QString &dllPath);
-    void serverRestartRequested();
+	void extensionInstalled(const QString& jsonPath, const QString& dllPath);
+	void extensionRemoving(const QString& name);
+	void serverRestartRequested();
 
 private slots:
-    void installExtension();
-    void pollInstall();
-    void removeSelected();
-    void refresh();
+	void installExtension();
+	void pollInstall();
+	void removeSelected();
+	void refresh();
 
 private:
-    QString serverProfilePath() const;
-    QString nodeModulesPath() const;
-    QString registryPath() const;
+	QString serverProfilePath() const;
+	QString nodeModulesPath() const;
+	QString registryPath() const;
 
-    QStringList loadInstalledExtensions() const;
-    void saveInstalledExtensions(const QStringList &names);
+	QStringList loadInstalledExtensions() const;
+	void saveInstalledExtensions(const QStringList& names);
 
-    void populateList();
+	void populateList();
 
-    bool removeExtensionDirectory(const QString &name, QString *error);
+	bool removeExtensionDirectory(const QString& name, QString* error);
 
-    QString m_serverProfilePath;
-    QListWidget *m_listWidget = nullptr;
-    QLabel *m_statusLabel = nullptr;
-    QPushButton *m_installButton = nullptr;
-    QPushButton *m_removeButton = nullptr;
-    QPushButton *m_refreshButton = nullptr;
-    std::future<bool> m_installFuture;
-    ExtensionLoader::LoadedExtension m_pendingExt;
-    QString m_pendingError;
-    bool m_installing = false;
-    QTimer *m_installTimer = nullptr;
+	QString m_serverProfilePath;
+	QListWidget* m_listWidget = nullptr;
+	QLabel* m_statusLabel = nullptr;
+	QPushButton* m_installButton = nullptr;
+	QPushButton* m_removeButton = nullptr;
+	QPushButton* m_refreshButton = nullptr;
+	std::future<bool> m_installFuture;
+	ExtensionLoader::LoadedExtension m_pendingExt;
+	QString m_pendingError;
+	bool m_installing = false;
+	QTimer* m_installTimer = nullptr;
 };

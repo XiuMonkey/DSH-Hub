@@ -10,8 +10,8 @@
 
 class LoadMoreButton : public QPushButton
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit LoadMoreButton(QWidget *parent = nullptr);
+	explicit LoadMoreButton(QWidget* parent = nullptr);
 };

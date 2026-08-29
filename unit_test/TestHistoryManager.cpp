@@ -4,82 +4,81 @@
 
 #include <QTest>
 
-
 void TestHistoryManager::resetDefaults()
 {
-    HistoryManager manager;
-    manager.setLoading(true);
-    manager.setLimit(50);
-    manager.setHasMore(true);
-    manager.setEventCount(10);
-    manager.setLoadMoreRequested(true);
+	HistoryManager manager;
+	manager.setLoading(true);
+	manager.setLimit(50);
+	manager.setHasMore(true);
+	manager.setEventCount(10);
+	manager.setLoadMoreRequested(true);
 
-    manager.reset();
+	manager.reset();
 
-    // reset() 不会改变 loading 状态，只重置分页/加载计数。
-    QVERIFY(manager.isLoading());
-    QCOMPARE(manager.limit(), 20);
-    QVERIFY(!manager.hasMore());
-    QCOMPARE(manager.eventCount(), 0);
-    QVERIFY(!manager.loadMoreRequested());
+	// reset() 不会改变 loading 状态，只重置分页/加载计数。
+	QVERIFY(manager.isLoading());
+	QCOMPARE(manager.limit(), 20);
+	QVERIFY(!manager.hasMore());
+	QCOMPARE(manager.eventCount(), 0);
+	QVERIFY(!manager.loadMoreRequested());
 }
 
 void TestHistoryManager::setLoading()
 {
-    HistoryManager manager;
-    QVERIFY(!manager.isLoading());
-    manager.setLoading(true);
-    QVERIFY(manager.isLoading());
-    manager.setLoading(false);
-    QVERIFY(!manager.isLoading());
+	HistoryManager manager;
+	QVERIFY(!manager.isLoading());
+	manager.setLoading(true);
+	QVERIFY(manager.isLoading());
+	manager.setLoading(false);
+	QVERIFY(!manager.isLoading());
 }
 
 void TestHistoryManager::limitLifecycle()
 {
-    HistoryManager manager;
-    QCOMPARE(manager.limit(), 20);
-    manager.setLimit(100);
-    QCOMPARE(manager.limit(), 100);
-    manager.setLimit(0);
-    QCOMPARE(manager.limit(), 0);
+	HistoryManager manager;
+	QCOMPARE(manager.limit(), 20);
+	manager.setLimit(100);
+	QCOMPARE(manager.limit(), 100);
+	manager.setLimit(0);
+	QCOMPARE(manager.limit(), 0);
 }
 
 void TestHistoryManager::increaseLimit()
 {
-    HistoryManager manager;
-    QCOMPARE(manager.limit(), 20);
-    manager.increaseLimit(30);
-    QCOMPARE(manager.limit(), 50);
-    manager.increaseLimit(-10);
-    QCOMPARE(manager.limit(), 40);
+	HistoryManager manager;
+	QCOMPARE(manager.limit(), 20);
+	manager.increaseLimit(30);
+	QCOMPARE(manager.limit(), 50);
+	manager.increaseLimit(-10);
+	QCOMPARE(manager.limit(), 40);
 }
 
 void TestHistoryManager::hasMoreLifecycle()
 {
-    HistoryManager manager;
-    QVERIFY(!manager.hasMore());
-    manager.setHasMore(true);
-    QVERIFY(manager.hasMore());
-    manager.setHasMore(false);
-    QVERIFY(!manager.hasMore());
+	HistoryManager manager;
+	QVERIFY(!manager.hasMore());
+	manager.setHasMore(true);
+	QVERIFY(manager.hasMore());
+	manager.setHasMore(false);
+	QVERIFY(!manager.hasMore());
 }
 
 void TestHistoryManager::eventCountLifecycle()
 {
-    HistoryManager manager;
-    QCOMPARE(manager.eventCount(), 0);
-    manager.setEventCount(12);
-    QCOMPARE(manager.eventCount(), 12);
-    manager.setEventCount(-1);
-    QCOMPARE(manager.eventCount(), -1);
+	HistoryManager manager;
+	QCOMPARE(manager.eventCount(), 0);
+	manager.setEventCount(12);
+	QCOMPARE(manager.eventCount(), 12);
+	manager.setEventCount(-1);
+	QCOMPARE(manager.eventCount(), -1);
 }
 
 void TestHistoryManager::loadMoreRequestedLifecycle()
 {
-    HistoryManager manager;
-    QVERIFY(!manager.loadMoreRequested());
-    manager.setLoadMoreRequested(true);
-    QVERIFY(manager.loadMoreRequested());
-    manager.setLoadMoreRequested(false);
-    QVERIFY(!manager.loadMoreRequested());
+	HistoryManager manager;
+	QVERIFY(!manager.loadMoreRequested());
+	manager.setLoadMoreRequested(true);
+	QVERIFY(manager.loadMoreRequested());
+	manager.setLoadMoreRequested(false);
+	QVERIFY(!manager.loadMoreRequested());
 }

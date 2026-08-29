@@ -10,17 +10,15 @@
 
 namespace
 {
-
-QJsonObject objectFromJson(const char *json)
-{
-    return QJsonDocument::fromJson(QByteArray(json)).object();
-}
-
+	QJsonObject objectFromJson(const char* json)
+	{
+		return QJsonDocument::fromJson(QByteArray(json)).object();
+	}
 } // namespace
 
 void TestDshEventParser::extractEventText_assistantMessageString()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/message",
         "data": {
             "message": {
@@ -29,25 +27,25 @@ void TestDshEventParser::extractEventText_assistantMessageString()
         }
     })json");
 
-    QCOMPARE(extractEventText(event), QStringLiteral("Hello, DSH!"));
+	QCOMPARE(extractEventText(event), QStringLiteral("Hello, DSH!"));
 }
 
 void TestDshEventParser::extractEventText_userMessageLegacy()
 {
-    // Legacy user/message compatibility: user/message may put message directly in data.
-    const QJsonObject event = objectFromJson(R"json({
+	// Legacy user/message compatibility: user/message may put message directly in data.
+	const QJsonObject event = objectFromJson(R"json({
         "type": "user/message",
         "data": {
             "content": "legacy user message"
         }
     })json");
 
-    QCOMPARE(extractEventText(event), QStringLiteral("legacy user message"));
+	QCOMPARE(extractEventText(event), QStringLiteral("legacy user message"));
 }
 
 void TestDshEventParser::extractEventText_contentArray()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/message",
         "data": {
             "message": {
@@ -60,80 +58,80 @@ void TestDshEventParser::extractEventText_contentArray()
         }
     })json");
 
-    QCOMPARE(extractEventText(event), QStringLiteral("first\nhidden\nthird"));
+	QCOMPARE(extractEventText(event), QStringLiteral("first\nhidden\nthird"));
 }
 
 void TestDshEventParser::extractEventText_chunkString()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/chunk",
         "data": {
             "chunk": "stream"
         }
     })json");
 
-    QCOMPARE(extractEventText(event), QStringLiteral("stream"));
+	QCOMPARE(extractEventText(event), QStringLiteral("stream"));
 }
 
 void TestDshEventParser::extractEventText_chunkObject()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/chunk",
         "data": {
             "chunk": { "type": "text", "text": "chunk object" }
         }
     })json");
 
-    QCOMPARE(extractEventText(event), QStringLiteral("chunk object"));
+	QCOMPARE(extractEventText(event), QStringLiteral("chunk object"));
 }
 
 void TestDshEventParser::extractEventText_fallbackText()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "some/event",
         "data": {
             "text": "fallback"
         }
     })json");
 
-    QCOMPARE(extractEventText(event), QStringLiteral("fallback"));
+	QCOMPARE(extractEventText(event), QStringLiteral("fallback"));
 }
 
 void TestDshEventParser::extractEventText_unknownTypeEmpty()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "unknown/event",
         "data": {}
     })json");
 
-    QVERIFY(extractEventText(event).isEmpty());
+	QVERIFY(extractEventText(event).isEmpty());
 }
 
 void TestDshEventParser::extractChunkType_object()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/chunk",
         "data": {
             "chunk": { "type": "reasoning", "text": "thinking" }
         }
     })json");
 
-    QCOMPARE(extractChunkType(event), QStringLiteral("reasoning"));
+	QCOMPARE(extractChunkType(event), QStringLiteral("reasoning"));
 }
 
 void TestDshEventParser::extractChunkType_missing()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/chunk",
         "data": { "chunk": "text" }
     })json");
 
-    QVERIFY(extractChunkType(event).isEmpty());
+	QVERIFY(extractChunkType(event).isEmpty());
 }
 
 void TestDshEventParser::extractThinking_onlyReasoningBlocks()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/message",
         "data": {
             "message": {
@@ -146,12 +144,12 @@ void TestDshEventParser::extractThinking_onlyReasoningBlocks()
         }
     })json");
 
-    QCOMPARE(extractThinking(event), QStringLiteral("step 1\nstep 2"));
+	QCOMPARE(extractThinking(event), QStringLiteral("step 1\nstep 2"));
 }
 
 void TestDshEventParser::extractThinking_ignoresTextBlocks()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/message",
         "data": {
             "message": {
@@ -162,12 +160,12 @@ void TestDshEventParser::extractThinking_ignoresTextBlocks()
         }
     })json");
 
-    QVERIFY(extractThinking(event).isEmpty());
+	QVERIFY(extractThinking(event).isEmpty());
 }
 
 void TestDshEventParser::extractThinking_stringContentReturnsEmpty()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/message",
         "data": {
             "message": {
@@ -176,12 +174,12 @@ void TestDshEventParser::extractThinking_stringContentReturnsEmpty()
         }
     })json");
 
-    QVERIFY(extractThinking(event).isEmpty());
+	QVERIFY(extractThinking(event).isEmpty());
 }
 
 void TestDshEventParser::extractReply_stringContent()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/message",
         "data": {
             "message": {
@@ -190,12 +188,12 @@ void TestDshEventParser::extractReply_stringContent()
         }
     })json");
 
-    QCOMPARE(extractReply(event), QStringLiteral("direct reply"));
+	QCOMPARE(extractReply(event), QStringLiteral("direct reply"));
 }
 
 void TestDshEventParser::extractReply_textBlocksOnly()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/message",
         "data": {
             "message": {
@@ -208,12 +206,12 @@ void TestDshEventParser::extractReply_textBlocksOnly()
         }
     })json");
 
-    QCOMPARE(extractReply(event), QStringLiteral("part 1\npart 2"));
+	QCOMPARE(extractReply(event), QStringLiteral("part 1\npart 2"));
 }
 
 void TestDshEventParser::extractReply_ignoresReasoning()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "assistant/message",
         "data": {
             "message": {
@@ -224,12 +222,12 @@ void TestDshEventParser::extractReply_ignoresReasoning()
         }
     })json");
 
-    QVERIFY(extractReply(event).isEmpty());
+	QVERIFY(extractReply(event).isEmpty());
 }
 
 void TestDshEventParser::extractToolCall_objectArguments()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "tool/call",
         "data": {
             "name": "read_file",
@@ -240,16 +238,16 @@ void TestDshEventParser::extractToolCall_objectArguments()
         }
     })json");
 
-    const ToolCallInfo info = extractToolCall(event);
-    QVERIFY(info.valid);
-    QCOMPARE(info.name, QStringLiteral("read_file"));
-    QCOMPARE(info.arguments.value(QStringLiteral("path")).toString(), QStringLiteral("C:/tmp/a.txt"));
-    QCOMPARE(info.arguments.value(QStringLiteral("line")).toInt(), 10);
+	const ToolCallInfo info = extractToolCall(event);
+	QVERIFY(info.valid);
+	QCOMPARE(info.name, QStringLiteral("read_file"));
+	QCOMPARE(info.arguments.value(QStringLiteral("path")).toString(), QStringLiteral("C:/tmp/a.txt"));
+	QCOMPARE(info.arguments.value(QStringLiteral("line")).toInt(), 10);
 }
 
 void TestDshEventParser::extractToolCall_jsonStringArguments()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "tool/call",
         "data": {
             "name": "run_command",
@@ -257,27 +255,27 @@ void TestDshEventParser::extractToolCall_jsonStringArguments()
         }
     })json");
 
-    const ToolCallInfo info = extractToolCall(event);
-    QVERIFY(info.valid);
-    QCOMPARE(info.name, QStringLiteral("run_command"));
-    QCOMPARE(info.arguments.value(QStringLiteral("command")).toString(), QStringLiteral("dir"));
+	const ToolCallInfo info = extractToolCall(event);
+	QVERIFY(info.valid);
+	QCOMPARE(info.name, QStringLiteral("run_command"));
+	QCOMPARE(info.arguments.value(QStringLiteral("command")).toString(), QStringLiteral("dir"));
 }
 
 void TestDshEventParser::extractToolCall_invalid()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "tool/call",
         "data": { "arguments": {} }
     })json");
 
-    const ToolCallInfo info = extractToolCall(event);
-    QVERIFY(!info.valid);
-    QVERIFY(info.name.isEmpty());
+	const ToolCallInfo info = extractToolCall(event);
+	QVERIFY(!info.valid);
+	QVERIFY(info.name.isEmpty());
 }
 
 void TestDshEventParser::extractToolResult_valid()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "tool/result",
         "data": {
             "message": "done",
@@ -285,58 +283,58 @@ void TestDshEventParser::extractToolResult_valid()
         }
     })json");
 
-    const ToolResultInfo info = extractToolResult(event);
-    QVERIFY(info.valid);
-    QCOMPARE(info.message, QStringLiteral("done"));
-    QVERIFY(info.error.isEmpty());
+	const ToolResultInfo info = extractToolResult(event);
+	QVERIFY(info.valid);
+	QCOMPARE(info.message, QStringLiteral("done"));
+	QVERIFY(info.error.isEmpty());
 }
 
 void TestDshEventParser::extractToolResult_invalid()
 {
-    const QJsonObject event = objectFromJson(R"json({
+	const QJsonObject event = objectFromJson(R"json({
         "type": "tool/result",
         "data": {}
     })json");
 
-    const ToolResultInfo info = extractToolResult(event);
-    QVERIFY(!info.valid);
-    QVERIFY(info.message.isEmpty());
-    QVERIFY(info.error.isEmpty());
+	const ToolResultInfo info = extractToolResult(event);
+	QVERIFY(!info.valid);
+	QVERIFY(info.message.isEmpty());
+	QVERIFY(info.error.isEmpty());
 }
 
 void TestDshEventParser::extractApproval_valid()
 {
-    const QJsonObject payload = objectFromJson(R"json({
+	const QJsonObject payload = objectFromJson(R"json({
         "sessionId": "sess-1",
         "approvalId": "appr-1",
         "toolName": "run_command",
         "reason": "needs permission"
     })json");
 
-    const ApprovalInfo info = extractApproval(payload);
-    QVERIFY(info.valid);
-    QCOMPARE(info.sessionId, QStringLiteral("sess-1"));
-    QCOMPARE(info.approvalId, QStringLiteral("appr-1"));
-    QCOMPARE(info.toolName, QStringLiteral("run_command"));
-    QCOMPARE(info.reason, QStringLiteral("needs permission"));
+	const ApprovalInfo info = extractApproval(payload);
+	QVERIFY(info.valid);
+	QCOMPARE(info.sessionId, QStringLiteral("sess-1"));
+	QCOMPARE(info.approvalId, QStringLiteral("appr-1"));
+	QCOMPARE(info.toolName, QStringLiteral("run_command"));
+	QCOMPARE(info.reason, QStringLiteral("needs permission"));
 }
 
 void TestDshEventParser::extractApproval_missingApprovalId()
 {
-    const QJsonObject payload = objectFromJson(R"json({
+	const QJsonObject payload = objectFromJson(R"json({
         "sessionId": "sess-1",
         "toolName": "run_command"
     })json");
 
-    const ApprovalInfo info = extractApproval(payload);
-    QVERIFY(!info.valid);
-    QCOMPARE(info.sessionId, QStringLiteral("sess-1"));
-    QVERIFY(info.approvalId.isEmpty());
+	const ApprovalInfo info = extractApproval(payload);
+	QVERIFY(!info.valid);
+	QCOMPARE(info.sessionId, QStringLiteral("sess-1"));
+	QVERIFY(info.approvalId.isEmpty());
 }
 
 void TestDshEventParser::extractQuestions_returnsOptions()
 {
-    const QJsonObject payload = objectFromJson(R"json({
+	const QJsonObject payload = objectFromJson(R"json({
         "questions": [
             {
                 "id": "q1",
@@ -351,21 +349,21 @@ void TestDshEventParser::extractQuestions_returnsOptions()
         ]
     })json");
 
-    const QList<QuestionInfo> questions = extractQuestions(payload);
-    QCOMPARE(questions.size(), 1);
-    const QuestionInfo &info = questions.first();
-    QCOMPARE(info.id, QStringLiteral("q1"));
-    QCOMPARE(info.question, QStringLiteral("Choose an option"));
-    QCOMPARE(info.detail, QStringLiteral("detail text"));
-    QVERIFY(info.multiSelect);
-    QCOMPARE(info.options, QStringList() << QStringLiteral("A") << QStringLiteral("B"));
+	const QList<QuestionInfo> questions = extractQuestions(payload);
+	QCOMPARE(questions.size(), 1);
+	const QuestionInfo& info = questions.first();
+	QCOMPARE(info.id, QStringLiteral("q1"));
+	QCOMPARE(info.question, QStringLiteral("Choose an option"));
+	QCOMPARE(info.detail, QStringLiteral("detail text"));
+	QVERIFY(info.multiSelect);
+	QCOMPARE(info.options, QStringList() << QStringLiteral("A") << QStringLiteral("B"));
 }
 
 void TestDshEventParser::extractQuestions_empty()
 {
-    const QJsonObject payload = objectFromJson(R"json({
+	const QJsonObject payload = objectFromJson(R"json({
         "questions": []
     })json");
 
-    QVERIFY(extractQuestions(payload).isEmpty());
+	QVERIFY(extractQuestions(payload).isEmpty());
 }

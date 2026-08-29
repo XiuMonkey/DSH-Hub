@@ -4,6 +4,8 @@
 #include "DshApiClient.h"
 #include "SessionPrefetcher.h"
 
+#include <QContextMenuEvent>
+#include <QDialog>
 #include <QDir>
 #include <QEvent>
 #include <QFile>
@@ -25,692 +27,757 @@
 // SidebarLogo
 // ------------------------------------------------------------------
 
-SidebarLogo::SidebarLogo(QWidget *parent)
-    : QLabel(parent)
+SidebarLogo::SidebarLogo(QWidget* parent)
+	: QLabel(parent)
 {
-    setObjectName(QStringLiteral("sidebarLogo"));
-    setAlignment(Qt::AlignCenter);
-    setAttribute(Qt::WA_TranslucentBackground);
-    setStyleSheet(QStringLiteral("background: transparent;"));
+	setObjectName(QStringLiteral("sidebarLogo"));
+	setAlignment(Qt::AlignCenter);
+	setAttribute(Qt::WA_TranslucentBackground);
+	setStyleSheet(QStringLiteral("background: transparent;"));
 
-    const QString logoResource = Theme::isDark()
-        ? QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny-Dark@2x.png")
-        : QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny@2x.png");
-    QPixmap logoPix(logoResource);
-    if (!logoPix.isNull()) {
-        logoPix.setDevicePixelRatio(2.0);
-        setPixmap(logoPix);
-        setFixedHeight(logoPix.height() / logoPix.devicePixelRatio());
-    } else {
-        setText(QStringLiteral("DSH Hub"));
-        setFixedHeight(80);
-    }
+	const QString logoResource = Theme::isDark()
+		? QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny-Dark@2x.png")
+		: QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny@2x.png");
+	QPixmap logoPix(logoResource);
+	if (!logoPix.isNull()) {
+		logoPix.setDevicePixelRatio(2.0);
+		setPixmap(logoPix);
+		setFixedHeight(logoPix.height() / logoPix.devicePixelRatio());
+	}
+	else {
+		setText(QStringLiteral("DSH Hub"));
+		setFixedHeight(80);
+	}
 }
 
 // ------------------------------------------------------------------
 // NewWorkspaceButton
 // ------------------------------------------------------------------
 
-NewWorkspaceButton::NewWorkspaceButton(QWidget *parent)
-    : QPushButton(QStringLiteral("新建工作区"), parent)
+NewWorkspaceButton::NewWorkspaceButton(QWidget* parent)
+	: QPushButton(QStringLiteral("新建工作区"), parent)
 {
-    setObjectName(QStringLiteral("newWorkspaceButton"));
-    setCursor(Qt::PointingHandCursor);
-    setStyleSheet(QStringLiteral("QPushButton#newWorkspaceButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 8px 12px;") + QStringLiteral("  font-size: 14px;") + QStringLiteral("}") + QStringLiteral("QPushButton#newWorkspaceButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("accentHover")) + QStringLiteral(";") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("newWorkspaceButton"));
+	setCursor(Qt::PointingHandCursor);
+	setStyleSheet(QStringLiteral("QPushButton#newWorkspaceButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 8px 12px;") + QStringLiteral("  font-size: 14px;") + QStringLiteral("}") + QStringLiteral("QPushButton#newWorkspaceButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("accentHover")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
 // ClearSessionButton
 // ------------------------------------------------------------------
 
-ClearSessionButton::ClearSessionButton(QWidget *parent)
-    : QPushButton(QStringLiteral("清空会话"), parent)
+ClearSessionButton::ClearSessionButton(QWidget* parent)
+	: QPushButton(QStringLiteral("清空会话"), parent)
 {
-    setObjectName(QStringLiteral("clearSessionButton"));
-    setCursor(Qt::PointingHandCursor);
-    setStyleSheet(QStringLiteral("QPushButton#clearSessionButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("dangerButtonBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 8px 12px;") + QStringLiteral("  font-size: 14px;") + QStringLiteral("}") + QStringLiteral("QPushButton#clearSessionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("clearSessionButton"));
+	setCursor(Qt::PointingHandCursor);
+	setStyleSheet(QStringLiteral("QPushButton#clearSessionButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("dangerButtonBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 8px 12px;") + QStringLiteral("  font-size: 14px;") + QStringLiteral("}") + QStringLiteral("QPushButton#clearSessionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
 // SidebarSettingsButton
 // ------------------------------------------------------------------
 
-SidebarSettingsButton::SidebarSettingsButton(QWidget *parent)
-    : QPushButton(parent)
+SidebarSettingsButton::SidebarSettingsButton(QWidget* parent)
+	: QPushButton(parent)
 {
-    setObjectName(QStringLiteral("sidebarSettingsButton"));
-    setFixedSize(32, 32);
-    setCursor(Qt::PointingHandCursor);
-    setToolTip(QStringLiteral("设置"));
-    setIcon(QIcon(QStringLiteral(":/DSHHub/Setting-Icon.png")));
-    setIconSize(QSize(20, 20));
-    setStyleSheet(QStringLiteral("QPushButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("sidebarSettingsButton"));
+	setFixedSize(32, 32);
+	setCursor(Qt::PointingHandCursor);
+	setToolTip(QStringLiteral("设置"));
+	setIcon(QIcon(QStringLiteral(":/DSHHub/Setting-Icon.png")));
+	setIconSize(QSize(20, 20));
+	setStyleSheet(QStringLiteral("QPushButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
 // SidebarPluginsButton
 // ------------------------------------------------------------------
 
-SidebarPluginsButton::SidebarPluginsButton(QWidget *parent)
-    : QPushButton(parent)
+SidebarPluginsButton::SidebarPluginsButton(QWidget* parent)
+	: QPushButton(parent)
 {
-    setObjectName(QStringLiteral("sidebarPluginsButton"));
-    setFixedSize(32, 32);
-    setCursor(Qt::PointingHandCursor);
-    setToolTip(QStringLiteral("插件"));
-    setIcon(QIcon(QStringLiteral(":/DSHHub/Plugin-Icon.png")));
-    setIconSize(QSize(20, 20));
-    setStyleSheet(QStringLiteral("QPushButton#sidebarPluginsButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarPluginsButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("sidebarPluginsButton"));
+	setFixedSize(32, 32);
+	setCursor(Qt::PointingHandCursor);
+	setToolTip(QStringLiteral("插件"));
+	setIcon(QIcon(QStringLiteral(":/DSHHub/Plugin-Icon.png")));
+	setIconSize(QSize(20, 20));
+	setStyleSheet(QStringLiteral("QPushButton#sidebarPluginsButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarPluginsButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
 // SidebarThemeButton
 // ------------------------------------------------------------------
 
-SidebarThemeButton::SidebarThemeButton(QWidget *parent)
-    : QPushButton(parent)
+SidebarThemeButton::SidebarThemeButton(QWidget* parent)
+	: QPushButton(parent)
 {
-    setObjectName(QStringLiteral("sidebarThemeButton"));
-    setFixedSize(32, 32);
-    setCursor(Qt::PointingHandCursor);
-    setToolTip(QStringLiteral("切换主题"));
-    setIcon(QIcon(QStringLiteral(":/DSHHub/Theme-Icon.png")));
-    setIconSize(QSize(20, 20));
-    setStyleSheet(QStringLiteral("QPushButton#sidebarThemeButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarThemeButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("sidebarThemeButton"));
+	setFixedSize(32, 32);
+	setCursor(Qt::PointingHandCursor);
+	setToolTip(QStringLiteral("切换主题"));
+	setIcon(QIcon(QStringLiteral(":/DSHHub/Theme-Icon.png")));
+	setIconSize(QSize(20, 20));
+	setStyleSheet(QStringLiteral("QPushButton#sidebarThemeButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarThemeButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
 // SidebarExtensionButton
 // ------------------------------------------------------------------
 
-SidebarExtensionButton::SidebarExtensionButton(QWidget *parent)
-    : QPushButton(parent)
+SidebarExtensionButton::SidebarExtensionButton(QWidget* parent)
+	: QPushButton(parent)
 {
-    setObjectName(QStringLiteral("sidebarExtensionButton"));
-    setFixedSize(32, 32);
-    setCursor(Qt::PointingHandCursor);
-    setToolTip(QStringLiteral("扩展管理"));
-    setIcon(QIcon(QStringLiteral(":/DSHHub/Extension-Icon.png")));
-    setIconSize(QSize(20, 20));
-    setStyleSheet(QStringLiteral("QPushButton#sidebarExtensionButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarExtensionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("sidebarExtensionButton"));
+	setFixedSize(32, 32);
+	setCursor(Qt::PointingHandCursor);
+	setToolTip(QStringLiteral("扩展管理"));
+	setIcon(QIcon(QStringLiteral(":/DSHHub/Extension-Icon.png")));
+	setIconSize(QSize(20, 20));
+	setStyleSheet(QStringLiteral("QPushButton#sidebarExtensionButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarExtensionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
 }
-
 
 // ------------------------------------------------------------------
 // SessionButton
 // ------------------------------------------------------------------
 
-SessionButton::SessionButton(const QString &sessionId,
-                             const QString &title,
-                             QWidget *parent)
-    : QPushButton(parent)
-    , m_sessionId(sessionId)
-    , m_fullTitle(title.isEmpty() ? sessionId : title)
+SessionButton::SessionButton(const QString& sessionId,
+	const QString& title,
+	QWidget* parent)
+	: QPushButton(parent)
+	, m_sessionId(sessionId)
+	, m_fullTitle(title.isEmpty() ? sessionId : title)
 {
-    setObjectName(QStringLiteral("sessionButton"));
-    setCheckable(true);
-    // 不再依赖 autoExclusive 做跨工作区互斥，统一由 WorkspaceList::setCurrentSession 管理
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setMinimumHeight(32);
-    setCursor(Qt::PointingHandCursor);
+	setObjectName(QStringLiteral("sessionButton"));
+	setCheckable(true);
+	// 不再依赖 autoExclusive 做跨工作区互斥，统一由 WorkspaceList::setCurrentSession 管理
+	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	setMinimumHeight(32);
+	setCursor(Qt::PointingHandCursor);
 
-    connect(this, &QPushButton::clicked, this, &SessionButton::handleClicked);
+	connect(this, &QPushButton::clicked, this, &SessionButton::handleClicked);
 
-    updateElidedText();
+	updateElidedText();
 }
 
 QString SessionButton::sessionId() const
 {
-    return m_sessionId;
+	return m_sessionId;
 }
 
 QString SessionButton::fullTitle() const
 {
-    return m_fullTitle;
+	return m_fullTitle;
 }
 
-void SessionButton::setSessionTitle(const QString &title)
+void SessionButton::setSessionTitle(const QString& title)
 {
-    m_fullTitle = title.isEmpty() ? m_sessionId : title;
-    updateElidedText();
+	m_fullTitle = title.isEmpty() ? m_sessionId : title;
+	updateElidedText();
 }
 
 void SessionButton::setSelected(bool selected)
 {
-    setChecked(selected);
+	setChecked(selected);
 }
 
-void SessionButton::resizeEvent(QResizeEvent *event)
+void SessionButton::resizeEvent(QResizeEvent* event)
 {
-    QPushButton::resizeEvent(event);
-    updateElidedText();
+	QPushButton::resizeEvent(event);
+	updateElidedText();
 }
 
 void SessionButton::handleClicked()
 {
-    emit sessionClicked(m_sessionId);
+	emit sessionClicked(m_sessionId);
+}
+
+void SessionButton::contextMenuEvent(QContextMenuEvent* event)
+{
+	// 不用 QMenu：Windows 的 QMenu 原生弹窗即使设置 WA_TranslucentBackground，
+	// 在某些环境下仍会在圆角外绘制黑色矩形。这里改用和 PopupWindow 相同的
+	// 无边框透明 QDialog + QPushButton 实现，圆角外可以真正透明。
+	QDialog menu(nullptr, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+	menu.setAttribute(Qt::WA_TranslucentBackground);
+	menu.setAttribute(Qt::WA_StyledBackground, true);
+
+	auto* deleteAction = new QPushButton(QStringLiteral("删除会话"), &menu);
+	deleteAction->setObjectName(QStringLiteral("sessionContextDeleteAction"));
+	deleteAction->setCursor(Qt::PointingHandCursor);
+	deleteAction->setStyleSheet(
+		QStringLiteral("QPushButton#sessionContextDeleteAction {")
+		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";")
+		+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
+		+ QStringLiteral("  border-radius: 10px;")
+		+ QStringLiteral("  padding: 8px 20px;")
+		+ QStringLiteral("  font-size: 13px;")
+		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
+		+ QStringLiteral("}")
+		+ QStringLiteral("QPushButton#sessionContextDeleteAction:hover {")
+		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("dangerBg")) + QStringLiteral(";")
+		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";")
+		+ QStringLiteral("}"));
+
+	auto* layout = new QVBoxLayout(&menu);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->addWidget(deleteAction);
+
+	menu.adjustSize();
+	menu.move(event->globalPos());
+
+	connect(deleteAction, &QPushButton::clicked, this, [this, &menu]() {
+		emit deleteRequested(m_sessionId);
+		menu.accept();
+		});
+
+	menu.exec();
 }
 
 void SessionButton::updateElidedText()
 {
-    const int availableWidth = width() - 20;
-    if (availableWidth <= 0) {
-        setText(m_fullTitle);
-        return;
-    }
+	const int availableWidth = width() - 20;
+	if (availableWidth <= 0) {
+		setText(m_fullTitle);
+		return;
+	}
 
-    const QFontMetrics fm(font());
-    setText(fm.elidedText(m_fullTitle, Qt::ElideRight, availableWidth));
+	const QFontMetrics fm(font());
+	setText(fm.elidedText(m_fullTitle, Qt::ElideRight, availableWidth));
 }
 
 // ------------------------------------------------------------------
 // WorkspaceButton
 // ------------------------------------------------------------------
 
-WorkspaceButton::WorkspaceButton(const QString &title, QWidget *parent)
-    : QPushButton(parent)
-    , m_title(title)
+WorkspaceButton::WorkspaceButton(const QString& title, QWidget* parent)
+	: QPushButton(parent)
+	, m_title(title)
 {
-    setObjectName(QStringLiteral("workspaceButton"));
-    setCursor(Qt::PointingHandCursor);
-    setMouseTracking(true);
-    setCheckable(true);
-    setChecked(true);
-    setStyleSheet(QStringLiteral("QPushButton#workspaceButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 6px 26px 6px 10px;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("  font-size: 13px;") + QStringLiteral("  font-weight: 600;") + QStringLiteral("  text-align: left;") + QStringLiteral("}") + QStringLiteral("QPushButton#workspaceButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("workspaceButton"));
+	setCursor(Qt::PointingHandCursor);
+	setMouseTracking(true);
+	setCheckable(true);
+	setChecked(true);
+	setStyleSheet(QStringLiteral("QPushButton#workspaceButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 6px 26px 6px 10px;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("  font-size: 13px;") + QStringLiteral("  font-weight: 600;") + QStringLiteral("  text-align: left;") + QStringLiteral("}") + QStringLiteral("QPushButton#workspaceButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}"));
 
-    setExpanded(true);
+	setExpanded(true);
 }
 
 void WorkspaceButton::setExpanded(bool expanded)
 {
-    setText((expanded ? QStringLiteral("▾ ") : QStringLiteral("▸ ")) + m_title);
-    update();
+	setText((expanded ? QStringLiteral("▾ ") : QStringLiteral("▸ ")) + m_title);
+	update();
 }
 
-void WorkspaceButton::enterEvent(QEnterEvent *event)
+void WorkspaceButton::enterEvent(QEnterEvent* event)
 {
-    update();
-    QPushButton::enterEvent(event);
+	update();
+	QPushButton::enterEvent(event);
 }
 
-void WorkspaceButton::leaveEvent(QEvent *event)
+void WorkspaceButton::leaveEvent(QEvent* event)
 {
-    m_plusHovered = false;
-    update();
-    QPushButton::leaveEvent(event);
+	m_plusHovered = false;
+	update();
+	QPushButton::leaveEvent(event);
 }
 
-void WorkspaceButton::mouseMoveEvent(QMouseEvent *event)
+void WorkspaceButton::mouseMoveEvent(QMouseEvent* event)
 {
-    const bool hover = rect().contains(event->pos()) && event->pos().x() >= width() - 30;
-    if (hover != m_plusHovered) {
-        m_plusHovered = hover;
-        update();
-    }
-    QPushButton::mouseMoveEvent(event);
+	const bool hover = rect().contains(event->pos()) && event->pos().x() >= width() - 30;
+	if (hover != m_plusHovered) {
+		m_plusHovered = hover;
+		update();
+	}
+	QPushButton::mouseMoveEvent(event);
 }
 
-void WorkspaceButton::mouseReleaseEvent(QMouseEvent *event)
+void WorkspaceButton::mouseReleaseEvent(QMouseEvent* event)
 {
-    // 点击右侧加号区域时只触发新建会话，不折叠/展开工作区
-    if (event->pos().x() >= width() - 30) {
-        emit addSessionRequested();
-        return;
-    }
-    QPushButton::mouseReleaseEvent(event);
+	// 点击右侧加号区域时只触发新建会话，不折叠/展开工作区
+	if (event->pos().x() >= width() - 30) {
+		emit addSessionRequested();
+		return;
+	}
+	QPushButton::mouseReleaseEvent(event);
 }
 
-void WorkspaceButton::paintEvent(QPaintEvent *event)
+void WorkspaceButton::paintEvent(QPaintEvent* event)
 {
-    QPushButton::paintEvent(event);
+	QPushButton::paintEvent(event);
 
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing, true);
+	QPainter painter(this);
+	painter.setRenderHint(QPainter::Antialiasing, true);
 
-    const int cx = width() - 16;
-    const int cy = height() / 2;
-    const int radius = 8;
+	const int cx = width() - 16;
+	const int cy = height() / 2;
+	const int radius = 8;
 
-    // 只有鼠标悬停在加号区域时，才显示浅蓝色圆形背景
-    if (m_plusHovered) {
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(224, 231, 255));
-        painter.drawEllipse(QPointF(cx, cy), radius, radius);
-    }
+	// 只有鼠标悬停在加号区域时，才显示浅蓝色圆形背景
+	if (m_plusHovered) {
+		painter.setPen(Qt::NoPen);
+		painter.setBrush(QColor(224, 231, 255));
+		painter.drawEllipse(QPointF(cx, cy), radius, radius);
+	}
 
-    QPen pen(QColor(76, 139, 245), 2, Qt::SolidLine, Qt::RoundCap);
-    painter.setPen(pen);
+	QPen pen(QColor(76, 139, 245), 2, Qt::SolidLine, Qt::RoundCap);
+	painter.setPen(pen);
 
-    const int half = 5;
-    painter.drawLine(cx - half, cy, cx + half, cy);
-    painter.drawLine(cx, cy - half, cx, cy + half);
+	const int half = 5;
+	painter.drawLine(cx - half, cy, cx + half, cy);
+	painter.drawLine(cx, cy - half, cx, cy + half);
 }
 
 // ------------------------------------------------------------------
 // WorkspaceList
 // ------------------------------------------------------------------
 
-WorkspaceList::WorkspaceList(QWidget *parent)
-    : QWidget(parent)
+WorkspaceList::WorkspaceList(QWidget* parent)
+	: QWidget(parent)
 {
-    setObjectName(QStringLiteral("workspaceList"));
-    setAttribute(Qt::WA_StyledBackground, true);
+	setObjectName(QStringLiteral("workspaceList"));
+	setAttribute(Qt::WA_StyledBackground, true);
 
-    m_layout = new QVBoxLayout(this);
-    m_layout->setContentsMargins(0, 0, 0, 0);
-    m_layout->setSpacing(2);
-    m_layout->addStretch(1);
+	m_layout = new QVBoxLayout(this);
+	m_layout->setContentsMargins(0, 0, 0, 0);
+	m_layout->setSpacing(2);
+	m_layout->addStretch(1);
 }
 
-void WorkspaceList::setWorkspaces(const QJsonArray &items)
+void WorkspaceList::setWorkspaces(const QJsonArray& items)
 {
-    clearWorkspaceGroups();
-    m_buttons.clear();
+	clearWorkspaceGroups();
+	m_buttons.clear();
 
-    for (const auto &item : items) {
-        const QJsonObject obj = item.toObject();
-        const QString workspaceId = obj.value(QStringLiteral("workspaceId")).toString();
-        const QString title = obj.value(QStringLiteral("title")).toString();
-        if (workspaceId.isEmpty())
-            continue;
+	for (const auto& item : items) {
+		const QJsonObject obj = item.toObject();
+		const QString workspaceId = obj.value(QStringLiteral("workspaceId")).toString();
+		const QString title = obj.value(QStringLiteral("title")).toString();
+		if (workspaceId.isEmpty())
+			continue;
 
-        createWorkspaceGroup(workspaceId, title.isEmpty() ? workspaceId : title);
+		createWorkspaceGroup(workspaceId, title.isEmpty() ? workspaceId : title);
 
-        const QJsonArray sessionIds = obj.value(QStringLiteral("sessionIds")).toArray();
-        for (const auto &sidValue : sessionIds) {
-            const QString sid = sidValue.toString();
-            if (!sid.isEmpty())
-                m_sessionWorkspace.insert(sid, workspaceId);
-        }
-    }
+		const QJsonArray sessionIds = obj.value(QStringLiteral("sessionIds")).toArray();
+		for (const auto& sidValue : sessionIds) {
+			const QString sid = sidValue.toString();
+			if (!sid.isEmpty())
+				m_sessionWorkspace.insert(sid, workspaceId);
+		}
+	}
 }
 
-WorkspaceList::WorkspaceGroup *WorkspaceList::createWorkspaceGroup(const QString &workspaceId, const QString &title)
+void WorkspaceList::setArchivedSessionIds(const QSet<QString>& ids)
 {
-    auto *group = new WorkspaceGroup;
-    group->workspaceId = workspaceId;
-    group->container = new QWidget(this);
-    group->container->setObjectName(QStringLiteral("workspaceGroupContainer"));
-    group->container->setAttribute(Qt::WA_StyledBackground, true);
-    group->layout = new QVBoxLayout(group->container);
-    group->layout->setContentsMargins(0, 0, 0, 0);
-    group->layout->setSpacing(2);
-    group->header = new WorkspaceButton(title, group->container);
-    group->layout->addWidget(group->header);
-
-    connect(group->header, &QPushButton::toggled, this, [this, group](bool checked) {
-        group->expanded = checked;
-        group->header->setExpanded(checked);
-        for (SessionButton *button : group->buttons)
-            button->setVisible(checked);
-    });
-    connect(group->header, &WorkspaceButton::addSessionRequested, this, [this, group]() {
-        emit createSessionInWorkspaceRequested(group->workspaceId);
-    });
-
-    m_layout->insertWidget(m_layout->count() - 1, group->container);
-    m_workspaceGroups.push_back(group);
-
-    if (workspaceId.isEmpty())
-        m_defaultGroup = group;
-
-    return group;
+	m_archivedSessionIds = ids;
 }
 
-WorkspaceList::WorkspaceGroup *WorkspaceList::defaultGroup()
+WorkspaceList::WorkspaceGroup* WorkspaceList::createWorkspaceGroup(const QString& workspaceId, const QString& title)
 {
-    if (!m_defaultGroup)
-        m_defaultGroup = createWorkspaceGroup(QString(), QStringLiteral("未分组"));
-    return m_defaultGroup;
+	auto* group = new WorkspaceGroup;
+	group->workspaceId = workspaceId;
+	group->container = new QWidget(this);
+	group->container->setObjectName(QStringLiteral("workspaceGroupContainer"));
+	group->container->setAttribute(Qt::WA_StyledBackground, true);
+	group->layout = new QVBoxLayout(group->container);
+	group->layout->setContentsMargins(0, 0, 0, 0);
+	group->layout->setSpacing(2);
+	group->header = new WorkspaceButton(title, group->container);
+	group->layout->addWidget(group->header);
+
+	connect(group->header, &QPushButton::toggled, this, [this, group](bool checked) {
+		group->expanded = checked;
+		group->header->setExpanded(checked);
+		for (SessionButton* button : group->buttons)
+			button->setVisible(checked);
+		});
+	connect(group->header, &WorkspaceButton::addSessionRequested, this, [this, group]() {
+		emit createSessionInWorkspaceRequested(group->workspaceId);
+		});
+
+	m_layout->insertWidget(m_layout->count() - 1, group->container);
+	m_workspaceGroups.push_back(group);
+
+	if (workspaceId.isEmpty())
+		m_defaultGroup = group;
+
+	return group;
+}
+
+WorkspaceList::WorkspaceGroup* WorkspaceList::defaultGroup()
+{
+	if (!m_defaultGroup)
+		m_defaultGroup = createWorkspaceGroup(QString(), QStringLiteral("未分组"));
+	return m_defaultGroup;
 }
 
 void WorkspaceList::clearWorkspaceGroups()
 {
-    for (WorkspaceGroup *group : m_workspaceGroups) {
-        if (group->container)
-            delete group->container;
-        delete group;
-    }
-    m_workspaceGroups.clear();
-    m_sessionWorkspace.clear();
-    m_defaultGroup = nullptr;
+	for (WorkspaceGroup* group : m_workspaceGroups) {
+		if (group->container)
+			delete group->container;
+		delete group;
+	}
+	m_workspaceGroups.clear();
+	m_sessionWorkspace.clear();
+	m_defaultGroup = nullptr;
 }
 
-void WorkspaceList::addSession(const QString &sessionId, const QString &title)
+void WorkspaceList::addSession(const QString& sessionId, const QString& title)
 {
-    // 防止同一个会话被重复添加，避免 setCurrentSession 选中多个同 sessionId 的按钮
-    for (SessionButton *button : m_buttons) {
-        if (button->sessionId() == sessionId) {
-            button->setSessionTitle(title);
-            return;
-        }
-    }
+	// 已归档/已删除的会话不再显示在侧边栏
+	if (m_archivedSessionIds.contains(sessionId))
+		return;
 
-    const QString workspaceId = m_sessionWorkspace.value(sessionId);
-    WorkspaceGroup *group = nullptr;
+	// 防止同一个会话被重复添加，避免 setCurrentSession 选中多个同 sessionId 的按钮
+	for (SessionButton* button : m_buttons) {
+		if (button->sessionId() == sessionId) {
+			button->setSessionTitle(title);
+			return;
+		}
+	}
 
-    for (WorkspaceGroup *g : m_workspaceGroups) {
-        if (g->workspaceId == workspaceId) {
-            group = g;
-            break;
-        }
-    }
-    if (!group)
-        group = defaultGroup();
+	const QString workspaceId = m_sessionWorkspace.value(sessionId);
+	WorkspaceGroup* group = nullptr;
 
-    auto *button = new SessionButton(sessionId, title, group->container);
-    connect(button, &SessionButton::sessionClicked, this, [this, sessionId]() {
-        setCurrentSession(sessionId);
-        emit sessionSelected(sessionId);
-    });
+	for (WorkspaceGroup* g : m_workspaceGroups) {
+		if (g->workspaceId == workspaceId) {
+			group = g;
+			break;
+		}
+	}
+	if (!group)
+		group = defaultGroup();
 
-    group->layout->addWidget(button);
-    group->buttons.push_back(button);
-    m_buttons.push_back(button);
+	auto* button = new SessionButton(sessionId, title, group->container);
+	connect(button, &SessionButton::sessionClicked, this, [this, sessionId]() {
+		setCurrentSession(sessionId);
+		emit sessionSelected(sessionId);
+		});
+	connect(button, &SessionButton::deleteRequested, this, [this](const QString& sid) {
+		emit deleteSessionRequested(sid);
+		});
 
-    if (!group->expanded)
-        button->setVisible(false);
+	group->layout->addWidget(button);
+	group->buttons.push_back(button);
+	m_buttons.push_back(button);
+
+	if (!group->expanded)
+		button->setVisible(false);
 }
 
-void WorkspaceList::addSessionToWorkspace(const QString &sessionId, const QString &title, const QString &workspaceId)
+void WorkspaceList::addSessionToWorkspace(const QString& sessionId, const QString& title, const QString& workspaceId)
 {
-    m_sessionWorkspace.insert(sessionId, workspaceId);
-    addSession(sessionId, title);
+	m_sessionWorkspace.insert(sessionId, workspaceId);
+	addSession(sessionId, title);
 }
 
 void WorkspaceList::clearSessions()
 {
-    clearWorkspaceGroups();
-    m_buttons.clear();
+	clearWorkspaceGroups();
+	m_buttons.clear();
 }
 
-void WorkspaceList::setCurrentSession(const QString &sessionId)
+void WorkspaceList::setCurrentSession(const QString& sessionId)
 {
-    for (SessionButton *button : m_buttons) {
-        const bool selected = button->sessionId() == sessionId;
-        if (button->isChecked() != selected)
-            button->setSelected(selected);
-    }
+	for (SessionButton* button : m_buttons) {
+		const bool selected = button->sessionId() == sessionId;
+		if (button->isChecked() != selected)
+			button->setSelected(selected);
+	}
 }
 
-void WorkspaceList::updateSessionTitle(const QString &sessionId, const QString &title)
+void WorkspaceList::updateSessionTitle(const QString& sessionId, const QString& title)
 {
-    for (SessionButton *button : m_buttons) {
-        if (button->sessionId() == sessionId) {
-            button->setSessionTitle(title);
-            break;
-        }
-    }
+	for (SessionButton* button : m_buttons) {
+		if (button->sessionId() == sessionId) {
+			button->setSessionTitle(title);
+			break;
+		}
+	}
 }
 
-QString WorkspaceList::titleForSession(const QString &sessionId) const
+QString WorkspaceList::titleForSession(const QString& sessionId) const
 {
-    for (const SessionButton *button : m_buttons) {
-        if (button->sessionId() == sessionId)
-            return button->fullTitle();
-    }
-    return QString();
+	for (const SessionButton* button : m_buttons) {
+		if (button->sessionId() == sessionId)
+			return button->fullTitle();
+	}
+	return QString();
 }
 
-void WorkspaceList::refreshTitles(DshApiClient *api)
+void WorkspaceList::refreshTitles(DshApiClient* api)
 {
-    if (!api)
-        return;
+	if (!api)
+		return;
 
-    api->callMethod(
-        QStringLiteral("session.list"),
-        {},
-        [this](const QJsonObject &value) {
-            const QJsonArray items = value.value(QStringLiteral("items")).toArray();
-            for (const auto &item : items) {
-                const QJsonObject session = item.toObject();
-                const QString sid = session.value(QStringLiteral("sessionId")).toString();
-                if (sid.isEmpty())
-                    continue;
+	api->callMethod(
+		QStringLiteral("session.list"),
+		{},
+		[this](const QJsonObject& value) {
+			const QJsonArray items = value.value(QStringLiteral("items")).toArray();
+			for (const auto& item : items) {
+				const QJsonObject session = item.toObject();
+				const QString sid = session.value(QStringLiteral("sessionId")).toString();
+				if (sid.isEmpty())
+					continue;
 
-                const QJsonObject projections = session.value(QStringLiteral("projections")).toObject();
-                const QJsonObject values = projections.value(QStringLiteral("values")).toObject();
-                QString label = values.value(QStringLiteral("title")).toString();
-                if (label.isEmpty())
-                    label = values.value(QStringLiteral("sessionTitle")).toString();
-                if (label.isEmpty())
-                    label = values.value(QStringLiteral("session.title")).toString();
-                if (label.isEmpty())
-                    continue;
+				const QJsonObject projections = session.value(QStringLiteral("projections")).toObject();
+				const QJsonObject values = projections.value(QStringLiteral("values")).toObject();
+				QString label = values.value(QStringLiteral("title")).toString();
+				if (label.isEmpty())
+					label = values.value(QStringLiteral("sessionTitle")).toString();
+				if (label.isEmpty())
+					label = values.value(QStringLiteral("session.title")).toString();
+				if (label.isEmpty())
+					continue;
 
-                updateSessionTitle(sid, label);
-            }
-        },
-        [](const DshApiClient::RpcError &) {});
+				updateSessionTitle(sid, label);
+			}
+		},
+		[](const DshApiClient::RpcError&) {});
 }
 
 // ------------------------------------------------------------------
 // Sidebar
 // ------------------------------------------------------------------
 
-Sidebar::Sidebar(QWidget *parent)
-    : QWidget(parent)
+Sidebar::Sidebar(QWidget* parent)
+	: QWidget(parent)
 {
-    setObjectName(QStringLiteral("sidebar"));
-    setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(QStringLiteral("#sidebar {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 12px;") + QStringLiteral("}") + QStringLiteral("#workspaceList {") + QStringLiteral("  background: transparent;") + QStringLiteral("}") + QStringLiteral("#workspaceGroupContainer {") + QStringLiteral("  background: transparent;") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton {") + QStringLiteral("  text-align: left;") + QStringLiteral("  padding: 0 10px;") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton:checked {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("sidebar"));
+	setAttribute(Qt::WA_StyledBackground, true);
+	setStyleSheet(QStringLiteral("#sidebar {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 12px;") + QStringLiteral("}") + QStringLiteral("#workspaceList {") + QStringLiteral("  background: transparent;") + QStringLiteral("}") + QStringLiteral("#workspaceGroupContainer {") + QStringLiteral("  background: transparent;") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton {") + QStringLiteral("  text-align: left;") + QStringLiteral("  padding: 0 10px;") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton:checked {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}"));
 
-    m_logo = new SidebarLogo(this);
-    m_clearButton = new ClearSessionButton(this);
-    m_newWorkspaceButton = new NewWorkspaceButton(this);
-    m_workspaceList = new WorkspaceList(this);
-    m_settingsButton = new SidebarSettingsButton(this);
-    m_pluginsButton = new SidebarPluginsButton(this);
-    m_themeButton = new SidebarThemeButton(this);
-    m_extensionButton = new SidebarExtensionButton(this);
+	m_logo = new SidebarLogo(this);
+	m_clearButton = new ClearSessionButton(this);
+	m_newWorkspaceButton = new NewWorkspaceButton(this);
+	m_workspaceList = new WorkspaceList(this);
+	m_settingsButton = new SidebarSettingsButton(this);
+	m_pluginsButton = new SidebarPluginsButton(this);
+	m_themeButton = new SidebarThemeButton(this);
+	m_extensionButton = new SidebarExtensionButton(this);
 
-    m_layout = new QVBoxLayout(this);
-    m_layout->setContentsMargins(10, 10, 10, 10);
-    m_layout->setSpacing(4);
-    m_layout->addWidget(m_logo, 0, Qt::AlignHCenter);
-    m_layout->addWidget(m_clearButton);
-    m_layout->addWidget(m_newWorkspaceButton);
-    m_layout->addWidget(m_workspaceList, 1);
+	m_layout = new QVBoxLayout(this);
+	m_layout->setContentsMargins(10, 10, 10, 10);
+	m_layout->setSpacing(4);
+	m_layout->addWidget(m_logo, 0, Qt::AlignHCenter);
+	m_layout->addWidget(m_clearButton);
+	m_layout->addWidget(m_newWorkspaceButton);
+	m_layout->addWidget(m_workspaceList, 1);
 
-    auto *bottomRow = new QHBoxLayout;
-    bottomRow->setContentsMargins(0, 0, 0, 0);
-    bottomRow->setSpacing(0);
-    bottomRow->addWidget(m_settingsButton);
-    bottomRow->addWidget(m_pluginsButton);
-    bottomRow->addWidget(m_themeButton);
-    bottomRow->addWidget(m_extensionButton);
-    bottomRow->addSpacing(15);
-    bottomRow->addStretch(1);
+	auto* bottomRow = new QHBoxLayout;
+	bottomRow->setContentsMargins(0, 0, 0, 0);
+	bottomRow->setSpacing(0);
+	bottomRow->addWidget(m_settingsButton);
+	bottomRow->addWidget(m_pluginsButton);
+	bottomRow->addWidget(m_themeButton);
+	bottomRow->addWidget(m_extensionButton);
+	bottomRow->addSpacing(15);
+	bottomRow->addStretch(1);
 
-    m_layout->addLayout(bottomRow);
+	m_layout->addLayout(bottomRow);
 
-    connect(m_clearButton, &QPushButton::clicked,
-            this, &Sidebar::clearRequested);
-    connect(m_newWorkspaceButton, &QPushButton::clicked,
-            this, &Sidebar::newWorkspaceRequested);
-    connect(m_settingsButton, &QPushButton::clicked,
-            this, &Sidebar::settingsRequested);
-    connect(m_pluginsButton, &QPushButton::clicked,
-            this, &Sidebar::pluginsRequested);
-    connect(m_themeButton, &QPushButton::clicked,
-            this, &Sidebar::themeToggleRequested);
-    connect(m_extensionButton, &QPushButton::clicked,
-            this, &Sidebar::extensionsRequested);
+	connect(m_clearButton, &QPushButton::clicked,
+		this, &Sidebar::clearRequested);
+	connect(m_newWorkspaceButton, &QPushButton::clicked,
+		this, &Sidebar::newWorkspaceRequested);
+	connect(m_settingsButton, &QPushButton::clicked,
+		this, &Sidebar::settingsRequested);
+	connect(m_pluginsButton, &QPushButton::clicked,
+		this, &Sidebar::pluginsRequested);
+	connect(m_themeButton, &QPushButton::clicked,
+		this, &Sidebar::themeToggleRequested);
+	connect(m_extensionButton, &QPushButton::clicked,
+		this, &Sidebar::extensionsRequested);
 
-    connect(m_workspaceList, &WorkspaceList::sessionSelected,
-            this, &Sidebar::sessionSelected);
-    connect(m_workspaceList, &WorkspaceList::createSessionInWorkspaceRequested,
-            this, &Sidebar::createSessionInWorkspaceRequested);
+	connect(m_workspaceList, &WorkspaceList::sessionSelected,
+		this, &Sidebar::sessionSelected);
+	connect(m_workspaceList, &WorkspaceList::createSessionInWorkspaceRequested,
+		this, &Sidebar::createSessionInWorkspaceRequested);
+	connect(m_workspaceList, &WorkspaceList::deleteSessionRequested,
+		this, &Sidebar::deleteSessionRequested);
 }
 
-WorkspaceList *Sidebar::workspaceList() const
+WorkspaceList* Sidebar::workspaceList() const
 {
-    return m_workspaceList;
+	return m_workspaceList;
 }
 
-void Sidebar::setWorkspaces(const QJsonArray &items)
+void Sidebar::setWorkspaces(const QJsonArray& items)
 {
-    if (m_workspaceList)
-        m_workspaceList->setWorkspaces(items);
+	if (m_workspaceList)
+		m_workspaceList->setWorkspaces(items);
 }
 
-void Sidebar::setSessions(const QJsonArray &items)
+void Sidebar::setSessions(const QJsonArray& items)
 {
-    if (!m_workspaceList)
-        return;
+	if (!m_workspaceList)
+		return;
 
-    for (const auto &item : items) {
-        const QJsonObject session = item.toObject();
-        const QString origin = session.value(QStringLiteral("origin")).toString();
-        const bool isSubagent = origin == QStringLiteral("subagent")
-                                || session.contains(QStringLiteral("parentSessionId"));
-        if (isSubagent)
-            continue;
+	for (const auto& item : items) {
+		const QJsonObject session = item.toObject();
+		const QString origin = session.value(QStringLiteral("origin")).toString();
+		const bool isSubagent = origin == QStringLiteral("subagent")
+			|| session.contains(QStringLiteral("parentSessionId"));
+		if (isSubagent)
+			continue;
 
-        const QString sid = session.value(QStringLiteral("sessionId")).toString();
-        if (sid.isEmpty())
-            continue;
+		const QString sid = session.value(QStringLiteral("sessionId")).toString();
+		if (sid.isEmpty())
+			continue;
 
-        // 标题优先从 session.projections.values 中读取
-        const QJsonObject projections = session.value(QStringLiteral("projections")).toObject();
-        const QJsonObject projectionValues = projections.value(QStringLiteral("values")).toObject();
-        QString label = projectionValues.value(QStringLiteral("title")).toString();
-        if (label.isEmpty())
-            label = projectionValues.value(QStringLiteral("sessionTitle")).toString();
-        if (label.isEmpty())
-            label = projectionValues.value(QStringLiteral("session.title")).toString();
-        if (label.isEmpty())
-            label = QStringLiteral("未命名会话");
+		// 标题优先从 session.projections.values 中读取
+		const QJsonObject projections = session.value(QStringLiteral("projections")).toObject();
+		const QJsonObject projectionValues = projections.value(QStringLiteral("values")).toObject();
+		QString label = projectionValues.value(QStringLiteral("title")).toString();
+		if (label.isEmpty())
+			label = projectionValues.value(QStringLiteral("sessionTitle")).toString();
+		if (label.isEmpty())
+			label = projectionValues.value(QStringLiteral("session.title")).toString();
+		if (label.isEmpty())
+			label = QStringLiteral("未命名会话");
 
-        m_workspaceList->addSession(sid, label);
-    }
+		m_workspaceList->addSession(sid, label);
+	}
 }
 
-void Sidebar::addCreatedSession(const QString &sessionId, const QString &workspaceId)
+void Sidebar::addCreatedSession(const QString& sessionId, const QString& workspaceId)
 {
-    if (sessionId.isEmpty() || !m_workspaceList)
-        return;
+	if (sessionId.isEmpty() || !m_workspaceList)
+		return;
 
-    if (workspaceId.isEmpty())
-        m_workspaceList->addSession(sessionId, QStringLiteral("未命名会话"));
-    else
-        m_workspaceList->addSessionToWorkspace(sessionId, QStringLiteral("未命名会话"), workspaceId);
+	if (workspaceId.isEmpty())
+		m_workspaceList->addSession(sessionId, QStringLiteral("未命名会话"));
+	else
+		m_workspaceList->addSessionToWorkspace(sessionId, QStringLiteral("未命名会话"), workspaceId);
 
-    m_workspaceList->setCurrentSession(sessionId);
+	m_workspaceList->setCurrentSession(sessionId);
 }
 
-void Sidebar::refreshSessions(DshApiClient *api, SessionPrefetcher *prefetcher)
+void Sidebar::refreshSessions(DshApiClient* api, SessionPrefetcher* prefetcher)
 {
-    if (!api)
-        return;
+	if (!api)
+		return;
 
-    const auto loadSessions = [this, api, prefetcher]() {
-        api->callMethod(
-            QStringLiteral("session.list"),
-            {},
-            [this, api, prefetcher](const QJsonObject &value) {
-                const QJsonArray items = value.value(QStringLiteral("items")).toArray();
-                setSessions(items);
+	const auto loadSessions = [this, api, prefetcher]() {
+		api->callMethod(
+			QStringLiteral("session.list"),
+			{},
+			[this, api, prefetcher](const QJsonObject& value) {
+				const QJsonArray items = value.value(QStringLiteral("items")).toArray();
+				setSessions(items);
 
-                // prefetch recent history for each visible session
-                if (prefetcher) {
-                    for (const auto &item : items) {
-                        const QJsonObject session = item.toObject();
-                        const QString origin = session.value(QStringLiteral("origin")).toString();
-                        if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
-                            continue;
-                        const QString sid = session.value(QStringLiteral("sessionId")).toString();
-                        if (!sid.isEmpty())
-                            prefetcher->prefetchHistory(api->baseUrl(), sid, 3);
-                    }
-                }
+				// prefetch recent history for each visible session
+				if (prefetcher) {
+					for (const auto& item : items) {
+						const QJsonObject session = item.toObject();
+						const QString origin = session.value(QStringLiteral("origin")).toString();
+						if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
+							continue;
+						const QString sid = session.value(QStringLiteral("sessionId")).toString();
+						if (!sid.isEmpty())
+							prefetcher->prefetchHistory(api->baseUrl(), sid, 3);
+					}
+				}
 
-                // auto select the first available non-running session
-                bool autoSelected = false;
-                for (const auto &item : items) {
-                    const QJsonObject session = item.toObject();
-                    const QString origin = session.value(QStringLiteral("origin")).toString();
-                    if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
-                        continue;
-                    const bool running = session.value(QStringLiteral("running")).toBool();
-                    const QString sid = session.value(QStringLiteral("sessionId")).toString();
-                    if (sid.isEmpty() || running)
-                        continue;
-                    const QString label = m_workspaceList ? m_workspaceList->titleForSession(sid) : QString();
-                    emit initialSessionReady(sid, label);
-                    autoSelected = true;
-                    break;
-                }
+				// auto select the first available non-running session
+				bool autoSelected = false;
+				for (const auto& item : items) {
+					const QJsonObject session = item.toObject();
+					const QString origin = session.value(QStringLiteral("origin")).toString();
+					if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
+						continue;
+					const bool running = session.value(QStringLiteral("running")).toBool();
+					const QString sid = session.value(QStringLiteral("sessionId")).toString();
+					if (sid.isEmpty() || running)
+						continue;
+					const QString label = m_workspaceList ? m_workspaceList->titleForSession(sid) : QString();
+					emit initialSessionReady(sid, label);
+					autoSelected = true;
+					break;
+				}
 
-                if (!autoSelected)
-                    emit noSessionAvailable();
-            },
-            [this](const DshApiClient::RpcError &error) {
-                emit sessionListError(error.code, error.message);
-            });
-    };
+				if (!autoSelected)
+					emit noSessionAvailable();
+			},
+			[this](const DshApiClient::RpcError& error) {
+				emit sessionListError(error.code, error.message);
+			});
+		};
 
-    api->callMethod(
-        QStringLiteral("workspace.list"),
-        {},
-        [this, loadSessions](const QJsonObject &value) {
-            setWorkspaces(value.value(QStringLiteral("items")).toArray());
-            loadSessions();
-        },
-        [this, loadSessions](const DshApiClient::RpcError &) {
-            setWorkspaces(QJsonArray());
-            loadSessions();
-        });
+	api->callMethod(
+		QStringLiteral("workspace.list"),
+		{},
+		[this, loadSessions](const QJsonObject& value) {
+			QSet<QString> archivedIds;
+			const QJsonArray archivedArray = value.value(QStringLiteral("archivedSessionIds")).toArray();
+			for (const auto& idValue : archivedArray) {
+				const QString id = idValue.toString();
+				if (!id.isEmpty())
+					archivedIds.insert(id);
+			}
+			if (m_workspaceList)
+				m_workspaceList->setArchivedSessionIds(archivedIds);
+
+			setWorkspaces(value.value(QStringLiteral("items")).toArray());
+			loadSessions();
+		},
+		[this, loadSessions](const DshApiClient::RpcError&) {
+			setWorkspaces(QJsonArray());
+			loadSessions();
+		});
 }
 
-void Sidebar::createSession(DshApiClient *api, const QString &workspaceId)
+void Sidebar::createSession(DshApiClient* api, const QString& workspaceId)
 {
-    if (!api)
-        return;
+	if (!api)
+		return;
 
-    QJsonObject payload;
-    if (!workspaceId.isEmpty())
-        payload.insert(QStringLiteral("workspaceId"), workspaceId);
+	QJsonObject payload;
+	if (!workspaceId.isEmpty())
+		payload.insert(QStringLiteral("workspaceId"), workspaceId);
 
-    api->callMethod(
-        QStringLiteral("session.create"),
-        payload,
-        [this, workspaceId](const QJsonObject &value) {
-            const QString sid = value.value(QStringLiteral("sessionId")).toString();
-            if (sid.isEmpty())
-                return;
-            addCreatedSession(sid, workspaceId);
-            emit sessionCreated(sid, workspaceId);
-        },
-        [this](const DshApiClient::RpcError &error) {
-            emit sessionCreateError(error.code, error.message);
-        });
+	api->callMethod(
+		QStringLiteral("session.create"),
+		payload,
+		[this, workspaceId](const QJsonObject& value) {
+			const QString sid = value.value(QStringLiteral("sessionId")).toString();
+			if (sid.isEmpty())
+				return;
+			addCreatedSession(sid, workspaceId);
+			emit sessionCreated(sid, workspaceId);
+		},
+		[this](const DshApiClient::RpcError& error) {
+			emit sessionCreateError(error.code, error.message);
+		});
 }
 
 void Sidebar::clearAllSessions(
-    const QString &dshHome,
-    const std::function<void()> &onCleared,
-    const std::function<void()> &onCreateNew)
+	const QString& dshHome,
+	const std::function<void()>& onCleared,
+	const std::function<void()>& onCreateNew)
 {
-    // 文件处理由 Sidebar 自己负责
-    if (!dshHome.isEmpty()) {
-        QDir sessionsDir(dshHome + QStringLiteral("/sessions"));
-        if (sessionsDir.exists()) {
-            sessionsDir.removeRecursively();
-            sessionsDir.mkpath(QStringLiteral("."));
-        }
+	// 文件处理由 Sidebar 自己负责
+	if (!dshHome.isEmpty()) {
+		QDir sessionsDir(dshHome + QStringLiteral("/sessions"));
+		if (sessionsDir.exists()) {
+			sessionsDir.removeRecursively();
+			sessionsDir.mkpath(QStringLiteral("."));
+		}
 
-        // 工作区清单保存在 storage domain 中，不删除的话重启后会重新出现旧工作区
-        QFile::remove(dshHome + QStringLiteral("/storages/workspace.json"));
-    }
+		// 工作区清单保存在 storage domain 中，不删除的话重启后会重新出现旧工作区
+		QFile::remove(dshHome + QStringLiteral("/storages/workspace.json"));
+	}
 
-    // 与当前加载的会话相关的清理由 WorkspaceList 负责
-    if (m_workspaceList)
-        m_workspaceList->clearSessions();
+	// 与当前加载的会话相关的清理由 WorkspaceList 负责
+	if (m_workspaceList)
+		m_workspaceList->clearSessions();
 
-    if (onCleared)
-        onCleared();
+	if (onCleared)
+		onCleared();
 
-    if (onCreateNew)
-        onCreateNew();
+	if (onCreateNew)
+		onCreateNew();
 }

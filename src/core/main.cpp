@@ -6,23 +6,23 @@
 #include <QStyleHints>
 #include <QtWidgets/QApplication>
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    QApplication app(argc, argv);
+	QApplication app(argc, argv);
 
-    Logger::init();
+	Logger::init();
 
-    // 根据系统颜色模式自动切换亮色/暗色主题
-    Theme::setMode(app.styleHints()->colorScheme() == Qt::ColorScheme::Dark
-                       ? Theme::Mode::Dark
-                       : Theme::Mode::Light);
+	// 根据系统颜色模式自动切换亮色/暗色主题
+	Theme::setMode(app.styleHints()->colorScheme() == Qt::ColorScheme::Dark
+		? Theme::Mode::Dark
+		: Theme::Mode::Light);
 
-    // 更现代的标准字体：Windows 下优先使用 Microsoft YaHei UI
-    QFont font(QStringLiteral("Microsoft YaHei UI"));
-    font.setPointSize(10);
-    app.setFont(font);
+	// 更现代的标准字体：Windows 下优先使用 Microsoft YaHei UI
+	QFont font(QStringLiteral("Microsoft YaHei UI"));
+	font.setPointSize(10);
+	app.setFont(font);
 
-    auto *window = new DSHHub;
-    window->show();
-    return app.exec();
+	auto* window = new DSHHub;
+	window->show();
+	return app.exec();
 }

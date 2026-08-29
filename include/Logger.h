@@ -3,5 +3,5 @@
 class Logger
 {
 public:
-    static void init();
+	static void init();
 };

@@ -21,20 +21,20 @@ class QTimer;
 
 class SessionPrefetcher : public QObject
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit SessionPrefetcher(QObject *parent = nullptr);
+	explicit SessionPrefetcher(QObject* parent = nullptr);
 
-    // 后台预取某个会话的最后 maxMessages 条历史
-    void prefetchHistory(const QUrl &baseUrl, const QString &sessionId, int maxMessages);
+	// 后台预取某个会话的最后 maxMessages 条历史
+	void prefetchHistory(const QUrl& baseUrl, const QString& sessionId, int maxMessages);
 
 signals:
-    void historyFetched(const QString &sessionId, const QJsonArray &events);
+	void historyFetched(const QString& sessionId, const QJsonArray& events);
 
 private:
-    void pollFutures();
+	void pollFutures();
 
-    QTimer *m_pollTimer = nullptr;
-    QHash<QString, std::shared_ptr<std::future<QJsonArray>>> m_futures;
+	QTimer* m_pollTimer = nullptr;
+	QHash<QString, std::shared_ptr<std::future<QJsonArray>>> m_futures;
 };

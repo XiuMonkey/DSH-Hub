@@ -16,33 +16,33 @@
 class ExtensionLoader
 {
 public:
-    struct LoadedExtension
-    {
-        QString rootDir;
-        QString jsonPath;
-        QString dllPath;
-        QString pluginPath;
-        QString pluginName;
-    };
+	struct LoadedExtension
+	{
+		QString rootDir;
+		QString jsonPath;
+		QString dllPath;
+		QString pluginPath;
+		QString pluginName;
+	};
 
-    bool loadAndInstall(const QString &extFilePath,
-                        const QString &serverProfilePath,
-                        LoadedExtension *out,
-                        QString *error = nullptr);
+	bool loadAndInstall(const QString& extFilePath,
+		const QString& serverProfilePath,
+		LoadedExtension* out,
+		QString* error = nullptr);
 
-    QString errorString() const;
+	QString errorString() const;
 
 private:
-    bool extractArchive(const QString &extFilePath,
-                        const QString &destDir,
-                        QString *error);
-    bool findFiles(const QString &rootDir,
-                   LoadedExtension *out,
-                   QString *error);
-    bool installPlugin(const QString &pluginPath,
-                       const QString &serverProfilePath,
-                       LoadedExtension *out,
-                       QString *error);
+	bool extractArchive(const QString& extFilePath,
+		const QString& destDir,
+		QString* error);
+	bool findFiles(const QString& rootDir,
+		LoadedExtension* out,
+		QString* error);
+	bool installPlugin(const QString& pluginPath,
+		const QString& serverProfilePath,
+		LoadedExtension* out,
+		QString* error);
 
-    QString m_errorString;
+	QString m_errorString;
 };

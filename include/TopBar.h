@@ -12,13 +12,13 @@ class QLabel;
 
 class TopBar : public QWidget
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit TopBar(QWidget *parent = nullptr);
+	explicit TopBar(QWidget* parent = nullptr);
 
-    void setTitle(const QString &title);
+	void setTitle(const QString& title);
 
 private:
-    QLabel *m_titleLabel = nullptr;
+	QLabel* m_titleLabel = nullptr;
 };

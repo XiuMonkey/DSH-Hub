@@ -12,17 +12,17 @@ class QTimer;
 
 class SpinnerWidget : public QWidget
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit SpinnerWidget(QWidget *parent = nullptr);
+	explicit SpinnerWidget(QWidget* parent = nullptr);
 
-    void start();
+	void start();
 
 protected:
-    void paintEvent(QPaintEvent *event) override;
+	void paintEvent(QPaintEvent* event) override;
 
 private:
-    QTimer *m_timer = nullptr;
-    int m_angle = 0;
+	QTimer* m_timer = nullptr;
+	int m_angle = 0;
 };

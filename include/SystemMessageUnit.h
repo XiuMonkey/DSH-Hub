@@ -11,14 +11,14 @@ class QResizeEvent;
 class SystemMessageUnit : public QTextBrowser
 {
 public:
-    static constexpr int DefaultWidth = 820;
+	static constexpr int DefaultWidth = 820;
 
-    explicit SystemMessageUnit(QWidget *parent = nullptr);
-    void setMessage(const QString &text);
+	explicit SystemMessageUnit(QWidget* parent = nullptr);
+	void setMessage(const QString& text);
 
-    /** 根据内容自动调整高度。 */
-    void updateHeightToContent();
+	/** 根据内容自动调整高度。 */
+	void updateHeightToContent();
 
 protected:
-    void resizeEvent(QResizeEvent *event) override;
+	void resizeEvent(QResizeEvent* event) override;
 };
