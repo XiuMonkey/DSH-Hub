@@ -51,6 +51,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QSettings>
 
 #include <QTimer>
 #include <QUrl>
@@ -65,6 +66,9 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	qInfo().noquote() << QStringLiteral("[DSH Hub] constructor started");
 	setWindowTitle(QStringLiteral("DSH Hub"));
 	setAttribute(Qt::WA_DeleteOnClose);
+
+	QSettings settings;
+	m_defaultAgentPreset = settings.value(QStringLiteral("agent/defaultPreset")).toString();
 
 	// 启动命名管道桥接服务，供 Node/DSh server 调用 DLL 工具
 	m_pipeBridge = new DshNamedPipeBridge(this);
@@ -301,6 +305,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 
 	// 信号槽
 	connect(m_chatInput, &ChatInputWidget::sendRequested, this, &DSHHub::onSendClicked);
+	connect(m_chatInput, &ChatInputWidget::stopRequested, this, &DSHHub::onStopRequested);
 
 	connect(m_sidebar, &Sidebar::newWorkspaceRequested,
 		this, &DSHHub::onNewWorkspaceClicked);
@@ -478,6 +483,21 @@ void DSHHub::openSettings()
 			m_serverManager->restart();
 		});
 
+	connect(m_settings, &Settings::agentPresetChanged, this, [this](const QString& presetId) {
+		m_defaultAgentPreset = presetId;
+		if (!m_sessionId.isEmpty() && m_api) {
+			QJsonObject payload;
+			payload.insert(QStringLiteral("sessionId"), m_sessionId);
+			payload.insert(QStringLiteral("agentPreset"), presetId);
+			m_api->callMethod(QStringLiteral("agentPreset.select"), payload, {}, {});
+		}
+		});
+
+	connect(m_settings, &Settings::serverSettingsSaved, this, [this]() {
+		if (m_serverManager)
+			m_serverManager->restart();
+		});
+
 	connect(m_settings, &PopupWindow::closed, this, [this]() {
 		closeSettings();
 		});
@@ -574,6 +594,68 @@ void DSHHub::onSendClicked()
 	sendPrompt(text);
 }
 
+void DSHHub::onStopRequested()
+{
+	if (!m_streaming)
+		return;
+
+	if (!m_api || m_sessionId.isEmpty()) {
+		// 没有可用会话时也把本地流式状态复位，避免按钮卡在中止态
+		m_streaming = false;
+		updateStreamingUi();
+		return;
+	}
+
+	QJsonObject payload;
+	payload.insert(QStringLiteral("sessionId"), m_sessionId);
+
+	m_api->callMethod(
+		QStringLiteral("session.cancel"),
+		payload,
+		[this](const QJsonObject&) {
+			m_streaming = false;
+			if (m_streamTimer)
+				m_streamTimer->stop();
+			if (m_messages && m_messages->lastAgentUnitIfLast())
+				m_messages->lastAgentUnitIfLast()->flushStream();
+			updateStreamingUi();
+		},
+		[this](const DshApiClient::RpcError& error) {
+			// cancel 失败也恢复按钮状态，避免 UI 一直卡在中止态
+			m_streaming = false;
+			if (m_streamTimer)
+				m_streamTimer->stop();
+			if (m_messages && m_messages->lastAgentUnitIfLast())
+				m_messages->lastAgentUnitIfLast()->flushStream();
+			updateStreamingUi();
+			if (m_messages) {
+				m_messages->addSystemMessage(
+					QStringLiteral("中止失败: %1 %2").arg(error.code, error.message),
+					m_messagesLayout);
+			}
+		});
+}
+
+void DSHHub::updateStreamingUi()
+{
+	if (m_chatInput)
+		m_chatInput->setStreaming(m_streaming);
+}
+
+void DSHHub::clearInteractionPanels()
+{
+	for (QWidget* panel : m_interactionPanels) {
+		if (!panel)
+			continue;
+
+		if (m_messagesLayout)
+			m_messagesLayout->removeWidget(panel);
+		panel->hide();
+		panel->deleteLater();
+	}
+	m_interactionPanels.clear();
+}
+
 void DSHHub::onNewWorkspaceClicked()
 {
 	const QString path = QFileDialog::getExistingDirectory(
@@ -607,6 +689,8 @@ void DSHHub::onCreateSessionInWorkspace(const QString& workspaceId)
 	QJsonObject payload;
 	if (!workspaceId.isEmpty())
 		payload.insert(QStringLiteral("workspaceId"), workspaceId);
+	if (!m_defaultAgentPreset.isEmpty())
+		payload.insert(QStringLiteral("agentPreset"), m_defaultAgentPreset);
 
 	m_api->callMethod(
 		QStringLiteral("session.create"),
@@ -654,6 +738,7 @@ void DSHHub::sendPrompt(const QString& text)
 	m_streaming = false;
 	if (m_streamTimer)
 		m_streamTimer->stop();
+	updateStreamingUi();
 	m_messages->addUserMessage(text, m_messagesLayout);
 
 	QJsonObject payload;
@@ -688,9 +773,12 @@ void DSHHub::createSessionAndSend(const QString& text)
 	if (!m_api)
 		return;
 
+	QJsonObject payload;
+	if (!m_defaultAgentPreset.isEmpty())
+		payload.insert(QStringLiteral("agentPreset"), m_defaultAgentPreset);
 	m_api->callMethod(
 		QStringLiteral("session.create"),
-		{},
+		payload,
 		[this, text](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
 			if (sid.isEmpty())
@@ -762,6 +850,7 @@ bool DSHHub::tryRestoreCachedMessages(const QString& sessionId)
 
 void DSHHub::swapToMessageQuery(MessageQuery* query)
 {
+	clearInteractionPanels();
 	if (!m_scrollArea)
 		return;
 
@@ -893,6 +982,8 @@ void DSHHub::onSessionSelected(const QString& sessionId)
 	m_streaming = false;
 	if (m_streamTimer)
 		m_streamTimer->stop();
+	updateStreamingUi();
+	clearInteractionPanels();
 	cacheCurrentMessages();
 
 	m_sessionId = sessionId;
@@ -983,6 +1074,8 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 				m_streaming = false;
 				if (m_streamTimer)
 					m_streamTimer->stop();
+				updateStreamingUi();
+				clearInteractionPanels();
 				// 当前会话被删除时，先丢弃当前消息容器，避免继续持有已归档会话
 				m_cacheManager.cacheOrDiscardCurrentSession(QString(), m_messages, m_messagesLayout);
 				m_messages = new MessageQuery;
@@ -1032,6 +1125,7 @@ void DSHHub::onClearConversationClicked()
 		m_serverManager->dshHome(),
 		[this]() {
 			hideLoadingIndicator();
+			clearInteractionPanels();
 			if (m_messages)
 				m_messages->clear();
 			m_cacheManager.clearAll();
@@ -1052,9 +1146,12 @@ void DSHHub::callSessionCreate()
 	if (!m_api)
 		return;
 
+	QJsonObject payload;
+	if (!m_defaultAgentPreset.isEmpty())
+		payload.insert(QStringLiteral("agentPreset"), m_defaultAgentPreset);
 	m_api->callMethod(
 		QStringLiteral("session.create"),
-		{},
+		payload,
 		[this](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
 			if (sid.isEmpty())
@@ -1109,6 +1206,12 @@ void DSHHub::onSessionCreated(const QString& sessionId, const QString& workspace
 	cacheCurrentMessages();
 	m_messages = new MessageQuery;
 	m_sessionId = sessionId;
+	if (!m_defaultAgentPreset.isEmpty() && m_api) {
+		QJsonObject presetPayload;
+		presetPayload.insert(QStringLiteral("sessionId"), sessionId);
+		presetPayload.insert(QStringLiteral("agentPreset"), m_defaultAgentPreset);
+		m_api->callMethod(QStringLiteral("agentPreset.select"), presetPayload, {}, {});
+	}
 	m_history.reset();
 
 	if (m_sidebar)
@@ -1261,6 +1364,7 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 				m_streaming = false;
 				if (m_streamTimer)
 					m_streamTimer->stop();
+				updateStreamingUi();
 				if (AgentMessageUnit* target = m_messages->lastAgentUnitIfLast())
 					target->flushStream();
 			}
@@ -1313,7 +1417,28 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 					m_streamTimer->start();
 
 				m_streaming = true;
+				updateStreamingUi();
 			}
+		}
+		else if (eventType == QStringLiteral("text-chunks") || eventType == QStringLiteral("reasoning-chunks")) {
+			const QJsonObject eventData = event.value(QStringLiteral("data")).toObject();
+			const QJsonArray texts = eventData.value(QStringLiteral("texts")).toArray();
+			if (!m_messages || texts.isEmpty())
+				return;
+			AgentMessageUnit* target = m_messages->lastAgentUnitIfLast();
+			if (!target)
+				target = m_messages->addAgentMessage(QString(), m_messagesLayout);
+			const bool thinking = eventType == QStringLiteral("reasoning-chunks");
+			for (const auto& value : texts) {
+				const QString chunk = value.toString();
+				if (chunk.isEmpty())
+					continue;
+				target->appendStreamChunk(thinking ? StreamSegment::Thinking : StreamSegment::Reply, chunk);
+			}
+			if (m_streamTimer && !m_streamTimer->isActive())
+				m_streamTimer->start();
+			m_streaming = true;
+			updateStreamingUi();
 		}
 		else if (eventType == QStringLiteral("user/message")) {
 			// 用户消息已在 onSendClicked 中创建 UserMessageUnit，这里避免重复显示。
@@ -1349,15 +1474,29 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 		}
 	}
 	else if (type == QStringLiteral("question/requested")) {
-		if (!InteractionHandler::handleQuestion(frame, m_api, this)) {
-			if (m_messages)
-				m_messages->addSystemMessage(QStringLiteral("Received question, but cannot show interaction dialog."), m_messagesLayout);
+		QWidget* panel = InteractionHandler::handleQuestion(frame, m_api, m_messagesLayout);
+		if (panel) {
+			m_interactionPanels.append(panel);
+			scrollToBottomNow();
+			connect(panel, &QObject::destroyed, this, [this, panel]() {
+				m_interactionPanels.removeAll(panel);
+				});
+		}
+		else if (m_messages) {
+			m_messages->addSystemMessage(QStringLiteral("收到提问请求，但无法创建内联面板。"), m_messagesLayout);
 		}
 	}
 	else if (type == QStringLiteral("approval/requested")) {
-		if (!InteractionHandler::handleApproval(frame, m_api, this)) {
-			if (m_messages)
-				m_messages->addSystemMessage(QStringLiteral("Received approval request, but cannot show approval dialog."), m_messagesLayout);
+		QWidget* panel = InteractionHandler::handleApproval(frame, m_api, m_messagesLayout);
+		if (panel) {
+			m_interactionPanels.append(panel);
+			scrollToBottomNow();
+			connect(panel, &QObject::destroyed, this, [this, panel]() {
+				m_interactionPanels.removeAll(panel);
+				});
+		}
+		else if (m_messages) {
+			m_messages->addSystemMessage(QStringLiteral("收到审批请求，但无法创建内联面板。"), m_messagesLayout);
 		}
 	}
 }

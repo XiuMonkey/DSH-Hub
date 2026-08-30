@@ -200,34 +200,33 @@ bool ExtensionLoader::extractArchive(const QString& extFilePath,
 	extractTimer.start();
 	QDir().mkpath(destDir);
 
-QZipReader reader(extFilePath);
-if (!reader.isReadable()) {
-m_errorString = QStringLiteral("cannot open extension archive: %1").arg(extFilePath);
-if (error)
-*error = m_errorString;
-return false;
-}
+	QZipReader reader(extFilePath);
+	if (!reader.isReadable()) {
+		m_errorString = QStringLiteral("cannot open extension archive: %1").arg(extFilePath);
+		if (error)
+			*error = m_errorString;
+		return false;
+	}
 
-const QList<QZipReader::FileInfo> infos = reader.fileInfoList();
-for (const QZipReader::FileInfo &info : infos) {
-const QString destPath = QDir(destDir).filePath(info.filePath);
-if (info.isDir) {
-QDir().mkpath(destPath);
-continue;
-}
+	const QList<QZipReader::FileInfo> infos = reader.fileInfoList();
+	for (const QZipReader::FileInfo& info : infos) {
+		const QString destPath = QDir(destDir).filePath(info.filePath);
+		if (info.isDir) {
+			QDir().mkpath(destPath);
+			continue;
+		}
 
-QDir().mkpath(QFileInfo(destPath).absolutePath());
-QFile outFile(destPath);
-if (!outFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-m_errorString = QStringLiteral("cannot write extracted file: %1").arg(destPath);
-if (error)
-*error = m_errorString;
-return false;
-}
-outFile.write(reader.fileData(info.filePath));
-outFile.close();
-}
-
+		QDir().mkpath(QFileInfo(destPath).absolutePath());
+		QFile outFile(destPath);
+		if (!outFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			m_errorString = QStringLiteral("cannot write extracted file: %1").arg(destPath);
+			if (error)
+				*error = m_errorString;
+			return false;
+		}
+		outFile.write(reader.fileData(info.filePath));
+		outFile.close();
+	}
 
 	qInfo().noquote() << QStringLiteral("[ExtensionLoader] extract finished, elapsed=%1 ms").arg(extractTimer.elapsed());
 	return true;

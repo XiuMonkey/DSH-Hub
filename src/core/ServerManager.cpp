@@ -9,7 +9,32 @@
 #include <QJsonObject>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QTcpSocket>
+
+namespace
+{
+	QUrl storedServerUrl()
+	{
+		// 优先级：环境变量 > QSettings
+		const QString envUrl = qEnvironmentVariable("DSH_SERVER_URL").trimmed();
+		if (!envUrl.isEmpty()) {
+			const QUrl url(envUrl);
+			if (url.isValid() && !url.host().isEmpty())
+				return url;
+		}
+
+		QSettings settings;
+		const QString savedUrl = settings.value(QStringLiteral("server/url")).toString().trimmed();
+		if (!savedUrl.isEmpty()) {
+			const QUrl url(savedUrl);
+			if (url.isValid() && !url.host().isEmpty())
+				return url;
+		}
+
+		return QUrl();
+	}
+} // namespace
 
 ServerManager::ServerManager(QObject* parent)
 	: QObject(parent)
@@ -29,14 +54,18 @@ void ServerManager::start(const QUrl& initialBaseUrl, QProcess* initialServerPro
 	const QString appDir = QCoreApplication::applicationDirPath();
 	m_dshHome = appDir + QStringLiteral("/resources/server/harness");
 
-	if (!initialBaseUrl.isEmpty()) {
+	QUrl baseUrl = initialBaseUrl;
+	if (baseUrl.isEmpty())
+		baseUrl = storedServerUrl();
+
+	if (!baseUrl.isEmpty()) {
 		// 复用已有 DSH server，不创建新 server
 		m_restarting = false;
 		if (initialServerProcess) {
 			m_serverProcess = initialServerProcess;
 			m_serverProcess->setParent(this);
 		}
-		m_baseUrl = initialBaseUrl;
+		m_baseUrl = baseUrl;
 		emit baseUrlReady(m_baseUrl);
 		return;
 	}
@@ -53,6 +82,14 @@ void ServerManager::restart()
 		m_serverProcess->waitForFinished(2000);
 		delete m_serverProcess;
 		m_serverProcess = nullptr;
+	}
+
+	const QUrl baseUrl = storedServerUrl();
+	if (!baseUrl.isEmpty()) {
+		m_restarting = false;
+		m_baseUrl = baseUrl;
+		emit baseUrlReady(m_baseUrl);
+		return;
 	}
 
 	startBundledServer();
@@ -108,7 +145,9 @@ void ServerManager::startBundledServer()
 	m_dshHome = dshHome;
 
 	if (!QFile::exists(nodePath) || !QFile::exists(entryPath) || !QFile::exists(dshEntry)) {
-		m_baseUrl = QUrl(QStringLiteral("http://127.0.0.1:3080"));
+		m_baseUrl = storedServerUrl();
+		if (m_baseUrl.isEmpty())
+			m_baseUrl = QUrl(QStringLiteral("http://127.0.0.1:3080"));
 		m_restarting = false;
 		emit baseUrlReady(m_baseUrl);
 		return;

@@ -7,6 +7,7 @@
 #include "AgentMessageUnit.h"
 #include "ThemeManager.h"
 #include "CodeHighlighter.h"
+#include "MarkdownPreprocess.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QFrame>
@@ -98,7 +99,7 @@ void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 			QStringList codes;
 			const QString marked = replaceInlineCodeWithPlaceholders(before, codes);
 			QTextDocument doc;
-			doc.setMarkdown(marked);
+			doc.setMarkdown(prepareMarkdownForQt(marked));
 			cursor.insertHtml(restoreInlineCodeHtml(doc.toHtml(), codes));
 		}
 
@@ -154,7 +155,7 @@ void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 				QStringList codes;
 				const QString marked = replaceInlineCodeWithPlaceholders(before, codes);
 				QTextDocument doc;
-				doc.setMarkdown(marked);
+				doc.setMarkdown(prepareMarkdownForQt(marked));
 				cursor.insertHtml(restoreInlineCodeHtml(doc.toHtml(), codes));
 			}
 
@@ -168,7 +169,7 @@ void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 			QStringList codes;
 			const QString marked = replaceInlineCodeWithPlaceholders(after, codes);
 			QTextDocument doc;
-			doc.setMarkdown(marked);
+			doc.setMarkdown(prepareMarkdownForQt(marked));
 			cursor.insertHtml(restoreInlineCodeHtml(doc.toHtml(), codes));
 		}
 	}

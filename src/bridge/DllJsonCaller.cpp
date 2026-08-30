@@ -727,7 +727,6 @@ bool DllJsonCaller::invokeNativeFunction(const FunctionSpec& fn,
 		*error = m_errorString;
 	return false;
 }
-
 QByteArray DllJsonCaller::stripJson5Comments(const QByteArray& input)
 {
 	QByteArray output;

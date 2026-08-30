@@ -128,6 +128,7 @@
     <ClCompile Include="src\chat\MessageQuery.cpp" />
     <ClCompile Include="src\chat\SystemMessageUnit.cpp" />
     <ClCompile Include="src\common\CodeHighlighter.cpp" />
+    <ClCompile Include="src\common\MarkdownPreprocess.cpp" />
 <ClCompile Include="src\common\InteractionHandler.cpp" />
     <ClCompile Include="src\ui\SpinnerWidget.cpp" />
     <ClCompile Include="src\network\SessionPrefetcher.cpp" />

@@ -1,18 +1,19 @@
 #include "InteractionHandler.h"
 
 #include "DshApiClient.h"
+#include "ThemeManager.h"
 
 #include <QAbstractButton>
 #include <QCheckBox>
-#include <QDialog>
-#include <QDialogButtonBox>
+#include <QHBoxLayout>
 #include <QJsonArray>
 #include <QLabel>
-#include <QObject>
 #include <QLineEdit>
+#include <QObject>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QVBoxLayout>
+#include <QWidget>
 
 namespace
 {
@@ -31,12 +32,60 @@ namespace
 			array.append(value);
 		return array;
 	}
+
+	QWidget* createInteractionPanel(QVBoxLayout* layout)
+	{
+		auto* panel = new QWidget;
+		panel->setObjectName(QStringLiteral("interactionPanel"));
+		panel->setAttribute(Qt::WA_StyledBackground, true);
+		panel->setStyleSheet(
+			QStringLiteral("QWidget#interactionPanel {")
+			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";")
+			+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
+			+ QStringLiteral("  border-radius: 12px;")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QLabel {")
+			+ QStringLiteral("  background: transparent;")
+			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QLineEdit {")
+			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("inputBg")) + QStringLiteral(";")
+			+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
+			+ QStringLiteral("  border-radius: 8px;")
+			+ QStringLiteral("  padding: 6px 10px;")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QPushButton {")
+			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
+			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";")
+			+ QStringLiteral("  border: none;")
+			+ QStringLiteral("  border-radius: 8px;")
+			+ QStringLiteral("  padding: 6px 16px;")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QPushButton:hover {")
+			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accentHover")) + QStringLiteral(";")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QPushButton#approvalRejectButton {")
+			+ QStringLiteral("  background: transparent;")
+			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";")
+			+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QPushButton#approvalRejectButton:hover {")
+			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("dangerBg")) + QStringLiteral(";")
+			+ QStringLiteral("}"));
+
+		auto* panelLayout = new QVBoxLayout(panel);
+		panelLayout->setContentsMargins(14, 12, 14, 12);
+		panelLayout->setSpacing(8);
+
+		layout->addWidget(panel);
+		return panel;
+	}
 } // namespace
 
-bool InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClient* api, QWidget* parent)
+QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClient* api, QVBoxLayout* layout)
 {
-	if (!api)
-		return false;
+	if (!api || !layout)
+		return nullptr;
 
 	const QString rpcId = frame.value(QStringLiteral("rpcId")).toString();
 	const QJsonObject payload = frame.value(QStringLiteral("payload")).toObject();
@@ -44,16 +93,14 @@ bool InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClient* 
 	const QJsonArray questions = payload.value(QStringLiteral("questions")).toArray();
 
 	if (rpcId.isEmpty() || sessionId.isEmpty() || questions.isEmpty())
-		return false;
+		return nullptr;
 
-	QDialog dialog(parent);
-	dialog.setWindowTitle(QStringLiteral("DSH 提问"));
-	dialog.setMinimumWidth(480);
+	QWidget* panel = createInteractionPanel(layout);
+	auto* panelLayout = static_cast<QVBoxLayout*>(panel->layout());
 
-	auto* layout = new QVBoxLayout(&dialog);
-
-	auto* hint = new QLabel(QStringLiteral("DSH 需要你确认以下问题："), &dialog);
-	layout->addWidget(hint);
+	auto* hint = new QLabel(QStringLiteral("需要你确认以下问题"), panel);
+	hint->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
+	panelLayout->addWidget(hint);
 
 	QList<UiQuestion> uiQuestions;
 
@@ -67,14 +114,15 @@ bool InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClient* 
 		const QString header = question.value(QStringLiteral("header")).toString();
 		if (!header.isEmpty()) {
 			auto* headerLabel = new QLabel(
-				QStringLiteral("<b>%1</b>").arg(header.toHtmlEscaped()), &dialog);
+				QStringLiteral("<b>%1</b>").arg(header.toHtmlEscaped()), panel);
 			headerLabel->setWordWrap(true);
-			layout->addWidget(headerLabel);
+			panelLayout->addWidget(headerLabel);
 		}
 
-		auto* questionLabel = new QLabel(question.value(QStringLiteral("question")).toString(), &dialog);
+		auto* questionLabel = new QLabel(
+			question.value(QStringLiteral("question")).toString(), panel);
 		questionLabel->setWordWrap(true);
-		layout->addWidget(questionLabel);
+		panelLayout->addWidget(questionLabel);
 
 		const QJsonArray options = question.value(QStringLiteral("options")).toArray();
 		if (!options.isEmpty()) {
@@ -85,80 +133,75 @@ bool InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClient* 
 					continue;
 
 				QAbstractButton* button = nullptr;
-				if (ui.multiSelect) {
-					button = new QCheckBox(label, &dialog);
-				}
-				else {
-					button = new QRadioButton(label, &dialog);
-				}
+				if (ui.multiSelect)
+					button = new QCheckBox(label, panel);
+				else
+					button = new QRadioButton(label, panel);
 
 				const QString description = option.value(QStringLiteral("description")).toString();
 				if (!description.isEmpty())
 					button->setToolTip(description);
 
-				layout->addWidget(button);
+				panelLayout->addWidget(button);
 				ui.optionButtons.append(button);
 			}
 
-			// 单选且只有一个选项时默认选中，减少用户操作。
+			// 单选且只有一个选项时默认选中，减少用户操作
 			if (!ui.multiSelect && ui.optionButtons.size() == 1)
 				ui.optionButtons.first()->setChecked(true);
 		}
 		else {
-			ui.customEdit = new QLineEdit(&dialog);
+			ui.customEdit = new QLineEdit(panel);
 			ui.customEdit->setPlaceholderText(QStringLiteral("请输入你的回答"));
-			layout->addWidget(ui.customEdit);
+			panelLayout->addWidget(ui.customEdit);
 		}
 
 		uiQuestions.append(ui);
 	}
 
-	auto* buttonBox = new QDialogButtonBox(
-		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-	QObject::connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-	QObject::connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+	auto* submitButton = new QPushButton(QStringLiteral("提交答案"), panel);
+	panelLayout->addWidget(submitButton, 0, Qt::AlignRight);
 
-	layout->addWidget(buttonBox);
+	QObject::connect(submitButton, &QPushButton::clicked, panel, [panel, api, rpcId, sessionId, uiQuestions]() {
+		QJsonObject answerPayload;
+		answerPayload.insert(QStringLiteral("sessionId"), sessionId);
 
-	// 无论用户点击“确定”还是“取消”，都把当前选择回传，避免服务端一直等待。
-	(void)dialog.exec();
+		QJsonArray answers;
+		for (const UiQuestion& ui : uiQuestions) {
+			QStringList selected;
+			for (QAbstractButton* button : ui.optionButtons) {
+				if (button->isChecked())
+					selected.append(button->text());
+			}
 
-	QJsonObject answerPayload;
-	answerPayload.insert(QStringLiteral("sessionId"), sessionId);
+			QJsonObject answer;
+			answer.insert(QStringLiteral("id"), ui.id);
+			answer.insert(QStringLiteral("selected"), stringListToJsonArray(selected));
 
-	QJsonArray answers;
-	for (const UiQuestion& ui : uiQuestions) {
-		QStringList selected;
-		for (QAbstractButton* button : ui.optionButtons) {
-			if (button->isChecked())
-				selected.append(button->text());
+			if (ui.customEdit) {
+				const QString custom = ui.customEdit->text().trimmed();
+				if (!custom.isEmpty())
+					answer.insert(QStringLiteral("custom"), custom);
+			}
+
+			answers.append(answer);
 		}
 
 		QJsonObject answer;
-		answer.insert(QStringLiteral("id"), ui.id);
-		answer.insert(QStringLiteral("selected"), stringListToJsonArray(selected));
+		answer.insert(QStringLiteral("answers"), answers);
+		answerPayload.insert(QStringLiteral("answer"), answer);
 
-		if (ui.customEdit) {
-			const QString custom = ui.customEdit->text().trimmed();
-			if (!custom.isEmpty())
-				answer.insert(QStringLiteral("custom"), custom);
-		}
+		api->respond(rpcId, answerPayload);
+		panel->deleteLater();
+		});
 
-		answers.append(answer);
-	}
-
-	QJsonObject answer;
-	answer.insert(QStringLiteral("answers"), answers);
-	answerPayload.insert(QStringLiteral("answer"), answer);
-
-	api->respond(rpcId, answerPayload);
-	return true;
+	return panel;
 }
 
-bool InteractionHandler::handleApproval(const QJsonObject& frame, DshApiClient* api, QWidget* parent)
+QWidget* InteractionHandler::handleApproval(const QJsonObject& frame, DshApiClient* api, QVBoxLayout* layout)
 {
-	if (!api)
-		return false;
+	if (!api || !layout)
+		return nullptr;
 
 	const QString rpcId = frame.value(QStringLiteral("rpcId")).toString();
 	const QJsonObject payload = frame.value(QStringLiteral("payload")).toObject();
@@ -168,50 +211,58 @@ bool InteractionHandler::handleApproval(const QJsonObject& frame, DshApiClient* 
 	const QString reason = payload.value(QStringLiteral("reason")).toString();
 
 	if (rpcId.isEmpty() || sessionId.isEmpty() || approvalId.isEmpty())
-		return false;
+		return nullptr;
 
-	QDialog dialog(parent);
-	dialog.setWindowTitle(QStringLiteral("DSH 审批"));
-	dialog.setMinimumWidth(420);
+	QWidget* panel = createInteractionPanel(layout);
+	auto* panelLayout = static_cast<QVBoxLayout*>(panel->layout());
 
-	auto* layout = new QVBoxLayout(&dialog);
-
-	auto* title = new QLabel(QStringLiteral("工具调用请求审批"), &dialog);
-	title->setStyleSheet(QStringLiteral("font-size: 16px; font-weight: bold;"));
-	layout->addWidget(title);
+	auto* title = new QLabel(QStringLiteral("工具调用请求审批"), panel);
+	title->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
+	panelLayout->addWidget(title);
 
 	auto* toolLabel = new QLabel(
-		QStringLiteral("工具：%1").arg(toolName.toHtmlEscaped()), &dialog);
+		QStringLiteral("工具：%1").arg(toolName.toHtmlEscaped()), panel);
 	toolLabel->setWordWrap(true);
-	layout->addWidget(toolLabel);
+	panelLayout->addWidget(toolLabel);
 
 	if (!reason.isEmpty()) {
 		auto* reasonLabel = new QLabel(
-			QStringLiteral("原因：%1").arg(reason.toHtmlEscaped()), &dialog);
+			QStringLiteral("原因：%1").arg(reason.toHtmlEscaped()), panel);
 		reasonLabel->setWordWrap(true);
-		layout->addWidget(reasonLabel);
+		panelLayout->addWidget(reasonLabel);
 	}
 
-	auto* buttonBox = new QDialogButtonBox(&dialog);
-	auto* allowButton = buttonBox->addButton(
-		QStringLiteral("允许一次"), QDialogButtonBox::AcceptRole);
-	auto* rejectButton = buttonBox->addButton(
-		QStringLiteral("拒绝"), QDialogButtonBox::RejectRole);
+	auto* buttonRow = new QHBoxLayout;
+	buttonRow->setSpacing(8);
 
-	QObject::connect(allowButton, &QPushButton::clicked, &dialog, &QDialog::accept);
-	QObject::connect(rejectButton, &QPushButton::clicked, &dialog, &QDialog::reject);
+	auto* rejectButton = new QPushButton(QStringLiteral("拒绝"), panel);
+	rejectButton->setObjectName(QStringLiteral("approvalRejectButton"));
+	auto* allowButton = new QPushButton(QStringLiteral("允许一次"), panel);
 
-	layout->addWidget(buttonBox);
+	buttonRow->addStretch();
+	buttonRow->addWidget(rejectButton);
+	buttonRow->addWidget(allowButton);
+	panelLayout->addLayout(buttonRow);
 
-	const QString outcome = dialog.exec() == QDialog::Accepted
-		? QStringLiteral("allowed-once")
-		: QStringLiteral("rejected");
+	QObject::connect(allowButton, &QPushButton::clicked, panel, [panel, api, rpcId, sessionId, approvalId]() {
+		QJsonObject answer;
+		answer.insert(QStringLiteral("sessionId"), sessionId);
+		answer.insert(QStringLiteral("approvalId"), approvalId);
+		answer.insert(QStringLiteral("outcome"), QStringLiteral("allowed-once"));
 
-	QJsonObject answer;
-	answer.insert(QStringLiteral("sessionId"), sessionId);
-	answer.insert(QStringLiteral("approvalId"), approvalId);
-	answer.insert(QStringLiteral("outcome"), outcome);
+		api->respond(rpcId, answer);
+		panel->deleteLater();
+		});
 
-	api->respond(rpcId, answer);
-	return true;
+	QObject::connect(rejectButton, &QPushButton::clicked, panel, [panel, api, rpcId, sessionId, approvalId]() {
+		QJsonObject answer;
+		answer.insert(QStringLiteral("sessionId"), sessionId);
+		answer.insert(QStringLiteral("approvalId"), approvalId);
+		answer.insert(QStringLiteral("outcome"), QStringLiteral("rejected"));
+
+		api->respond(rpcId, answer);
+		panel->deleteLater();
+		});
+
+	return panel;
 }

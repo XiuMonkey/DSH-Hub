@@ -26,9 +26,14 @@ public:
 	// 清空输入框并复位高度
 	void clear();
 
+	// 切换发送按钮/中止输出按钮状态
+	void setStreaming(bool streaming);
+
 signals:
 	// 点击发送按钮或按 Enter 时发出，携带当前输入框内容（未 trim）
 	void sendRequested(const QString& text);
+	// 当前会话正在输出时，点击中止按钮或按 Enter 发出
+	void stopRequested();
 
 protected:
 	bool eventFilter(QObject* obj, QEvent* event) override;
@@ -48,4 +53,5 @@ private:
 	QWidget* m_sendOverlay = nullptr;
 	bool m_sendHovered = false;
 	bool m_sendPressed = false;
+	bool m_streaming = false;
 };

@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="DSHHub">
         <file>EnterBtn.png</file>
+        <file>StopBtn.png</file>
         <file>DSH-Hub-Logo-Tiny@2x.png</file>
         <file>DSH-Hub-Logo-Tiny-Dark@2x.png</file>
         <file>Setting-Icon.png</file>

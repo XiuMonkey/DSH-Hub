@@ -8,6 +8,7 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
+#include <QList>
 
 class DshApiClient;
 class DshNamedPipeBridge;
@@ -55,6 +56,7 @@ signals:
 
 private slots:
 	void onSendClicked();
+	void onStopRequested();
 	void onNewWorkspaceClicked();
 	void onCreateSessionInWorkspace(const QString& workspaceId);
 	void onSessionSelected(const QString& sessionId);
@@ -92,6 +94,8 @@ private:
 	void cacheCurrentMessages();
 	void callSessionCreate();
 	void sendPrompt(const QString& text);
+	void updateStreamingUi();
+	void clearInteractionPanels();
 	void createSessionAndSend(const QString& text);
 	void onHistoryPrefetched(const QString& sessionId, const QJsonArray& events);
 	void processPrebuildQueue();
@@ -106,6 +110,7 @@ private:
 	bool m_usingPrefetched = false;
 
 	QString m_sessionId;
+	QString m_defaultAgentPreset;
 
 	bool m_streaming = false;
 	QTimer* m_streamTimer = nullptr;
@@ -143,6 +148,7 @@ private:
 
 	QVBoxLayout* m_messagesLayout = nullptr;
 	ChatInputWidget* m_chatInput = nullptr;
+	QList<QWidget*> m_interactionPanels;
 
 	DshApiClient* m_api = nullptr;
 	ServerManager* m_serverManager = nullptr;

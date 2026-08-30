@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -37,12 +37,12 @@
   </ImportGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
     <QtInstall>6.11.2_msvc2022_64</QtInstall>
-    <QtModules>core;testlib</QtModules>
+    <QtModules>core;gui;testlib</QtModules>
     <QtBuildConfig>debug</QtBuildConfig>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
     <QtInstall>6.11.2_msvc2022_64</QtInstall>
-    <QtModules>core;testlib</QtModules>
+    <QtModules>core;gui;testlib</QtModules>
     <QtBuildConfig>release</QtBuildConfig>
   </PropertyGroup>
   <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
@@ -101,13 +101,16 @@
     <ClCompile Include="unit_test\TestDshEventParser.cpp" />
     <ClCompile Include="unit_test\TestCodeHighlighter.cpp" />
     <ClCompile Include="unit_test\TestHistoryManager.cpp" />
+    <ClCompile Include="unit_test\TestMarkdownPreprocess.cpp" />
     <ClCompile Include="src\network\DshEventParser.cpp" />
     <ClCompile Include="src\common\CodeHighlighter.cpp" />
+    <ClCompile Include="src\common\MarkdownPreprocess.cpp" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="unit_test\TestDshEventParser.h" />
     <QtMoc Include="unit_test\TestCodeHighlighter.h" />
     <QtMoc Include="unit_test\TestHistoryManager.h" />
+    <QtMoc Include="unit_test\TestMarkdownPreprocess.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

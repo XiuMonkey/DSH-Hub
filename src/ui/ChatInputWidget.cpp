@@ -83,8 +83,33 @@ void ChatInputWidget::clear()
 	adjustHeight();
 }
 
+void ChatInputWidget::setStreaming(bool streaming)
+{
+	if (m_streaming == streaming)
+		return;
+
+	m_streaming = streaming;
+
+	if (!m_sendButton)
+		return;
+
+	if (m_streaming) {
+		m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/StopBtn.png")));
+		m_sendButton->setToolTip(QStringLiteral("中止输出"));
+	}
+	else {
+		m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/EnterBtn.png")));
+		m_sendButton->setToolTip(QStringLiteral("发送"));
+	}
+}
+
 void ChatInputWidget::handleSendClicked()
 {
+	if (m_streaming) {
+		emit stopRequested();
+		return;
+	}
+
 	if (m_editor)
 		emit sendRequested(m_editor->toPlainText());
 }
@@ -95,7 +120,10 @@ bool ChatInputWidget::eventFilter(QObject* obj, QEvent* event)
 		auto* keyEvent = static_cast<QKeyEvent*>(event);
 		if ((keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter)
 			&& !(keyEvent->modifiers() & Qt::ShiftModifier)) {
-			emit sendRequested(m_editor->toPlainText());
+			if (m_streaming)
+				emit stopRequested();
+			else
+				emit sendRequested(m_editor->toPlainText());
 			return true;
 		}
 	}
