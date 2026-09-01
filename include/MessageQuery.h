@@ -103,7 +103,6 @@ public:
 	void loadMore();
 	void setUsingPrefetched(bool usingPrefetched);
 	void setMessages(MessageQuery* messages);
-	bool isBuilding() const;
 	void cancelBuild();
 
 signals:
@@ -112,7 +111,6 @@ signals:
 	void noMoreHistory();
 	void historyError(const QString& code, const QString& message);
 	void incrementalBuildReady(MessageQuery* query);
-	void initializationFinished();
 
 private:
 	void continueBuild();

@@ -4,7 +4,9 @@
 #include "ThemeManager.h"
 
 #include <QAbstractButton>
+#include <QButtonGroup>
 #include <QCheckBox>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QLabel>
@@ -22,6 +24,7 @@ namespace
 		QString id;
 		bool multiSelect = false;
 		QList<QAbstractButton*> optionButtons;
+		QButtonGroup* singleGroup = nullptr;
 		QLineEdit* customEdit = nullptr;
 	};
 
@@ -47,6 +50,45 @@ namespace
 			+ QStringLiteral("QWidget#interactionPanel QLabel {")
 			+ QStringLiteral("  background: transparent;")
 			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QFrame#questionCard {")
+			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";")
+			+ QStringLiteral("  border-radius: 10px;")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QRadioButton,")
+			+ QStringLiteral("QWidget#interactionPanel QCheckBox {")
+			+ QStringLiteral("  background: transparent;")
+			+ QStringLiteral("  spacing: 8px;")
+			+ QStringLiteral("  font-size: 13px;")
+			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QRadioButton::indicator {")
+			+ QStringLiteral("  width: 18px;")
+			+ QStringLiteral("  height: 18px;")
+			+ QStringLiteral("  border-radius: 9px;")
+			+ QStringLiteral("  border: 2px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
+			+ QStringLiteral("  background: transparent;")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QRadioButton::indicator:hover {")
+			+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QRadioButton::indicator:checked {")
+			+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
+			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QCheckBox::indicator {")
+			+ QStringLiteral("  width: 18px;")
+			+ QStringLiteral("  height: 18px;")
+			+ QStringLiteral("  border-radius: 5px;")
+			+ QStringLiteral("  border: 2px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
+			+ QStringLiteral("  background: transparent;")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QCheckBox::indicator:hover {")
+			+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
+			+ QStringLiteral("}")
+			+ QStringLiteral("QWidget#interactionPanel QCheckBox::indicator:checked {")
+			+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
+			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
 			+ QStringLiteral("}")
 			+ QStringLiteral("QWidget#interactionPanel QLineEdit {")
 			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("inputBg")) + QStringLiteral(";")
@@ -80,6 +122,20 @@ namespace
 		layout->addWidget(panel);
 		return panel;
 	}
+
+	QFrame* createQuestionCard(QWidget* panel, QVBoxLayout* panelLayout)
+	{
+		auto* card = new QFrame(panel);
+		card->setObjectName(QStringLiteral("questionCard"));
+		card->setAttribute(Qt::WA_StyledBackground, true);
+
+		auto* cardLayout = new QVBoxLayout(card);
+		cardLayout->setContentsMargins(12, 10, 12, 10);
+		cardLayout->setSpacing(6);
+
+		panelLayout->addWidget(card);
+		return card;
+	}
 } // namespace
 
 QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClient* api, QVBoxLayout* layout)
@@ -111,21 +167,29 @@ QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClie
 		ui.id = question.value(QStringLiteral("id")).toString();
 		ui.multiSelect = question.value(QStringLiteral("multiSelect")).toBool();
 
+		QFrame* card = createQuestionCard(panel, panelLayout);
+		auto* cardLayout = static_cast<QVBoxLayout*>(card->layout());
+
 		const QString header = question.value(QStringLiteral("header")).toString();
 		if (!header.isEmpty()) {
 			auto* headerLabel = new QLabel(
-				QStringLiteral("<b>%1</b>").arg(header.toHtmlEscaped()), panel);
+				QStringLiteral("<b>%1</b>").arg(header.toHtmlEscaped()), card);
 			headerLabel->setWordWrap(true);
-			panelLayout->addWidget(headerLabel);
+			cardLayout->addWidget(headerLabel);
 		}
 
 		auto* questionLabel = new QLabel(
-			question.value(QStringLiteral("question")).toString(), panel);
+			question.value(QStringLiteral("question")).toString(), card);
 		questionLabel->setWordWrap(true);
-		panelLayout->addWidget(questionLabel);
+		cardLayout->addWidget(questionLabel);
 
 		const QJsonArray options = question.value(QStringLiteral("options")).toArray();
 		if (!options.isEmpty()) {
+			if (!ui.multiSelect) {
+				ui.singleGroup = new QButtonGroup(card);
+				ui.singleGroup->setExclusive(true);
+			}
+
 			for (const auto& optionValue : options) {
 				const QJsonObject option = optionValue.toObject();
 				const QString label = option.value(QStringLiteral("label")).toString();
@@ -134,15 +198,17 @@ QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClie
 
 				QAbstractButton* button = nullptr;
 				if (ui.multiSelect)
-					button = new QCheckBox(label, panel);
-				else
-					button = new QRadioButton(label, panel);
+					button = new QCheckBox(label, card);
+				else {
+					button = new QRadioButton(label, card);
+					ui.singleGroup->addButton(button);
+				}
 
 				const QString description = option.value(QStringLiteral("description")).toString();
 				if (!description.isEmpty())
 					button->setToolTip(description);
 
-				panelLayout->addWidget(button);
+				cardLayout->addWidget(button);
 				ui.optionButtons.append(button);
 			}
 
@@ -151,9 +217,9 @@ QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClie
 				ui.optionButtons.first()->setChecked(true);
 		}
 		else {
-			ui.customEdit = new QLineEdit(panel);
+			ui.customEdit = new QLineEdit(card);
 			ui.customEdit->setPlaceholderText(QStringLiteral("请输入你的回答"));
-			panelLayout->addWidget(ui.customEdit);
+			cardLayout->addWidget(ui.customEdit);
 		}
 
 		uiQuestions.append(ui);

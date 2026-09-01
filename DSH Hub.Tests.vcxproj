@@ -102,6 +102,9 @@
     <ClCompile Include="unit_test\TestCodeHighlighter.cpp" />
     <ClCompile Include="unit_test\TestHistoryManager.cpp" />
     <ClCompile Include="unit_test\TestMarkdownPreprocess.cpp" />
+    <ClCompile Include="unit_test\TestThunk.cpp" />
+    <ClCompile Include="src\bridge\Thunk.cpp" />
+    <ClCompile Include="src\bridge\DllJsonCaller.cpp" />
     <ClCompile Include="src\network\DshEventParser.cpp" />
     <ClCompile Include="src\common\CodeHighlighter.cpp" />
     <ClCompile Include="src\common\MarkdownPreprocess.cpp" />
@@ -111,6 +114,10 @@
     <QtMoc Include="unit_test\TestCodeHighlighter.h" />
     <QtMoc Include="unit_test\TestHistoryManager.h" />
     <QtMoc Include="unit_test\TestMarkdownPreprocess.h" />
+    <QtMoc Include="unit_test\TestThunk.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\Thunk.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

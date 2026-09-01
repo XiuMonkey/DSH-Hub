@@ -14,7 +14,6 @@ class TestHistoryManager : public QObject
 
 private slots:
 	void resetDefaults();
-	void setLoading();
 	void limitLifecycle();
 	void increaseLimit();
 	void hasMoreLifecycle();

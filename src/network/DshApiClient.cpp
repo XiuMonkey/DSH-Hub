@@ -40,10 +40,7 @@ DshApiClient::DshApiClient(QObject* parent)
 {
 	connect(m_mux, &QWebSocket::textMessageReceived,
 		this, &DshApiClient::onMuxTextMessageReceived);
-	connect(m_host, &QWebSocket::textMessageReceived,
-		this, &DshApiClient::onHostTextMessageReceived);
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 	connect(m_mux, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
 		emit transportError(QStringLiteral("mux"), m_mux->errorString());
 		qWarning().noquote() << "[DshApi] mux error:" << m_mux->errorString();
@@ -52,18 +49,6 @@ DshApiClient::DshApiClient(QObject* parent)
 		emit transportError(QStringLiteral("host"), m_host->errorString());
 		qWarning().noquote() << "[DshApi] host error:" << m_host->errorString();
 		});
-#else
-	connect(m_mux, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
-		this, [this](QAbstractSocket::SocketError) {
-			emit transportError(QStringLiteral("mux"), m_mux->errorString());
-			qWarning().noquote() << "[DshApi] mux error:" << m_mux->errorString();
-		});
-	connect(m_host, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
-		this, [this](QAbstractSocket::SocketError) {
-			emit transportError(QStringLiteral("host"), m_host->errorString());
-			qWarning().noquote() << "[DshApi] host error:" << m_host->errorString();
-		});
-#endif
 
 	connect(m_mux, &QWebSocket::connected, this, [this] {
 		m_muxConnected = true;
@@ -78,16 +63,13 @@ DshApiClient::DshApiClient(QObject* parent)
 			emit connected();
 		});
 
-	auto emitDisconnected = [this] {
-		const bool wasConnected = m_muxConnected && m_hostConnected;
+	auto resetDisconnected = [this] {
 		m_muxConnected = false;
 		m_hostConnected = false;
-		if (wasConnected)
-			emit disconnected();
 		qInfo().noquote() << "[DshApi] DSH disconnected";
 		};
-	connect(m_mux, &QWebSocket::disconnected, this, emitDisconnected);
-	connect(m_host, &QWebSocket::disconnected, this, emitDisconnected);
+	connect(m_mux, &QWebSocket::disconnected, this, resetDisconnected);
+	connect(m_host, &QWebSocket::disconnected, this, resetDisconnected);
 }
 
 /**
@@ -387,19 +369,4 @@ void DshApiClient::onMuxTextMessageReceived(const QString& message)
 	}
 	if (!frame.isEmpty())
 		emit muxFrameReceived(frame);
-}
-
-/**
- * host WebSocket 收到文本消息。
- * 把 JSON 解析成 QJsonObject 后通过 hostFrameReceived 信号发出。
- */
-void DshApiClient::onHostTextMessageReceived(const QString& message)
-{
-	const QJsonObject frame = QJsonDocument::fromJson(message.toUtf8()).object();
-	if (frame.isEmpty()) {
-		qWarning().noquote() << "[DshApi] empty frame received";
-		return;
-	}
-	if (!frame.isEmpty())
-		emit hostFrameReceived(frame);
 }

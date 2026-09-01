@@ -196,17 +196,6 @@ void AgentMessageUnit::appendMarkdownWithCodeShadow(const QString& markdown)
 	updateHeightToContent();
 }
 
-void AgentMessageUnit::appendHtml(const QString& html)
-{
-	Segment segment;
-	segment.type = Segment::Html;
-	segment.text = html;
-	m_segments.append(segment);
-
-	insertHtml(html);
-	updateHeightToContent();
-}
-
 void AgentMessageUnit::insertHtml(const QString& html)
 {
 	QTextCursor cursor = textCursor();
@@ -345,9 +334,6 @@ void AgentMessageUnit::rebuild()
 			break;
 		case Segment::Html:
 			insertHtml(segment.text);
-			break;
-		case Segment::StreamText:
-			insertHtml(segment.text.toHtmlEscaped());
 			break;
 		}
 	}

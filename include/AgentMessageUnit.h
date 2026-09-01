@@ -31,10 +31,9 @@ struct StreamSegment
  *
  * 使用示例：
  * @code
- * RichTextView *view = new RichTextView;
+ * AgentMessageUnit *view = new AgentMessageUnit;
  * view->setFixedWidth(800);
  * view->appendMarkdownWithCodeShadow(reply);
- * view->appendHtml("<p>普通 HTML</p>");
  * @endcode
  */
 class AgentMessageUnit : public QTextBrowser
@@ -62,9 +61,6 @@ public:
 
 	/** 追加一个可折叠的工具结果块。 */
 	void appendToolResult(const QString& resultHtml);
-
-	/** 追加一段 HTML 内容。 */
-	void appendHtml(const QString& html);
 
 	/** 清空文档以及内部已记录的 segment/思考块，准备重新渲染整段内容。 */
 	void resetContent();
@@ -103,8 +99,7 @@ private:
 			Thinking,
 			Tool,
 			Markdown,
-			Html,
-			StreamText
+			Html
 		};
 		Type type = Markdown;
 		int thinkingIndex = -1;
@@ -130,7 +125,7 @@ private:
 	void toggleTool(int index);
 	QString thinkingPreview(const QString& content) const;
 
-	/** 生成带阴影的代码块 HTML（最初版样式）。 */
+	/** 生成带阴影的代码块 HTML。 */
 	QString buildCodeShadowHtml(const QString& language, const QString& code);
 
 	/** 把 Markdown 行内代码替换成占位符，避免 Qt 解析丢失样式。 */

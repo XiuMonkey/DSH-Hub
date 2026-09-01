@@ -11,6 +11,7 @@
 #include "TestCodeHighlighter.h"
 #include "TestHistoryManager.h"
 #include "TestMarkdownPreprocess.h"
+#include "TestThunk.h"
 
 int main(int argc, char* argv[])
 {
@@ -35,6 +36,11 @@ int main(int argc, char* argv[])
 
 	{
 		TestMarkdownPreprocess test;
+		status |= QTest::qExec(&test, argc, argv);
+	}
+
+	{
+		TestThunk test;
 		status |= QTest::qExec(&test, argc, argv);
 	}
 

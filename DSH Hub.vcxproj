@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -115,7 +115,7 @@
     <ClCompile Include="src\ui\LoadingCard.cpp" />
     <ClCompile Include="src\ui\LoadMoreButton.cpp" />
     <ClCompile Include="src\ui\ChatInputWidget.cpp" />
-        <ClCompile Include="src\ui\Sidebar.cpp" />
+    <ClCompile Include="src\ui\Sidebar.cpp" />
     <ClCompile Include="src\chat\UserMessageUnit.cpp" />
     <QtRcc Include="resources\DSHHub.qrc" />
     <QtMoc Include="include\DSHHub.h" />
@@ -129,20 +129,21 @@
     <ClCompile Include="src\chat\SystemMessageUnit.cpp" />
     <ClCompile Include="src\common\CodeHighlighter.cpp" />
     <ClCompile Include="src\common\MarkdownPreprocess.cpp" />
-<ClCompile Include="src\common\InteractionHandler.cpp" />
+    <ClCompile Include="src\common\InteractionHandler.cpp" />
     <ClCompile Include="src\ui\SpinnerWidget.cpp" />
     <ClCompile Include="src\network\SessionPrefetcher.cpp" />
     <ClCompile Include="src\ui\TopBar.cpp" />
     <ClCompile Include="src\chat\CacheHistoryManager.cpp" />
     <ClCompile Include="src\ui\PopupWindow.cpp" />
     <ClCompile Include="src\ui\Settings.cpp" />
-      <ClCompile Include="src\common\ThemeManager.cpp" />
-      <ClCompile Include="src\common\Logger.cpp" />
-      <ClCompile Include="src\ui\PluginsPopup.cpp" />
-      <ClCompile Include="src\ui\ExtensionManagerPopup.cpp" />
-      <ClCompile Include="src\bridge\DshNamedPipeBridge.cpp" />
-      <ClCompile Include="src\bridge\DllJsonCaller.cpp" />
-      <ClCompile Include="src\bridge\ExtensionLoader.cpp" />
+    <ClCompile Include="src\common\ThemeManager.cpp" />
+    <ClCompile Include="src\common\Logger.cpp" />
+    <ClCompile Include="src\ui\PluginsPopup.cpp" />
+    <ClCompile Include="src\ui\ExtensionManagerPopup.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DshNamedPipeBridge.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DllJsonCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\Thunk.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp" />
     <None Include="resources\highlight_rules.json" />
     <None Include="resources\registry-snapshot.json" />
     <None Include="resources\DSH-Hub-Logo-Tiny@2x.png" />
@@ -152,33 +153,34 @@
     <ResourceCompile Include="resources\DSH Hub.rc" />
   </ItemGroup>
   <ItemGroup>
-        <QtMoc Include="include\Sidebar.h" />
+    <QtMoc Include="include\Sidebar.h" />
     <QtMoc Include="include\LoadingCard.h" />
     <QtMoc Include="include\LoadMoreButton.h" />
     <QtMoc Include="include\DshApiClient.h" />
-      <QtMoc Include="include\DshNamedPipeBridge.h" />
+    <QtMoc Include="include\DshNamedPipeBridge.h" />
     <QtMoc Include="include\SessionPrefetcher.h" />
     <QtMoc Include="include\MessageQuery.h" />
     <QtMoc Include="include\SpinnerWidget.h" />
     <QtMoc Include="include\TopBar.h" />
     <QtMoc Include="include\PopupWindow.h" />
     <QtMoc Include="include\Settings.h" />
-      <QtMoc Include="include\PluginsPopup.h" />
-      <QtMoc Include="include\ExtensionManagerPopup.h" />
+    <QtMoc Include="include\PluginsPopup.h" />
+    <QtMoc Include="include\ExtensionManagerPopup.h" />
     <QtMoc Include="include\ChatInputWidget.h" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="include\UserMessageUnit.h" />
     <QtMoc Include="include\AgentMessageUnit.h" />
     <ClInclude Include="include\DshEventParser.h" />
-      <ClInclude Include="include\ExtensionLoader.h" />
-      <ClInclude Include="include\DllJsonCaller.h" />
+    <ClInclude Include="include\ExtensionLoader.h" />
+    <ClInclude Include="include\DllJsonCaller.h" />
+    <ClInclude Include="include\Thunk.h" />
     <ClInclude Include="include\SystemMessageUnit.h" />
     <ClInclude Include="include\CodeHighlighter.h" />
-<ClInclude Include="include\InteractionHandler.h" />
+    <ClInclude Include="include\InteractionHandler.h" />
     <ClInclude Include="include\CacheHistoryManager.h" />
-      <ClInclude Include="include\ThemeManager.h" />
-      <ClInclude Include="include\Logger.h" />
+    <ClInclude Include="include\ThemeManager.h" />
+    <ClInclude Include="include\Logger.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

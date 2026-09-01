@@ -44,10 +44,6 @@ signals:
 		const QJsonObject& args,
 		QLocalSocket* socket);
 
-	void clientConnected();
-	void clientDisconnected();
-	void logMessage(const QString& message);
-
 private slots:
 	void onNewConnection();
 	void onReadyRead();

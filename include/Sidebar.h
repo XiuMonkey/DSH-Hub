@@ -31,7 +31,6 @@ class QMouseEvent;
 class QPaintEvent;
 class QResizeEvent;
 class QContextMenuEvent;
-class SessionButton;
 class DshApiClient;
 class SessionPrefetcher;
 

@@ -39,7 +39,6 @@ class QWebSocket;
  * 事件使用方式：
  * @code
  * connect(&api, &DshApiClient::muxFrameReceived, ...);
- * connect(&api, &DshApiClient::hostFrameReceived, ...);
  * @endcode
  */
 class DshApiClient : public QObject
@@ -138,18 +137,12 @@ signals:
 	/** 两条 WebSocket 流都连接成功后发出。 */
 	void connected();
 
-	/** 任意一条 WebSocket 流断开后发出。 */
-	void disconnected();
-
 	/**
 	 * 收到 mux 流的一整帧。
 	 * frame["payload"] 是 MuxFrame；
 	 * frame["rpcId"] 用于应答审批/提问。
 	 */
 	void muxFrameReceived(const QJsonObject& frame);
-
-	/** 收到 host 流的一整帧。 */
-	void hostFrameReceived(const QJsonObject& frame);
 
 	/**
 	 * 传输层错误信号。
@@ -191,8 +184,6 @@ private slots:
 	void onReplyFinished();
 	/** mux WebSocket 收到文本消息。 */
 	void onMuxTextMessageReceived(const QString& message);
-	/** host WebSocket 收到文本消息。 */
-	void onHostTextMessageReceived(const QString& message);
 
 private:
 	QNetworkAccessManager* m_nam = nullptr; // 用于发送 HTTP 请求

@@ -7,7 +7,6 @@
 void TestHistoryManager::resetDefaults()
 {
 	HistoryManager manager;
-	manager.setLoading(true);
 	manager.setLimit(50);
 	manager.setHasMore(true);
 	manager.setEventCount(10);
@@ -15,22 +14,11 @@ void TestHistoryManager::resetDefaults()
 
 	manager.reset();
 
-	// reset() 不会改变 loading 状态，只重置分页/加载计数。
-	QVERIFY(manager.isLoading());
+	// reset() 只重置分页/加载计数。
 	QCOMPARE(manager.limit(), 20);
 	QVERIFY(!manager.hasMore());
 	QCOMPARE(manager.eventCount(), 0);
 	QVERIFY(!manager.loadMoreRequested());
-}
-
-void TestHistoryManager::setLoading()
-{
-	HistoryManager manager;
-	QVERIFY(!manager.isLoading());
-	manager.setLoading(true);
-	QVERIFY(manager.isLoading());
-	manager.setLoading(false);
-	QVERIFY(!manager.isLoading());
 }
 
 void TestHistoryManager::limitLifecycle()

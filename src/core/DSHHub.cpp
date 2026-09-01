@@ -215,7 +215,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	contentLayout->addLayout(bodyLayout, 1);
 
 	layout->addWidget(content, 0, Qt::AlignHCenter);
-	// 输入框已放入右侧白色面板，不再单独添加到主布局
+	// 输入框是 rightPanel 的子控件，随右侧面板一起布局，无需加入主布局
 
 	setCentralWidget(central);
 
@@ -1398,9 +1398,6 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 
 			{
 				const QString chunkType = extractChunkType(event);
-				const QJsonObject chunkObj = event.value(QStringLiteral("data")).toObject()
-					.value(QStringLiteral("chunk")).toObject();
-				const QString blockType = chunkObj.value(QStringLiteral("blockType")).toString();
 
 				AgentMessageUnit* streamTarget = m_messages->lastAgentUnitIfLast();
 				if (!streamTarget)

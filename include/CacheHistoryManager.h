@@ -51,9 +51,6 @@ private:
 class HistoryManager
 {
 public:
-	bool isLoading() const { return m_historyLoading; }
-	void setLoading(bool loading) { m_historyLoading = loading; }
-
 	int limit() const { return m_historyLimit; }
 	void setLimit(int limit) { m_historyLimit = limit; }
 	void increaseLimit(int delta) { m_historyLimit += delta; }
@@ -76,7 +73,6 @@ public:
 	}
 
 private:
-	bool m_historyLoading = false;
 	int m_historyLimit = 20;
 	bool m_historyHasMore = false;
 	int m_historyEventCount = 0;

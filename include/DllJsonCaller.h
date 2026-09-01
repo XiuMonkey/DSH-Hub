@@ -52,8 +52,6 @@ public:
 
 	struct Descriptor
 	{
-		QString name;
-		QString description;
 		QVector<FunctionSpec> functions;
 	};
 
@@ -69,7 +67,6 @@ public:
 	// 卸载当前 DLL，释放文件占用（移除扩展前调用）
 	void unloadLibrary();
 
-	bool isReady() const;
 	QStringList tools() const;
 	QString errorString() const;
 
@@ -101,5 +98,4 @@ private:
 	QHash<QString, QLibrary*> m_libraries;         // LoadingSource -> QLibrary
 	QString m_descriptorDir;                       // regulation.json5 所在目录
 	QString m_errorString;
-	QString m_dllPath;
 };

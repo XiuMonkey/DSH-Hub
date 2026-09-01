@@ -676,11 +676,6 @@ void HistoryLoader::setMessages(MessageQuery* messages)
 	m_messages = messages;
 }
 
-bool HistoryLoader::isBuilding() const
-{
-	return m_builder.isActive();
-}
-
 void HistoryLoader::cancelBuild()
 {
 	m_builder.cancel();
@@ -717,5 +712,4 @@ void HistoryLoader::continueBuild()
 
 	emit incrementalBuildReady(query);
 	emit loadMoreButtonVisibleChanged(true);
-	emit initializationFinished();
 }

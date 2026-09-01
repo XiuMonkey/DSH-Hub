@@ -97,8 +97,8 @@ QString CodeHighlighter::highlight(const QString& language, const QString& code)
 			}
 		}
 
-		if (!bestRule || bestPos < pos) {
-			// 没有更多匹配，或者匹配位置异常，直接转义剩余内容
+		if (!bestRule) {
+			// 没有更多匹配，直接转义剩余内容
 			html += code.mid(pos).toHtmlEscaped();
 			break;
 		}
