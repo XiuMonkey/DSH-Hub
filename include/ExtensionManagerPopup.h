@@ -54,6 +54,8 @@ private:
 	void saveInstalledExtensions(const QStringList& names);
 
 	void populateList();
+	// 更新状态栏：超长文本按标签当前宽度用省略号截断，避免把弹窗撑大
+	void setStatus(const QString& text);
 
 	bool removeExtensionDirectory(const QString& name, QString* error);
 

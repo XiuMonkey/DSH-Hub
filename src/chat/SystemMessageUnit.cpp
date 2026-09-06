@@ -1,5 +1,4 @@
 #include "SystemMessageUnit.h"
-#include "ThemeManager.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QFrame>
@@ -13,7 +12,8 @@ SystemMessageUnit::SystemMessageUnit(QWidget* parent)
 	setReadOnly(true);
 
 	// 无边框、透明背景、斜体浅灰文字
-	setStyleSheet(QStringLiteral("SystemMessageUnit {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("systemMessageText")) + QStringLiteral(";") + QStringLiteral("  font-style: italic;") + QStringLiteral("}"));
+
+	setObjectName(QStringLiteral("systemUnit")); // 外观规则见 resources/styles/chat.qss（#systemUnit）
 	viewport()->setAutoFillBackground(false);
 	setFrameShape(QFrame::NoFrame);
 	setFrameShadow(QFrame::Plain);
@@ -21,7 +21,8 @@ SystemMessageUnit::SystemMessageUnit(QWidget* parent)
 	setFixedWidth(DefaultWidth);
 	setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	// 单行过长时给左右滚动条，避免内容被裁剪（正常文本仍按宽度换行）
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	document()->setDocumentMargin(0);
 
 	connect(document(), &QTextDocument::contentsChanged,

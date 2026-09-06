@@ -1,5 +1,4 @@
 #include "UserMessageUnit.h"
-#include "ThemeManager.h"
 
 #include <QFrame>
 #include <QStringList>
@@ -21,7 +20,7 @@ UserMessageUnit::UserMessageUnit(QWidget* parent)
 	setFrameShape(QFrame::NoFrame);
 	setFrameShadow(QFrame::Plain);
 
-	setStyleSheet(QStringLiteral("UserMessageUnit {") + QStringLiteral("  background-color: ") + Theme::color(QStringLiteral("userBubbleBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 12px;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("userBubbleText")) + QStringLiteral(";") + QStringLiteral("}"));
+	setObjectName(QStringLiteral("userUnit")); // 外观规则见 resources/styles/chat.qss（#userUnit）
 
 	// 使用 viewport margin 提供真正的内边距，而不是依赖 QSS padding
 	setViewportMargins(8, 8, 8, 8);
@@ -32,10 +31,11 @@ UserMessageUnit::UserMessageUnit(QWidget* parent)
 	setMaximumWidth(MaxWidth);
 	setFixedWidth(MinWidth);
 
-	// 高度由内容决定，不在控件内部显示滚动条
+	// 高度由内容决定，不在控件内部显示滚动条；
+	// 单行过长时给左右滚动条（普通文本仍按气泡宽度 Anywhere 换行）
 	setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	document()->setDocumentMargin(0);
 
 	// 内容变化后自动调整高度

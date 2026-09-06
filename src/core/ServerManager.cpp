@@ -333,6 +333,39 @@ void ServerManager::launchBundledServer(const QString& nodePath,
 
 	QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
 	env.insert(QStringLiteral("DSH_HOME"), dshHome);
+
+	// 让 server 进程内也能解析 pnpm（dshmarket 安装/卸载插件时会在进程内
+	// spawn pnpm）。GUI 启动的进程没有 shell PATH，这里与 PluginsManager
+	// 的 bootstrap 一致：用内嵌 node 跑 node_modules/pnpm，建本地 shim 并
+	// 加进 PATH。shim 已存在则不覆盖。
+	{
+		const QString appDir = QCoreApplication::applicationDirPath();
+		const QString nodePath = QDir::toNativeSeparators(
+			appDir + QStringLiteral("/resources/server/node.exe"));
+		const QString pnpmEntry = QDir::toNativeSeparators(
+			appDir + QStringLiteral("/resources/server/node_modules/pnpm/bin/pnpm.cjs"));
+		const QString binDir = QDir::toNativeSeparators(dshHome + QStringLiteral("/.desktop-bin"));
+		QDir().mkpath(binDir);
+		const QString pnpmCmdPath = binDir + QStringLiteral("/pnpm.cmd");
+		if (!QFile::exists(pnpmCmdPath)) {
+			QFile shim(pnpmCmdPath);
+			if (shim.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+				shim.write(QStringLiteral("@echo off\r\n\"%1\" \"%2\" %*\r\n")
+					.arg(nodePath, pnpmEntry)
+					.toUtf8());
+				shim.close();
+			}
+		}
+
+		QString path = env.value(QStringLiteral("Path"));
+		if (!path.isEmpty())
+			path = binDir + QLatin1Char(';') + path;
+		else
+			path = binDir;
+		env.insert(QStringLiteral("Path"), path);
+		env.insert(QStringLiteral("PATH"), path);
+	}
+
 	m_serverProcess->setProcessEnvironment(env);
 	m_serverProcess->setWorkingDirectory(cwd);
 

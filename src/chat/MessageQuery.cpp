@@ -1,5 +1,5 @@
 #include "MessageQuery.h"
-#include "ThemeManager.h"
+#include "AgentMessageUnit.h"
 #include "DshEventParser.h"
 #include "DshApiClient.h"
 #include "CacheHistoryManager.h"
@@ -19,37 +19,23 @@
 
 namespace
 {
-	QPushButton* makeCopyButton(QTextBrowser* textEdit)
+	QPushButton* makeCopyButton(QWidget* widget)
 	{
 		auto* button = new QPushButton(QString(QChar(0x29C9))); // ⧉ 复制图标
 		button->setToolTip(QStringLiteral("复制"));
 		button->setFixedSize(28, 24);
 		button->setCursor(Qt::PointingHandCursor);
-		button->setStyleSheet(
-			QStringLiteral("QPushButton {")
-			+ QStringLiteral("  border: none;")
-			+ QStringLiteral("  background: transparent;")
-			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("iconButtonText"))
-			+ QStringLiteral(";")
-			+ QStringLiteral("  font-size: 14px;")
-			+ QStringLiteral("  border-radius: 4px;")
-			+ QStringLiteral("  padding: 0px;")
-			+ QStringLiteral("  margin: 0px;")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QPushButton:hover {")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("iconButtonHoverBg"))
-			+ QStringLiteral(";")
-			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("iconButtonTextHover"))
-			+ QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QPushButton:pressed {")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("iconButtonPressedBg"))
-			+ QStringLiteral(";")
-			+ QStringLiteral("}")
-		);
-		QObject::connect(button, &QPushButton::clicked, textEdit, [textEdit]() {
-			if (!textEdit->toPlainText().isEmpty())
-				QGuiApplication::clipboard()->setText(textEdit->toPlainText());
+		button->setObjectName(QStringLiteral("msgCopyButton")); // 外观规则见 resources/styles/chat.qss（#chatScrollContent QPushButton#msgCopyButton）
+		// 复制内容：Agent 气泡（容器化后不再是 QTextBrowser）用 textContent() 取
+		// “正文 + 代码”按顺序的纯文本；其余消息单元是 QTextBrowser 子类，走 toPlainText()
+		QObject::connect(button, &QPushButton::clicked, widget, [widget]() {
+			QString text;
+			if (auto* agent = qobject_cast<AgentMessageUnit*>(widget))
+				text = agent->textContent();
+			else if (auto* browser = qobject_cast<QTextBrowser*>(widget))
+				text = browser->toPlainText();
+			if (!text.isEmpty())
+				QGuiApplication::clipboard()->setText(text);
 			});
 		return button;
 	}
@@ -97,7 +83,7 @@ namespace
 					AgentMessageUnit* target = query->lastAgentUnitIfLast();
 					if (!target)
 						target = query->addAgentMessage(QString(), layout);
-					const QString html = QStringLiteral("<pre>%1</pre>")
+					const QString html = QStringLiteral("<pre style='white-space:pre-wrap;word-break:break-all;margin:0;'>%1</pre>")
 						.arg(QString::fromUtf8(
 							QJsonDocument(tool.arguments).toJson(QJsonDocument::Indented))
 							.toHtmlEscaped());
@@ -110,7 +96,7 @@ namespace
 					AgentMessageUnit* target = query->lastAgentUnitIfLast();
 					if (!target)
 						target = query->addAgentMessage(QString(), layout);
-					const QString html = QStringLiteral("<pre>%1</pre>").arg(result.message.toHtmlEscaped());
+					const QString html = QStringLiteral("<pre style='white-space:pre-wrap;word-break:break-all;margin:0;'>%1</pre>").arg(result.message.toHtmlEscaped());
 					target->appendToolResult(html);
 				}
 			}
@@ -180,7 +166,7 @@ AgentMessageUnit* MessageQuery::addAgentMessage(const QString& markdown, QVBoxLa
 	if (AgentMessageUnit* last = lastAgentUnitIfLast()) {
 		// 每次合并新的一段输出前，先加一个段落分隔，避免多段内容挤在一起。
 		// 如果这一段只有回复没有思考，appendMarkdownWithCodeShadow 内部会自己分段。
-		if (!last->document()->isEmpty() && !thinking.isEmpty())
+		if (last->hasContent() && !thinking.isEmpty())
 			last->appendSeparator();
 
 		if (!thinking.isEmpty())
@@ -191,7 +177,7 @@ AgentMessageUnit* MessageQuery::addAgentMessage(const QString& markdown, QVBoxLa
 	}
 
 	auto* unit = new AgentMessageUnit;
-	unit->setStyleSheet(QStringLiteral("AgentMessageUnit {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border-radius: 0;") + QStringLiteral("}"));
+	// AgentMessageUnit 外观见 resources/styles/chat.qss：#agentBubble 内的 #agentUnit 由下方容器规则覆盖为透明
 
 	if (!thinking.isEmpty())
 		unit->appendThinking(thinking);
@@ -202,7 +188,7 @@ AgentMessageUnit* MessageQuery::addAgentMessage(const QString& markdown, QVBoxLa
 	auto* container = new QWidget;
 	container->setObjectName(QStringLiteral("agentBubble"));
 	container->setAttribute(Qt::WA_StyledBackground, true);
-	container->setStyleSheet(QStringLiteral("QWidget#agentBubble {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 12px;") + QStringLiteral("}"));
+	// 气泡容器外观见 resources/styles/chat.qss（#agentBubble）
 	auto* box = new QVBoxLayout(container);
 	box->setContentsMargins(8, 8, 8, 8);
 	box->setSpacing(2);
@@ -220,7 +206,7 @@ AgentMessageUnit* MessageQuery::insertAgentMessage(const QString& markdown, QVBo
 	const QString& thinking)
 {
 	auto* unit = new AgentMessageUnit;
-	unit->setStyleSheet(QStringLiteral("AgentMessageUnit {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border-radius: 0;") + QStringLiteral("}"));
+	// AgentMessageUnit 外观见 resources/styles/chat.qss：#agentBubble 内的 #agentUnit 由下方容器规则覆盖为透明
 
 	if (!thinking.isEmpty())
 		unit->appendThinking(thinking);
@@ -230,7 +216,7 @@ AgentMessageUnit* MessageQuery::insertAgentMessage(const QString& markdown, QVBo
 	auto* container = new QWidget;
 	container->setObjectName(QStringLiteral("agentBubble"));
 	container->setAttribute(Qt::WA_StyledBackground, true);
-	container->setStyleSheet(QStringLiteral("QWidget#agentBubble {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 12px;") + QStringLiteral("}"));
+	// 气泡容器外观见 resources/styles/chat.qss（#agentBubble）
 	auto* box = new QVBoxLayout(container);
 	box->setContentsMargins(8, 8, 8, 8);
 	box->setSpacing(2);
@@ -386,7 +372,7 @@ void MessageQuery::prependEvents(QVBoxLayout* layout, const QJsonArray& events, 
 			if (items.isEmpty() || items.last().type != 1)
 				items.append({ 1, QString(), QString(), {} });
 
-			const QString html = QStringLiteral("<pre>%1</pre>")
+			const QString html = QStringLiteral("<pre style='white-space:pre-wrap;word-break:break-all;margin:0;'>%1</pre>")
 				.arg(QString::fromUtf8(
 					QJsonDocument(tool.arguments).toJson(QJsonDocument::Indented))
 					.toHtmlEscaped());
@@ -400,7 +386,7 @@ void MessageQuery::prependEvents(QVBoxLayout* layout, const QJsonArray& events, 
 			if (items.isEmpty() || items.last().type != 1)
 				items.append({ 1, QString(), QString(), {} });
 
-			const QString html = QStringLiteral("<pre>%1</pre>").arg(result.message.toHtmlEscaped());
+			const QString html = QStringLiteral("<pre style='white-space:pre-wrap;word-break:break-all;margin:0;'>%1</pre>").arg(result.message.toHtmlEscaped());
 			items.last().tools.append({ true, QString(), html });
 		}
 	}

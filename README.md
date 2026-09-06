@@ -38,8 +38,8 @@ DSH Hub/
 │   ├── ui/                     # Sidebar, chat input, popups, plugin/extension managers
 │   ├── chat/                   # Message list/units, history loading and caching
 │   ├── network/                # HTTP/WebSocket client, event parser, session prefetcher
-│   ├── bridge/                 # Named pipe bridge, DLL JSON caller, extension loader
-│   └── common/                 # Logger, theme manager, code highlighter, interaction dialogs
+│   ├── ExtensionSystem/        # Named pipe bridge, DLL JSON caller, thunk generator, extension loader
+│   └── common/                 # Logger, theme manager, code highlighter, markdown preprocessor, interaction dialogs
 ├── resources/
 │   ├── icons/ images and QRC
 │   ├── highlight_rules.json    # Syntax highlighting rules
@@ -92,6 +92,8 @@ The test project currently covers:
 - `DshEventParser` – JSON event parsing helpers (`extractEventText`, `extractToolCall`, `extractApproval`, etc.)
 - `CodeHighlighter` – syntax highlighting and HTML escaping
 - `HistoryManager` – history loading state management
+- `MarkdownPreprocess` – `<br>` replacement and table rendering (regression tests for Qt 6 bug)
+- `Thunk` – x86-64 thunk generator: calling conventions, argument types, signature JSON, end-to-end DLL calls
 
 ## Extension Format
 

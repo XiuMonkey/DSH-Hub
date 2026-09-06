@@ -19,7 +19,6 @@ PopupWindow::PopupWindow(QWidget* parent)
 	auto* body = new QWidget(this);
 	body->setObjectName(QStringLiteral("popupBody"));
 	body->setAttribute(Qt::WA_StyledBackground, true);
-	body->setStyleSheet(QStringLiteral("QWidget#popupBody {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";") + QStringLiteral("  border-radius: 16px;") + QStringLiteral("}"));
 
 	auto* outerLayout = new QVBoxLayout(this);
 	outerLayout->setContentsMargins(1, 1, 1, 1);
@@ -35,12 +34,12 @@ PopupWindow::PopupWindow(QWidget* parent)
 	headerLayout->setContentsMargins(0, -4, -4, 0); // 关闭按钮向上、向右各靠近 4px
 
 	m_titleLabel = new QLabel(QStringLiteral("弹窗"), body);
-	m_titleLabel->setStyleSheet(QStringLiteral("QLabel {") + QStringLiteral("  background: transparent;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("  font-size: 16px;") + QStringLiteral("}"));
+	m_titleLabel->setObjectName(QStringLiteral("popupTitle"));
 
 	m_closeButton = new QPushButton(QStringLiteral("✕"), body);
+	m_closeButton->setObjectName(QStringLiteral("popupCloseButton"));
 	m_closeButton->setFixedSize(28, 28);
 	m_closeButton->setCursor(Qt::PointingHandCursor);
-	m_closeButton->setStyleSheet(QStringLiteral("QPushButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textSecondary")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 6px;") + QStringLiteral("  font-size: 14px;") + QStringLiteral("}") + QStringLiteral("QPushButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}"));
 	connect(m_closeButton, &QPushButton::clicked, this, &QWidget::close);
 
 	headerLayout->addWidget(m_titleLabel, 1);
@@ -53,6 +52,9 @@ PopupWindow::PopupWindow(QWidget* parent)
 	m_contentLayout->setContentsMargins(0, 0, 0, 0);
 	m_contentLayout->setSpacing(0);
 	m_mainLayout->addLayout(m_contentLayout, 1);
+
+	// 窗口级样式：本弹窗与后续 setContent 加入的内容统一应用当前主题样式表
+	Theme::applyToWindow(this);
 }
 
 void PopupWindow::setTitle(const QString& title)

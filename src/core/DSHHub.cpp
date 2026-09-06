@@ -10,23 +10,23 @@
 #include "SpinnerWidget.h"
 #include "TopBar.h"
 #include "Settings.h"
-#include "PluginsPopup.h"
+#include "PluginsManager.h"
 #include "DshNamedPipeBridge.h"
-#include "DllJsonCaller.h"
+#include "DllCaller.h"
 #include "ExtensionManagerPopup.h"
 #include "InteractionHandler.h"
 
 #include "DshEventParser.h"
 #include "AgentMessageUnit.h"
 #include "MessageQuery.h"
-#include "LoadingCard.h"
 #include "LoadMoreButton.h"
 
 #include <QCoreApplication>
+#include <QEventLoop>
+#include <QMoveEvent>
 
 #include <QDebug>
 #include <QDir>
-#include <QDirIterator>
 #include <QFileInfo>
 #include <QFile>
 #include <QFileDialog>
@@ -58,12 +58,47 @@
 #include <QTcpSocket>
 #include <QLocalSocket>
 #include <QVBoxLayout>
+#include <QPointer>
+#include <QRunnable>
+#include <QThreadPool>
+
+#include <functional>
+
+namespace
+{
+	// 简单 std::function 任务，投递到 QThreadPool 执行（QtCore，无需 QtConcurrent）
+	class FunctorTask : public QRunnable
+	{
+	public:
+		explicit FunctorTask(std::function<void()> fn)
+			: m_fn(std::move(fn))
+		{
+		}
+
+		void run() override
+		{
+			if (m_fn)
+				m_fn();
+		}
+
+	private:
+		std::function<void()> m_fn;
+	};
+} // namespace
 
 DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialServerProcess)
 	: QMainWindow(parent)
 	, m_api(new DshApiClient(this))
 {
 	qInfo().noquote() << QStringLiteral("[DSH Hub] constructor started");
+
+	// DLL/COM 工具调用线程池：请求在 Worker 上执行（GUI 不阻塞）；
+	// DllCaller 内部按 DLL 串行、跨 DLL 并行。
+	m_toolPool = new QThreadPool(this);
+	m_toolPool->setMaxThreadCount(4);
+
+	// 样式表按窗口安装（替代全局 qApp 表）：本窗口与后续加入的子控件统一应用当前主题
+	Theme::applyToWindow(this);
 	setWindowTitle(QStringLiteral("DSH Hub"));
 	setAttribute(Qt::WA_DeleteOnClose);
 
@@ -79,7 +114,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	}
 
 	// 初始化 JSON5 DLL 调用器
-	m_dllCaller = new DllJsonCaller;
+	m_dllCaller = new DllCaller;
 	const QString appDir = QCoreApplication::applicationDirPath();
 	const QString serverProfilePath = appDir + QStringLiteral("/resources/server/harness/profiles/web");
 	const QString extensionsRoot = serverProfilePath + QStringLiteral("/extensions");
@@ -87,53 +122,76 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	QString descriptorPath = qEnvironmentVariable("DSH_DLL_JSON5", QString());
 	QString dllPath = qEnvironmentVariable("DSH_DLL", QString());
 
-	// 没有显式指定时，从已安装扩展包里按 regulation.json5 + main.dll 查找并加载
-	if (descriptorPath.isEmpty() || dllPath.isEmpty()) {
+	// 显式指定了完整一对（调试用）：只加载这一份，跳过自动发现
+	if (!descriptorPath.isEmpty() && !dllPath.isEmpty()) {
+		if (QFile::exists(descriptorPath) && QFile::exists(dllPath)) {
+			if (!m_dllCaller->loadDescriptor(descriptorPath)) {
+				qWarning() << "[DllCaller] descriptor error:" << m_dllCaller->errorString();
+			}
+			else if (!m_dllCaller->loadLibrary(dllPath)) {
+				qWarning() << "[DllCaller] library error:" << m_dllCaller->errorString();
+			}
+		}
+	}
+	else {
+		// env 只给了描述符（调试）：目录下的 main.dll 作为库一并加载
+		if (!descriptorPath.isEmpty() && QFile::exists(descriptorPath)) {
+			if (dllPath.isEmpty())
+				dllPath = QFileInfo(descriptorPath).absolutePath() + QStringLiteral("/main.dll");
+			if (QFile::exists(dllPath)) {
+				if (!m_dllCaller->loadDescriptor(descriptorPath)) {
+					qWarning() << "[DllCaller] descriptor error:" << m_dllCaller->errorString();
+				}
+				else if (!m_dllCaller->loadLibrary(dllPath)) {
+					qWarning() << "[DllCaller] library error:" << m_dllCaller->errorString();
+				}
+			}
+		}
+
+		// 自动发现：逐个加载全部已安装扩展（原先只加载扫描到的第一个；
+		// 多扩展并存后改为全部加载，DllCaller 内部按扩展名去重）
 		const QStringList scanRoots = {
 			extensionsRoot,
 			serverProfilePath + QStringLiteral("/node_modules")
 		};
 		for (const QString& scanRoot : scanRoots) {
-			QDirIterator it(scanRoot, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
-			while (it.hasNext()) {
-				const QString dir = it.next();
-				const QString candidateJson = dir + QStringLiteral("/regulation.json5");
-				const QString candidateDll = dir + QStringLiteral("/main.dll");
-				if (QFile::exists(candidateJson) && QFile::exists(candidateDll)) {
-					if (descriptorPath.isEmpty())
-						descriptorPath = candidateJson;
-					if (dllPath.isEmpty())
-						dllPath = candidateDll;
-					break;
+			const QDir root(scanRoot);
+			if (!root.exists())
+				continue;
+			const QFileInfoList entries = root.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+			for (const QFileInfo& entry : entries) {
+				const QString extDir = entry.absoluteFilePath();
+				const QString candidateJson = extDir + QStringLiteral("/regulation.json5");
+				const QString candidateDll = extDir + QStringLiteral("/main.dll");
+				if (!QFile::exists(candidateJson) || !QFile::exists(candidateDll))
+					continue;
+				if (!m_dllCaller->loadDescriptor(candidateJson)) {
+					qWarning() << "[DllCaller] auto-load descriptor failed:" << candidateJson
+						<< m_dllCaller->errorString();
+					continue;
+				}
+				if (!m_dllCaller->loadLibrary(candidateDll)) {
+					qWarning() << "[DllCaller] auto-load library failed:" << candidateDll
+						<< m_dllCaller->errorString();
 				}
 			}
-			if (!descriptorPath.isEmpty() && !dllPath.isEmpty())
-				break;
 		}
 	}
 
-	if (!descriptorPath.isEmpty() && !dllPath.isEmpty()
-		&& QFile::exists(descriptorPath) && QFile::exists(dllPath)) {
-		if (!m_dllCaller->loadDescriptor(descriptorPath)) {
-			qWarning() << "[DllCaller] descriptor error:" << m_dllCaller->errorString();
-		}
-		else if (!m_dllCaller->loadLibrary(dllPath)) {
-			qWarning() << "[DllCaller] library error:" << m_dllCaller->errorString();
-		}
-	}
-
-	// 创建界面
+	// 创建界面（外观由 Theme 启动时从 styles/*.qss 统一安装，控件只负责提供 objectName）
 	auto* central = new QWidget(this);
-	central->setStyleSheet(QStringLiteral("QWidget {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("windowBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QLineEdit {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border: 1px solid ") + QStringLiteral("#D0D7DE") + QStringLiteral(";") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 6px 10px;") + QStringLiteral("}") + QStringLiteral("QLineEdit:focus {") + QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton {") + QStringLiteral("  background: ") + QStringLiteral("#E8EAED") + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 6px 14px;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton:hover {") + QStringLiteral("  background: ") + QStringLiteral("#DDE0E4") + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton:pressed {") + QStringLiteral("  background: ") + QStringLiteral("#CDD0D5") + QStringLiteral(";") + QStringLiteral("}"));
+	central->setObjectName(QStringLiteral("dshhubCentral"));
+	central->setAttribute(Qt::WA_StyledBackground, true);
 	auto* layout = new QVBoxLayout(central);
 
 	m_scrollArea = new QScrollArea(central);
+	m_scrollArea->setObjectName(QStringLiteral("chatScrollArea"));
 	m_scrollArea->setFixedWidth(900);
 	m_scrollArea->setFrameShape(QFrame::NoFrame);
-	m_scrollArea->setStyleSheet(QStringLiteral("QScrollArea {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("windowBg")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("}") + QStringLiteral("QScrollArea QScrollBar:vertical {") + QStringLiteral("  background: transparent;") + QStringLiteral("  width: 8px;") + QStringLiteral("  margin: 2px;") + QStringLiteral("}") + QStringLiteral("QScrollArea QScrollBar::handle:vertical {") + QStringLiteral("  background: ") + QStringLiteral("#C1C7CF") + QStringLiteral(";") + QStringLiteral("  border-radius: 4px;") + QStringLiteral("  min-height: 30px;") + QStringLiteral("}") + QStringLiteral("QScrollArea QScrollBar::handle:vertical:hover {") + QStringLiteral("  background: ") + QStringLiteral("#A8B0B9") + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QScrollArea QScrollBar::add-line:vertical,") + QStringLiteral("QScrollArea QScrollBar::sub-line:vertical {") + QStringLiteral("  height: 0;") + QStringLiteral("}") + QStringLiteral("QScrollArea QScrollBar::add-page:vertical,") + QStringLiteral("QScrollArea QScrollBar::sub-page:vertical {") + QStringLiteral("  background: transparent;") + QStringLiteral("}"));
 
 	auto* scrollContent = new QWidget;
-	scrollContent->setStyleSheet(QStringLiteral("background: ") + Theme::color(QStringLiteral("windowBg")) + QStringLiteral(";"));
+	scrollContent->setObjectName(QStringLiteral("chatScrollContent"));
+	scrollContent->setAttribute(Qt::WA_StyledBackground, true);
 	auto* scrollLayout = new QVBoxLayout(scrollContent);
 	scrollLayout->setContentsMargins(10, 0, 0, 0);
 	scrollLayout->setAlignment(Qt::AlignTop);
@@ -154,15 +212,15 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 
 	// 右侧面板与主窗口同色
 	auto* rightPanel = new QWidget(central);
+	rightPanel->setObjectName(QStringLiteral("chatPanel"));
 	rightPanel->setFixedWidth(900);
 	rightPanel->setAttribute(Qt::WA_StyledBackground, true);
-	rightPanel->setStyleSheet(QStringLiteral("background: ") + Theme::color(QStringLiteral("windowBg")) + QStringLiteral(";") + QStringLiteral("border-radius: 12px;"));
 
 	m_chatInput = new ChatInputWidget(rightPanel);
 
 	// 底部“没有更多了”提示
 	m_toastLabel = new QLabel(QStringLiteral("啊哦，没有更多了"), this);
-	m_toastLabel->setStyleSheet(QStringLiteral("QLabel {") + QStringLiteral("  background: rgba(31,35,40,0.85);") + QStringLiteral("  color: white;") + QStringLiteral("  border-radius: 16px;") + QStringLiteral("  padding: 8px 16px;") + QStringLiteral("  font-size: 13px;") + QStringLiteral("}"));
+	m_toastLabel->setObjectName(QStringLiteral("toastLabel"));
 	m_toastLabel->setAlignment(Qt::AlignCenter);
 	m_toastLabel->hide();
 
@@ -225,13 +283,14 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	// 初始化灰色蒙版 + 居中标签
 	m_initOverlay = new QWidget(this);
 	m_initOverlay->setObjectName(QStringLiteral("initOverlay"));
-	m_initOverlay->setStyleSheet(QStringLiteral("QWidget#initOverlay {") + QStringLiteral("  background-color: rgba(128,128,128,0.65);") + QStringLiteral("}"));
+	m_initOverlay->setAttribute(Qt::WA_StyledBackground, true);
 	auto* overlayLayout = new QVBoxLayout(m_initOverlay);
 
 	// 现代化横版卡片：宽高比约 5:3
 	auto* initCard = new QWidget(m_initOverlay);
+	initCard->setObjectName(QStringLiteral("initCard"));
+	initCard->setAttribute(Qt::WA_StyledBackground, true);
 	initCard->setFixedSize(400, 240);
-	initCard->setStyleSheet(QStringLiteral("QWidget {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 20px;") + QStringLiteral("}"));
 
 	auto* cardLayout = new QVBoxLayout(initCard);
 	cardLayout->setContentsMargins(24, 20, 24, 20);
@@ -266,8 +325,8 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	rowLayout->addWidget(spinner, 0, Qt::AlignVCenter);
 
 	m_initLabel = new QLabel(QStringLiteral("DSH Hub 正在初始化..."), initCard);
+	m_initLabel->setObjectName(QStringLiteral("initLabel"));
 	m_initLabel->setAlignment(Qt::AlignCenter);
-	m_initLabel->setStyleSheet(QStringLiteral("QLabel {") + QStringLiteral("  background: transparent;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("  font-size: 18px;") + QStringLiteral("  font-weight: 600;") + QStringLiteral("}"));
 	rowLayout->addWidget(m_initLabel, 0, Qt::AlignVCenter);
 	rowLayout->addStretch(1);
 
@@ -324,10 +383,13 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	m_prefetcher = new SessionPrefetcher(this);
 	connect(m_prefetcher, &SessionPrefetcher::historyFetched,
 		this, &DSHHub::onHistoryPrefetched);
+	// 侧边栏“设置”入口：Settings 是常驻“设置系统”，窗口开关由它自己管理，
+	// 这里只做一次接线；实际创建放在构造函数尾部（ServerManager start 之后，
+	// 那时 dshHome 才可用）。
 	connect(m_sidebar, &Sidebar::settingsRequested,
-		this, &DSHHub::openSettings);
+		this, [this]() { if (m_settings) m_settings->openSettings(); });
 	connect(m_sidebar, &Sidebar::pluginsRequested,
-		this, &DSHHub::openPlugins);
+		this, [this]() { if (m_pluginsManager) m_pluginsManager->openPlugins(); });
 	connect(m_sidebar, &Sidebar::themeToggleRequested,
 		this, &DSHHub::toggleTheme);
 	connect(m_sidebar, &Sidebar::extensionsRequested,
@@ -344,8 +406,6 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		this, &DSHHub::onSessionCreateError);
 
 	m_historyLoader = new HistoryLoader(m_api, m_messages, m_messagesLayout, &m_history, m_scrollArea, this);
-	connect(m_historyLoader, &HistoryLoader::loadingChanged,
-		this, &DSHHub::onHistoryLoadingChanged);
 	connect(m_historyLoader, &HistoryLoader::loadMoreButtonVisibleChanged,
 		this, &DSHHub::onHistoryLoadMoreButtonVisibleChanged);
 	connect(m_historyLoader, &HistoryLoader::historyError,
@@ -365,8 +425,8 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		if (!m_api)
 			return;
 		m_api->setBaseUrl(url);
-		if (m_pluginsPopup)
-			m_pluginsPopup->setBaseUrl(url);
+		if (m_pluginsManager)
+			m_pluginsManager->setBaseUrl(url);
 		m_api->openStreams();
 		});
 	connect(m_serverManager, &ServerManager::errorLine, this, [this](const QString& line) {
@@ -384,12 +444,19 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 			finishInitialization();
 		});
 	connect(m_serverManager, &ServerManager::outputLine, this, [](const QString& line) {
-		// 只记录插件市场/registry/snapshot 相关输出和错误，避免刷爆日志
-		if (line.contains(QStringLiteral("dshmarket"), Qt::CaseInsensitive)
-			|| line.contains(QStringLiteral("registry"), Qt::CaseInsensitive)
-			|| line.contains(QStringLiteral("snapshot"), Qt::CaseInsensitive)
-			|| line.contains(QStringLiteral("error"), Qt::CaseInsensitive)
-			|| line.contains(QStringLiteral("fail"), Qt::CaseInsensitive)) {
+		// 只记录服务端里可能与插件市场/扩展/服务本身相关的输出，避免刷爆日志；
+		// 设置环境变量 DSH_HUB_SERVER_TRACE=1 可转储服务端全部 stdout。
+		const QString lower = line.toLower();
+		if (qEnvironmentVariableIsSet("DSH_HUB_SERVER_TRACE")
+			|| lower.contains(QStringLiteral("dshmarket"))
+			|| lower.contains(QStringLiteral("market"))
+			|| lower.contains(QStringLiteral("install"))
+			|| lower.contains(QStringLiteral("pnpm"))
+			|| lower.contains(QStringLiteral("plugin"))
+			|| lower.contains(QStringLiteral("registry"))
+			|| lower.contains(QStringLiteral("snapshot"))
+			|| lower.contains(QStringLiteral("error"))
+			|| lower.contains(QStringLiteral("fail"))) {
 			qInfo().noquote() << "[DSH Server]" << line;
 		}
 		});
@@ -413,6 +480,40 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		});
 
 	m_serverManager->start(initialBaseUrl, initialServerProcess);
+
+	// ------------------------------------------------------------------
+	// 常驻“设置系统”：随主窗口存在，自管设置窗口的开关/遮罩/居中。
+	// 放在 start() 之后创建，因为 Settings 构造需要 dshHome
+	// （由 ServerManager::start 填充）。这里只做一次业务信号接线：
+	// apiKey/Server 保存失败重启服务端、预设变更同步给当前会话。
+	// ------------------------------------------------------------------
+	m_settings = new Settings(m_serverManager->dshHome(), m_api, this);
+	connect(m_settings, &Settings::apiKeyChanged, this, [this]() {
+		if (m_serverManager)
+			m_serverManager->restart();
+		});
+	connect(m_settings, &Settings::agentPresetChanged, this, [this](const QString& presetId) {
+		m_defaultAgentPreset = presetId;
+		if (!m_sessionId.isEmpty() && m_api) {
+			QJsonObject payload;
+			payload.insert(QStringLiteral("sessionId"), m_sessionId);
+			payload.insert(QStringLiteral("agentPreset"), presetId);
+			m_api->callMethod(QStringLiteral("agentPreset.select"), payload, {}, {});
+		}
+		});
+	connect(m_settings, &Settings::serverSettingsSaved, this, [this]() {
+		if (m_serverManager)
+			m_serverManager->restart();
+		});
+
+	// ------------------------------------------------------------------
+	// 常驻“插件系统”：随主窗口存在，自管插件窗口的开关/遮罩/居中。
+	// baseUrl 会在 ServerManager::baseUrlReady 时经 setBaseUrl() 更新；
+	// serverRestartRequested（插件内“重启服务”）只在此接线一次。
+	// ------------------------------------------------------------------
+	m_pluginsManager = new PluginsManager(m_api ? m_api->baseUrl() : QUrl(), this);
+	connect(m_pluginsManager, &PluginsManager::serverRestartRequested,
+		m_serverManager, &ServerManager::restart);
 }
 
 void DSHHub::resizeEvent(QResizeEvent* event)
@@ -422,13 +523,35 @@ void DSHHub::resizeEvent(QResizeEvent* event)
 	if (m_initOverlay)
 		m_initOverlay->setGeometry(rect());
 
-	if (m_settingsOverlay)
-		m_settingsOverlay->setGeometry(rect());
+	if (m_settings)
+		m_settings->syncOverlayToHost();
 
-	if (m_pluginsOverlay)
-		m_pluginsOverlay->setGeometry(rect());
+	if (m_pluginsManager)
+		m_pluginsManager->syncOverlayToHost();
 	if (m_extensionOverlay)
 		m_extensionOverlay->setGeometry(rect());
+
+	// 宿主缩放后把打开的弹窗重新居中
+	keepOpenPopupsCentered();
+}
+
+void DSHHub::moveEvent(QMoveEvent* event)
+{
+	QMainWindow::moveEvent(event);
+	// 弹窗是宿主“拥有的”独立窗口（Windows 上不随宿主拖动），这里手动跟随
+	keepOpenPopupsCentered();
+}
+
+void DSHHub::keepOpenPopupsCentered()
+{
+	const QPoint center = geometry().center();
+	const auto recenter = [center](QWidget* popup) {
+		if (popup && popup->isVisible())
+			popup->move(center - popup->rect().center());
+	};
+	recenter(m_settings);
+	recenter(m_pluginsManager);
+	recenter(m_extensionPopup);
 }
 
 void DSHHub::finishInitialization()
@@ -459,101 +582,13 @@ QUrl DSHHub::baseUrl() const
 	return m_api ? m_api->baseUrl() : QUrl();
 }
 
-void DSHHub::openSettings()
-{
-	if (m_settings)
-		return;
-
-	// 灰色蒙版，和初始化蒙版一致，禁止主窗口交互
-	m_settingsOverlay = new QWidget(this);
-	m_settingsOverlay->setObjectName(QStringLiteral("settingsOverlay"));
-	m_settingsOverlay->setAttribute(Qt::WA_StyledBackground, true);
-	m_settingsOverlay->setStyleSheet(QStringLiteral("QWidget#settingsOverlay {") + QStringLiteral("  background-color: rgba(128,128,128,0.65);") + QStringLiteral("}"));
-	m_settingsOverlay->setGeometry(rect());
-	m_settingsOverlay->raise();
-	m_settingsOverlay->show();
-
-	m_settings = new Settings(m_serverManager->dshHome(), m_api, this);
-	m_settings->move(geometry().center() - m_settings->rect().center());
-	m_settings->show();
-
-	// 仅当 credentials.set 失败时，才通过重启服务端兜底
-	connect(m_settings, &Settings::apiKeyChanged, this, [this]() {
-		if (m_serverManager)
-			m_serverManager->restart();
-		});
-
-	connect(m_settings, &Settings::agentPresetChanged, this, [this](const QString& presetId) {
-		m_defaultAgentPreset = presetId;
-		if (!m_sessionId.isEmpty() && m_api) {
-			QJsonObject payload;
-			payload.insert(QStringLiteral("sessionId"), m_sessionId);
-			payload.insert(QStringLiteral("agentPreset"), presetId);
-			m_api->callMethod(QStringLiteral("agentPreset.select"), payload, {}, {});
-		}
-		});
-
-	connect(m_settings, &Settings::serverSettingsSaved, this, [this]() {
-		if (m_serverManager)
-			m_serverManager->restart();
-		});
-
-	connect(m_settings, &PopupWindow::closed, this, [this]() {
-		closeSettings();
-		});
-}
-
-void DSHHub::closeSettings()
-{
-	if (m_settingsOverlay) {
-		m_settingsOverlay->hide();
-		m_settingsOverlay->deleteLater();
-		m_settingsOverlay = nullptr;
-	}
-
-	if (m_settings) {
-		disconnect(m_settings, nullptr, this, nullptr);
-		m_settings->close();
-		m_settings->deleteLater();
-		m_settings = nullptr;
-	}
-}
-
 void DSHHub::toggleTheme()
 {
 	Theme::switchTheme(this);
 }
 
-void DSHHub::openPlugins()
-{
-	if (m_pluginsPopup)
-		return;
-
-	m_pluginsOverlay = new QWidget(this);
-	m_pluginsOverlay->setObjectName(QStringLiteral("pluginsOverlay"));
-	m_pluginsOverlay->setAttribute(Qt::WA_StyledBackground, true);
-	m_pluginsOverlay->setStyleSheet(QStringLiteral("QWidget#pluginsOverlay {") + QStringLiteral("  background-color: rgba(128,128,128,0.65);") + QStringLiteral("}"));
-	m_pluginsOverlay->setGeometry(rect());
-	m_pluginsOverlay->raise();
-	m_pluginsOverlay->show();
-
-	m_pluginsPopup = new PluginsPopup(m_api ? m_api->baseUrl() : QUrl(), this);
-	m_pluginsPopup->move(geometry().center() - m_pluginsPopup->rect().center());
-	m_pluginsPopup->show();
-
-	connect(m_pluginsPopup, &PluginsPopup::serverRestartRequested,
-		m_serverManager, &ServerManager::restart);
-
-	connect(m_pluginsPopup, &PopupWindow::closed, this, [this]() {
-		if (m_pluginsOverlay) {
-			m_pluginsOverlay->hide();
-			m_pluginsOverlay->deleteLater();
-			m_pluginsOverlay = nullptr;
-		}
-		m_pluginsPopup->deleteLater();
-		m_pluginsPopup = nullptr;
-		});
-}
+// openPlugins 已迁出：插件窗口的开关/遮罩/居中由常驻的
+// PluginsManager（openPlugins()/closePlugins()）自管，见构造函数。
 
 QProcess* DSHHub::takeServerProcess()
 {
@@ -568,6 +603,14 @@ void DSHHub::adoptServerProcess(QProcess* process)
 
 DSHHub::~DSHHub()
 {
+	// 先停掉工具调用线程池，避免 Worker 仍在用 m_dllCaller / 排队任务引用 this
+	if (m_toolPool) {
+		m_toolPool->clear();
+		m_toolPool->waitForDone();
+		delete m_toolPool;
+		m_toolPool = nullptr;
+	}
+
 	if (m_api)
 		disconnect(m_api, nullptr, this, nullptr);
 
@@ -594,7 +637,7 @@ void DSHHub::onSendClicked()
 	sendPrompt(text);
 }
 
-void DSHHub::onStopRequested()
+void DSHHub::onStopRequested()  
 {
 	if (!m_streaming)
 		return;
@@ -634,6 +677,7 @@ void DSHHub::onStopRequested()
 					m_messagesLayout);
 			}
 		});
+
 }
 
 void DSHHub::updateStreamingUi()
@@ -682,6 +726,7 @@ void DSHHub::onNewWorkspaceClicked()
 					m_messagesLayout);
 			}
 		});
+
 }
 
 void DSHHub::onCreateSessionInWorkspace(const QString& workspaceId)
@@ -728,6 +773,7 @@ void DSHHub::onCreateSessionInWorkspace(const QString& workspaceId)
 					m_messagesLayout);
 			}
 		});
+
 }
 
 void DSHHub::sendPrompt(const QString& text)
@@ -815,6 +861,7 @@ void DSHHub::createSessionAndSend(const QString& text)
 					m_messagesLayout);
 			}
 		});
+
 }
 
 void DSHHub::cacheCurrentMessages()
@@ -830,7 +877,6 @@ bool DSHHub::tryRestoreCachedMessages(const QString& sessionId)
 	if (!m_messages)
 		return false;
 
-	hideLoadingIndicator();
 	if (m_loadMoreButton)
 		m_loadMoreButton->setVisible(!m_messages->messages.empty());
 
@@ -846,6 +892,7 @@ bool DSHHub::tryRestoreCachedMessages(const QString& sessionId)
 	}
 
 	return true;
+
 }
 
 void DSHHub::swapToMessageQuery(MessageQuery* query)
@@ -908,6 +955,7 @@ void DSHHub::scrollToBottomNow()
 		m_scrollArea->setUpdatesEnabled(true);
 		m_scrollArea->viewport()->update();
 		});
+
 }
 
 void DSHHub::onHistoryPrefetched(const QString& sessionId, const QJsonArray& events)
@@ -922,7 +970,6 @@ void DSHHub::onHistoryPrefetched(const QString& sessionId, const QJsonArray& eve
 		m_messages->appendEvents(m_messagesLayout, events);
 		m_history.setEventCount(events.size());
 		m_usingPrefetched = true;
-		hideLoadingIndicator();
 		scrollToBottomNow();
 		if (m_historyLoader)
 			m_historyLoader->setUsingPrefetched(true);
@@ -937,6 +984,7 @@ void DSHHub::onHistoryPrefetched(const QString& sessionId, const QJsonArray& eve
 	if (!m_prebuildQueue.contains(sessionId))
 		m_prebuildQueue.append(sessionId);
 	processPrebuildQueue();
+
 }
 
 void DSHHub::processPrebuildQueue()
@@ -967,6 +1015,7 @@ void DSHHub::processPrebuildQueue()
 
 	if (!m_prebuildQueue.isEmpty())
 		QTimer::singleShot(0, this, &DSHHub::processPrebuildQueue);
+
 }
 
 void DSHHub::onSessionSelected(const QString& sessionId)
@@ -974,7 +1023,6 @@ void DSHHub::onSessionSelected(const QString& sessionId)
 	if (sessionId.isEmpty())
 		return;
 
-	hideLoadingIndicator();
 	// 切换会话时先取消上一个会话尚未完成的增量构建，避免旧消息覆盖新会话
 	if (m_historyLoader)
 		m_historyLoader->cancelBuild();
@@ -1020,6 +1068,7 @@ void DSHHub::onSessionSelected(const QString& sessionId)
 		m_historyLoader->setUsingPrefetched(m_usingPrefetched);
 		m_historyLoader->load(sessionId);
 	}
+
 }
 
 void DSHHub::onDeleteSessionRequested(const QString& sessionId)
@@ -1099,24 +1148,7 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 					m_messagesLayout);
 			}
 		});
-}
 
-void DSHHub::hideLoadingIndicator()
-{
-	if (!m_loadingContainer && !m_loadingCard)
-		return;
-
-	if (m_messagesLayout && m_loadingContainer) {
-		m_messagesLayout->removeWidget(m_loadingContainer);
-		m_loadingContainer->deleteLater();
-	}
-	else if (m_messagesLayout && m_loadingCard) {
-		m_messagesLayout->removeWidget(m_loadingCard);
-		m_loadingCard->deleteLater();
-	}
-
-	m_loadingContainer = nullptr;
-	m_loadingCard = nullptr;
 }
 
 void DSHHub::onClearConversationClicked()
@@ -1124,7 +1156,6 @@ void DSHHub::onClearConversationClicked()
 	m_sidebar->clearAllSessions(
 		m_serverManager->dshHome(),
 		[this]() {
-			hideLoadingIndicator();
 			clearInteractionPanels();
 			if (m_messages)
 				m_messages->clear();
@@ -1139,6 +1170,7 @@ void DSHHub::onClearConversationClicked()
 		[this]() {
 			callSessionCreate();
 		});
+
 }
 
 void DSHHub::callSessionCreate()
@@ -1185,6 +1217,7 @@ void DSHHub::callSessionCreate()
 					QStringLiteral("创建会话失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 		});
+
 }
 
 void DSHHub::handleConnected()
@@ -1233,6 +1266,7 @@ void DSHHub::onNoSessionAvailable()
 {
 	if (m_sidebar && m_api)
 		m_sidebar->createSession(m_api);
+
 }
 
 void DSHHub::onSessionListError(const QString& code, const QString& message)
@@ -1240,6 +1274,7 @@ void DSHHub::onSessionListError(const QString& code, const QString& message)
 	if (m_messages)
 		m_messages->addSystemMessage(QStringLiteral("Session list error: %1 %2").arg(code, message), m_messagesLayout);
 	finishInitialization();
+
 }
 
 void DSHHub::onSessionCreateError(const QString& code, const QString& message)
@@ -1247,12 +1282,7 @@ void DSHHub::onSessionCreateError(const QString& code, const QString& message)
 	if (m_messages)
 		m_messages->addSystemMessage(QStringLiteral("Session create error: %1 %2").arg(code, message), m_messagesLayout);
 	finishInitialization();
-}
 
-void DSHHub::onHistoryLoadingChanged(bool loading)
-{
-	Q_UNUSED(loading)
-		hideLoadingIndicator();
 }
 
 void DSHHub::onHistoryLoadMoreButtonVisibleChanged(bool visible)
@@ -1265,6 +1295,7 @@ void DSHHub::onHistoryError(const QString& code, const QString& message)
 {
 	if (m_messages)
 		m_messages->addSystemMessage(QStringLiteral("History error: %1 %2").arg(code, message), m_messagesLayout);
+
 }
 
 void DSHHub::onIncrementalBuildReady(MessageQuery* query)
@@ -1280,13 +1311,17 @@ void DSHHub::openExtensions()
 	if (m_extensionPopup)
 		return;
 
-	m_extensionOverlay = new QWidget(this);
-	m_extensionOverlay->setObjectName(QStringLiteral("extensionOverlay"));
-	m_extensionOverlay->setAttribute(Qt::WA_StyledBackground, true);
-	m_extensionOverlay->setStyleSheet(QStringLiteral("QWidget#extensionOverlay { background-color: rgba(128,128,128,0.65); }"));
+	// 遮罩常驻复用：只在首次创建，关闭后仅隐藏，避免每次开关重建全窗半透明控件
+	if (!m_extensionOverlay) {
+		m_extensionOverlay = new QWidget(this);
+		m_extensionOverlay->setObjectName(QStringLiteral("extensionOverlay"));
+		m_extensionOverlay->setAttribute(Qt::WA_StyledBackground, true);
+	}
 	m_extensionOverlay->setGeometry(rect());
 	m_extensionOverlay->raise();
 	m_extensionOverlay->show();
+	// 强制先让遮罩画出来（否则与下方弹窗同一帧才呈现，观感像弹窗先出、遮罩延迟）
+	QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 
 	m_extensionPopup = new ExtensionManagerPopup(m_serverManager->dshHome() + QStringLiteral("/profiles/web"), this);
 	m_extensionPopup->move(geometry().center() - m_extensionPopup->rect().center());
@@ -1304,19 +1339,19 @@ void DSHHub::openExtensions()
 			}
 		});
 	connect(m_extensionPopup, &ExtensionManagerPopup::extensionRemoving,
-		this, [this](const QString&) {
-			// 移除扩展前先卸载 DLL，释放文件占用
-			if (m_dllCaller)
-				m_dllCaller->unloadLibrary();
+		this, [this](const QString& name) {
+			// 移除扩展前先卸载该扩展的 DLL，释放文件占用（其它扩展不受影响）
+			if (m_dllCaller && !m_dllCaller->removeExtension(name)) {
+				qWarning() << "[DSH DllCaller] removeExtension failed:" << name
+					<< m_dllCaller->errorString();
+			}
 			// 如果移除后服务端因残留配置启动失败，自动清理一次
 			m_cleanupResidualsAfterServerError = true;
 		});
 	connect(m_extensionPopup, &PopupWindow::closed, this, [this]() {
-		if (m_extensionOverlay) {
+		// 遮罩常驻复用：只隐藏，不销毁
+		if (m_extensionOverlay)
 			m_extensionOverlay->hide();
-			m_extensionOverlay->deleteLater();
-			m_extensionOverlay = nullptr;
-		}
 		if (m_extensionPopup) {
 			m_extensionPopup->deleteLater();
 			m_extensionPopup = nullptr;
@@ -1326,16 +1361,50 @@ void DSHHub::openExtensions()
 
 void DSHHub::handlePipeRequest(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket)
 {
-	QJsonObject result;
-	QString error;
-	if (m_dllCaller && m_dllCaller->callTool(tool, args, result, &error)) {
-		if (m_pipeBridge)
-			m_pipeBridge->sendResponse(socket, id, true, result);
-	}
-	else {
-		if (m_pipeBridge)
-			m_pipeBridge->sendResponse(socket, id, false, QJsonObject(), error);
-	}
+	if (!m_dllCaller || !m_pipeBridge || !m_toolPool)
+		return;
+
+	// DLL/COM 调用挪到 Worker 线程执行：GUI 线程不再被长任务（如 ffmpeg
+	// 转码、COM 调用）卡住；不同扩展/不同 DLL 的工具可并行。QLocalSocket
+	// 只在 GUI 线程读写，Worker 完成后把响应投递回 GUI 线程发送。
+	// 同一连接上多个请求的响应可能乱序返回，Node 端按请求 id 配对，无碍。
+	struct PipeJob
+	{
+		int id = 0;
+		QPointer<QLocalSocket> socket;
+		QString tool;
+		QJsonObject args;
+	};
+
+	auto* job = new PipeJob;
+	job->id = id;
+	job->socket = socket;
+	job->tool = tool;
+	job->args = args;
+
+	auto* task = new FunctorTask([this, job]() {
+		QJsonObject result;
+		QString error;
+		const bool ok = m_dllCaller->callTool(job->tool, job->args, result, &error);
+
+		const int jobId = job->id;
+		const QPointer<QLocalSocket> client = job->socket;
+		const bool success = ok;
+		const QJsonObject payload = result;
+		const QString errText = error;
+		delete job;
+
+		QMetaObject::invokeMethod(this, [this, jobId, client, success, payload, errText]() {
+			if (!m_pipeBridge || client.isNull())
+				return; // 客户端已断开，丢弃响应
+			if (success)
+				m_pipeBridge->sendResponse(client.data(), jobId, true, payload);
+			else
+				m_pipeBridge->sendResponse(client.data(), jobId, false, QJsonObject(), errText);
+			}, Qt::QueuedConnection);
+		});
+
+	m_toolPool->start(task);
 }
 
 void DSHHub::handleMuxFrame(const QJsonObject& frame)
@@ -1496,6 +1565,7 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 			m_messages->addSystemMessage(QStringLiteral("收到审批请求，但无法创建内联面板。"), m_messagesLayout);
 		}
 	}
+
 }
 
 void DSHHub::handleTransportError(const QString& context, const QString& message)
@@ -1507,6 +1577,7 @@ void DSHHub::handleTransportError(const QString& context, const QString& message
 	m_messages->addSystemMessage(
 		QStringLiteral("传输错误 [%1]: %2").arg(context, message),
 		m_messagesLayout);
+
 }
 
 void DSHHub::showNoMoreToast()

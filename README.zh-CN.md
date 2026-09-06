@@ -40,8 +40,8 @@ DSH Hub/
 │   ├── ui/                     # 侧边栏、聊天输入框、弹窗、插件/扩展管理
 │   ├── chat/                   # 消息列表/单元、历史加载与缓存
 │   ├── network/                # HTTP/WebSocket 客户端、事件解析、会话预取
-│   ├── bridge/                 # 命名管道桥接、DLL JSON 调用器、扩展加载器
-│   └── common/                 # 日志、主题、代码高亮、交互弹窗
+│   ├── ExtensionSystem/        # 命名管道桥接、DLL JSON 调用器、Thunk 生成器、扩展加载器
+│   └── common/                 # 日志、主题、代码高亮、Markdown 预处理、交互弹窗
 ├── resources/
 │   ├── 图标/图片与 QRC
 │   ├── highlight_rules.json    # 代码高亮规则
@@ -94,6 +94,8 @@ DSH Hub/
 - `DshEventParser` — JSON 事件解析辅助函数（`extractEventText`、`extractToolCall`、`extractApproval` 等）
 - `CodeHighlighter` — 语法高亮与 HTML 转义
 - `HistoryManager` — 历史加载状态管理
+- `MarkdownPreprocess` — `<br>` 替换与表格渲染（针对 Qt 6 bug 的回归测试）
+- `Thunk` — x86-64 Thunk 生成器：调用约定、参数类型、签名 JSON、端到端 DLL 调用
 
 ## 扩展格式
 

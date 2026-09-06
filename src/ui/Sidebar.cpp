@@ -33,7 +33,6 @@ SidebarLogo::SidebarLogo(QWidget* parent)
 	setObjectName(QStringLiteral("sidebarLogo"));
 	setAlignment(Qt::AlignCenter);
 	setAttribute(Qt::WA_TranslucentBackground);
-	setStyleSheet(QStringLiteral("background: transparent;"));
 
 	const QString logoResource = Theme::isDark()
 		? QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny-Dark@2x.png")
@@ -59,7 +58,6 @@ NewWorkspaceButton::NewWorkspaceButton(QWidget* parent)
 {
 	setObjectName(QStringLiteral("newWorkspaceButton"));
 	setCursor(Qt::PointingHandCursor);
-	setStyleSheet(QStringLiteral("QPushButton#newWorkspaceButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 8px 12px;") + QStringLiteral("  font-size: 14px;") + QStringLiteral("}") + QStringLiteral("QPushButton#newWorkspaceButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("accentHover")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
@@ -71,7 +69,6 @@ ClearSessionButton::ClearSessionButton(QWidget* parent)
 {
 	setObjectName(QStringLiteral("clearSessionButton"));
 	setCursor(Qt::PointingHandCursor);
-	setStyleSheet(QStringLiteral("QPushButton#clearSessionButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("dangerButtonBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 8px 12px;") + QStringLiteral("  font-size: 14px;") + QStringLiteral("}") + QStringLiteral("QPushButton#clearSessionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
@@ -87,7 +84,6 @@ SidebarSettingsButton::SidebarSettingsButton(QWidget* parent)
 	setToolTip(QStringLiteral("设置"));
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Setting-Icon.png")));
 	setIconSize(QSize(20, 20));
-	setStyleSheet(QStringLiteral("QPushButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
@@ -103,7 +99,6 @@ SidebarPluginsButton::SidebarPluginsButton(QWidget* parent)
 	setToolTip(QStringLiteral("插件"));
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Plugin-Icon.png")));
 	setIconSize(QSize(20, 20));
-	setStyleSheet(QStringLiteral("QPushButton#sidebarPluginsButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarPluginsButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
@@ -119,7 +114,6 @@ SidebarThemeButton::SidebarThemeButton(QWidget* parent)
 	setToolTip(QStringLiteral("切换主题"));
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Theme-Icon.png")));
 	setIconSize(QSize(20, 20));
-	setStyleSheet(QStringLiteral("QPushButton#sidebarThemeButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarThemeButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
@@ -135,7 +129,6 @@ SidebarExtensionButton::SidebarExtensionButton(QWidget* parent)
 	setToolTip(QStringLiteral("扩展管理"));
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Extension-Icon.png")));
 	setIconSize(QSize(20, 20));
-	setStyleSheet(QStringLiteral("QPushButton#sidebarExtensionButton {") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sidebarExtensionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("}"));
 }
 
 // ------------------------------------------------------------------
@@ -259,7 +252,6 @@ WorkspaceButton::WorkspaceButton(const QString& title, QWidget* parent)
 	setMouseTracking(true);
 	setCheckable(true);
 	setChecked(true);
-	setStyleSheet(QStringLiteral("QPushButton#workspaceButton {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  padding: 6px 26px 6px 10px;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("  font-size: 13px;") + QStringLiteral("  font-weight: 600;") + QStringLiteral("  text-align: left;") + QStringLiteral("}") + QStringLiteral("QPushButton#workspaceButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("}"));
 
 	setExpanded(true);
 }
@@ -548,7 +540,6 @@ Sidebar::Sidebar(QWidget* parent)
 {
 	setObjectName(QStringLiteral("sidebar"));
 	setAttribute(Qt::WA_StyledBackground, true);
-	setStyleSheet(QStringLiteral("#sidebar {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border-radius: 12px;") + QStringLiteral("}") + QStringLiteral("#workspaceList {") + QStringLiteral("  background: transparent;") + QStringLiteral("}") + QStringLiteral("#workspaceGroupContainer {") + QStringLiteral("  background: transparent;") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton {") + QStringLiteral("  text-align: left;") + QStringLiteral("  padding: 0 10px;") + QStringLiteral("  background: transparent;") + QStringLiteral("  border: none;") + QStringLiteral("  border-radius: 8px;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton:hover {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("}") + QStringLiteral("QPushButton#sessionButton:checked {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("}"));
 
 	m_logo = new SidebarLogo(this);
 	m_clearButton = new ClearSessionButton(this);

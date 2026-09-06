@@ -9,5 +9,13 @@
         <file>Theme-Icon.png</file>
         <file>Extension-Icon.png</file>
         <file>highlight_rules.json</file>
+        <file alias="styles/theme-light.json">styles/theme-light.json</file>
+        <file alias="styles/theme-dark.json">styles/theme-dark.json</file>
+        <file alias="styles/base.qss">styles/base.qss</file>
+        <file alias="styles/chat.qss">styles/chat.qss</file>
+        <file alias="styles/sidebar.qss">styles/sidebar.qss</file>
+        <file alias="styles/panels.qss">styles/panels.qss</file>
+        <file alias="styles/settings.qss">styles/settings.qss</file>
+        <file alias="styles/plugins.qss">styles/plugins.qss</file>
     </qresource>
 </RCC>

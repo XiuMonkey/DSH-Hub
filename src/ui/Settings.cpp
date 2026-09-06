@@ -18,6 +18,8 @@
 #include <QStringList>
 #include <QVBoxLayout>
 #include <QTimer>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QDebug>
 
 SettingsButton::SettingsButton(const QString& text, QWidget* parent)
@@ -28,30 +30,14 @@ SettingsButton::SettingsButton(const QString& text, QWidget* parent)
 	setFixedWidth(120);
 	setFixedHeight(36);
 	setCheckable(true);
-	setStyleSheet(
-		QStringLiteral("QPushButton#settingsNavButton {")
-		+ QStringLiteral("  background: transparent;")
-		+ QStringLiteral("  border: none;")
-		+ QStringLiteral("  border-radius: 8px;")
-		+ QStringLiteral("  padding: 8px 16px;")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
-		+ QStringLiteral("  font-size: 14px;")
-		+ QStringLiteral("  text-align: left;")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QPushButton#settingsNavButton:hover,")
-		+ QStringLiteral("QPushButton#settingsNavButton:checked {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QPushButton#settingsNavButton:pressed {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
-		+ QStringLiteral("}"));
 }
 
-Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* parent)
-	: PopupWindow(parent)
+Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
+	: PopupWindow(host)
 	, m_dshHome(dshHome)
 	, m_credentialsFile(dshHome.isEmpty() ? QString() : dshHome + QStringLiteral("/.credentials.yaml"))
 	, m_api(api)
+	, m_host(host)
 {
 	setTitle(QStringLiteral("设置"));
 
@@ -67,10 +53,12 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* parent)
 	auto* modelButton = new SettingsButton(QStringLiteral("模型设置"), content);
 	auto* agentButton = new SettingsButton(QStringLiteral("Agent预设"), content);
 	auto* serverButton = new SettingsButton(QStringLiteral("Server设置"), content);
+	auto* appearanceButton = new SettingsButton(QStringLiteral("外观设置"), content);
 
 	navLayout->addWidget(modelButton);
 	navLayout->addWidget(agentButton);
 	navLayout->addWidget(serverButton);
+	navLayout->addWidget(appearanceButton);
 	navLayout->addStretch(1);
 
 	layout->addLayout(navLayout);
@@ -82,23 +70,16 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* parent)
 	modelLayout->setSpacing(6);
 
 	auto* apiLabel = new QLabel(QStringLiteral("API Key:"), modelPanel);
-	apiLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: ")
-		+ Theme::color(QStringLiteral("textSecondary")) + QStringLiteral("; font-size: 12px; }"));
+	apiLabel->setObjectName(QStringLiteral("settingsApiLabel"));
 
-	auto* modelEdit = new QLineEdit(modelPanel);
-	modelEdit->setObjectName(QStringLiteral("modelSettingsEdit"));
-	modelEdit->setPlaceholderText(QStringLiteral("输入模型设置"));
-	modelEdit->setText(readApiKeyFromCredentialsFile());
-	modelEdit->setStyleSheet(QStringLiteral("QLineEdit#modelSettingsEdit { background: ")
-		+ Theme::color(QStringLiteral("inputBg")) + QStringLiteral("; border: 1px solid ")
-		+ Theme::color(QStringLiteral("scrollbar")) + QStringLiteral("; border-radius: 8px; padding: 8px 12px; font-size: 14px; color: ")
-		+ Theme::color(QStringLiteral("textPrimary")) + QStringLiteral("; }")
-		+ QStringLiteral("QLineEdit#modelSettingsEdit:focus { background: ")
-		+ Theme::color(QStringLiteral("panelBg")) + QStringLiteral("; border-color: ")
-		+ Theme::color(QStringLiteral("accent")) + QStringLiteral("; }"));
+	m_apiKeyEdit = new QLineEdit(modelPanel);
+	m_apiKeyEdit->setObjectName(QStringLiteral("modelSettingsEdit"));
+	m_apiKeyEdit->setPlaceholderText(QStringLiteral("输入模型设置"));
+	// 初始文本由 openSettings() 每次打开时经 refreshOnOpen() 同步，
+	// 避免常驻对象在服务端未就绪时就读取凭据。
 
 	modelLayout->addWidget(apiLabel);
-	modelLayout->addWidget(modelEdit);
+	modelLayout->addWidget(m_apiKeyEdit);
 	modelLayout->addStretch(1);
 
 	// ---------------- Agent 预设 ----------------
@@ -108,42 +89,18 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* parent)
 	agentLayout->setSpacing(6);
 
 	auto* agentLabel = new QLabel(QStringLiteral("默认 Agent 预设"), agentPanel);
-	agentLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: ")
-		+ Theme::color(QStringLiteral("textSecondary")) + QStringLiteral("; font-size: 12px; }"));
+	agentLabel->setObjectName(QStringLiteral("settingsAgentLabel"));
 
 	m_agentPresetButton = new QPushButton(agentPanel);
 	m_agentPresetButton->setObjectName(QStringLiteral("agentPresetButton"));
 	m_agentPresetButton->setMinimumWidth(280);
 	m_agentPresetButton->setCursor(Qt::PointingHandCursor);
-	m_agentPresetButton->setStyleSheet(
-		QStringLiteral("QPushButton#agentPresetButton {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";")
-		+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
-		+ QStringLiteral("  border-radius: 10px;")
-		+ QStringLiteral("  padding: 8px 14px;")
-		+ QStringLiteral("  font-size: 14px;")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
-		+ QStringLiteral("  text-align: left;")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QPushButton#agentPresetButton:hover {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";")
-		+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QPushButton#agentPresetButton:pressed {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";")
-		+ QStringLiteral("}"));
 
 	// 用普通 QFrame 做下拉面板，直接像按钮/气泡一样用 QSS border-radius。
 	// 因为它是 Settings 窗口的子控件，父窗口背景会填满圆角外部，不会出现独立 Popup 的直角矩形背景。
 	m_agentPresetPopup = new QFrame(this);
 	m_agentPresetPopup->setObjectName(QStringLiteral("agentPresetPopup"));
 	m_agentPresetPopup->setAttribute(Qt::WA_StyledBackground, true);
-	m_agentPresetPopup->setStyleSheet(
-		QStringLiteral("QFrame#agentPresetPopup {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";")
-		+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
-		+ QStringLiteral("  border-radius: 10px;")
-		+ QStringLiteral("}"));
 	m_agentPresetPopup->hide();
 
 	auto* popupLayout = new QVBoxLayout(m_agentPresetPopup);
@@ -154,49 +111,11 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* parent)
 	m_agentPresetList->setObjectName(QStringLiteral("agentPresetList"));
 	m_agentPresetList->setFrameShape(QFrame::NoFrame);
 	m_agentPresetList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	m_agentPresetList->setStyleSheet(
-		QStringLiteral("QListWidget#agentPresetList {")
-		+ QStringLiteral("  background: transparent;")
-		+ QStringLiteral("  border: none;")
-		+ QStringLiteral("  outline: none;")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget#agentPresetList::item {")
-		+ QStringLiteral("  min-height: 34px;")
-		+ QStringLiteral("  padding: 6px 12px;")
-		+ QStringLiteral("  border-radius: 8px;")
-		+ QStringLiteral("  margin: 2px 4px;")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget#agentPresetList::item:hover {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget#agentPresetList::item:selected {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget#agentPresetList QScrollBar:vertical {")
-		+ QStringLiteral("  background: transparent;")
-		+ QStringLiteral("  width: 8px;")
-		+ QStringLiteral("  margin: 4px 2px;")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget#agentPresetList QScrollBar::handle:vertical {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("scrollbar")) + QStringLiteral(";")
-		+ QStringLiteral("  border-radius: 4px;")
-		+ QStringLiteral("  min-height: 30px;")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget#agentPresetList QScrollBar::handle:vertical:hover {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("scrollbarHover")) + QStringLiteral(";")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget#agentPresetList QScrollBar::add-line:vertical,")
-		+ QStringLiteral("QListWidget#agentPresetList QScrollBar::sub-line:vertical { height: 0; }")
-		+ QStringLiteral("QListWidget#agentPresetList QScrollBar::add-page:vertical,")
-		+ QStringLiteral("QListWidget#agentPresetList QScrollBar::sub-page:vertical { background: transparent; }"));
 	popupLayout->addWidget(m_agentPresetList);
 
 	auto* agentHint = new QLabel(QStringLiteral("新会话将使用该预设；修改后对当前会话也会立即生效。"), agentPanel);
 	agentHint->setWordWrap(true);
-	agentHint->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: ")
-		+ Theme::color(QStringLiteral("textSecondary")) + QStringLiteral("; font-size: 12px; }"));
+	agentHint->setObjectName(QStringLiteral("settingsAgentHint"));
 
 	agentLayout->addWidget(agentLabel);
 	agentLayout->addWidget(m_agentPresetButton);
@@ -242,53 +161,82 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* parent)
 	serverLayout->setSpacing(6);
 
 	auto* serverLabel = new QLabel(QStringLiteral("服务器地址"), serverPanel);
-	serverLabel->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: ")
-		+ Theme::color(QStringLiteral("textSecondary")) + QStringLiteral("; font-size: 12px; }"));
+	serverLabel->setObjectName(QStringLiteral("settingsServerLabel"));
 
-	auto* serverUrlEdit = new QLineEdit(serverPanel);
-	serverUrlEdit->setObjectName(QStringLiteral("serverUrlEdit"));
-	serverUrlEdit->setPlaceholderText(QStringLiteral("http://127.0.0.1:3080"));
-	m_serverUrlText = m_api ? m_api->baseUrl().toString() : QString();
-	serverUrlEdit->setText(m_serverUrlText);
-	serverUrlEdit->setStyleSheet(QStringLiteral("QLineEdit#serverUrlEdit { background: ")
-		+ Theme::color(QStringLiteral("inputBg")) + QStringLiteral("; border: 1px solid ")
-		+ Theme::color(QStringLiteral("scrollbar")) + QStringLiteral("; border-radius: 8px; padding: 8px 12px; font-size: 14px; color: ")
-		+ Theme::color(QStringLiteral("textPrimary")) + QStringLiteral("; }"));
+	m_serverUrlEdit = new QLineEdit(serverPanel);
+	m_serverUrlEdit->setObjectName(QStringLiteral("serverUrlEdit"));
+	m_serverUrlEdit->setPlaceholderText(QStringLiteral("http://127.0.0.1:3080"));
+	// 初始文本由 openSettings() 每次打开时经 refreshOnOpen() 同步
 
 	auto* serverHint = new QLabel(QStringLiteral("留空表示使用内置 DSH 服务；保存后需要重启服务生效。"), serverPanel);
 	serverHint->setWordWrap(true);
-	serverHint->setStyleSheet(QStringLiteral("QLabel { background: transparent; color: ")
-		+ Theme::color(QStringLiteral("textSecondary")) + QStringLiteral("; font-size: 12px; }"));
+	serverHint->setObjectName(QStringLiteral("settingsServerHint"));
 
 	auto* serverSaveButton = new QPushButton(QStringLiteral("保存并重启服务"), serverPanel);
 	serverSaveButton->setCursor(Qt::PointingHandCursor);
-	serverSaveButton->setStyleSheet(QStringLiteral("QPushButton { background: ")
-		+ Theme::color(QStringLiteral("accent")) + QStringLiteral("; color: ")
-		+ Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral("; border: none; border-radius: 8px; padding: 8px 14px; }"));
+	serverSaveButton->setObjectName(QStringLiteral("settingsServerSaveButton"));
 
 	serverLayout->addWidget(serverLabel);
-	serverLayout->addWidget(serverUrlEdit);
+	serverLayout->addWidget(m_serverUrlEdit);
 	serverLayout->addWidget(serverHint);
 	serverLayout->addWidget(serverSaveButton);
 	serverLayout->addStretch(1);
 
-	connect(serverUrlEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+	connect(m_serverUrlEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
 		m_serverUrlText = text.trimmed();
 		});
 	connect(serverSaveButton, &QPushButton::clicked, this, &Settings::saveServerSettings);
+
+	// ---------------- 外观 ----------------
+	auto* appearancePanel = new QWidget(content);
+	auto* appearanceLayout = new QVBoxLayout(appearancePanel);
+	appearanceLayout->setContentsMargins(0, 0, 0, 0);
+	appearanceLayout->setSpacing(6);
+
+	auto* appearanceHint = new QLabel(
+		QStringLiteral("主题颜色与界面样式来自程序目录 styles/ 下的模板"
+			"（theme-*.json 色板与各 *.qss 规则）。手动改坏后可用下面的按钮恢复默认。"),
+		appearancePanel);
+	appearanceHint->setWordWrap(true);
+	appearanceHint->setObjectName(QStringLiteral("settingsAppearanceHint"));
+
+	auto* stylesResetButton = new QPushButton(QStringLiteral("重置样式为默认"), appearancePanel);
+	stylesResetButton->setCursor(Qt::PointingHandCursor);
+	stylesResetButton->setObjectName(QStringLiteral("settingsStylesResetButton"));
+
+	auto* appearanceFeedback = new QLabel(appearancePanel);
+	appearanceFeedback->setWordWrap(true);
+	appearanceFeedback->setObjectName(QStringLiteral("settingsAppearanceFeedback"));
+	appearanceFeedback->hide();
+
+	connect(stylesResetButton, &QPushButton::clicked, this, [appearanceFeedback]() {
+		Theme::resetStyles();
+		if (appearanceFeedback) {
+			appearanceFeedback->setText(
+				QStringLiteral("已恢复默认样式：styles/ 模板已重新生成，界面已刷新。"));
+			appearanceFeedback->show();
+		}
+		});
+
+	appearanceLayout->addWidget(appearanceHint);
+	appearanceLayout->addWidget(stylesResetButton);
+	appearanceLayout->addWidget(appearanceFeedback);
+	appearanceLayout->addStretch(1);
 
 	// ---------------- 栏目切换 ----------------
 	layout->addWidget(modelPanel, 1);
 	layout->addWidget(agentPanel, 1);
 	layout->addWidget(serverPanel, 1);
+	layout->addWidget(appearancePanel, 1);
 
 	modelPanel->setVisible(true);
 	agentPanel->setVisible(false);
 	serverPanel->setVisible(false);
+	appearancePanel->setVisible(false);
 	modelButton->setChecked(true);
 
-	const QList<QPushButton*> navButtons = { modelButton, agentButton, serverButton };
-	const QList<QWidget*> navPanels = { modelPanel, agentPanel, serverPanel };
+	const QList<QPushButton*> navButtons = { modelButton, agentButton, serverButton, appearanceButton };
+	const QList<QWidget*> navPanels = { modelPanel, agentPanel, serverPanel, appearancePanel };
 
 	for (int i = 0; i < navButtons.size(); ++i) {
 		const int index = i;
@@ -309,16 +257,83 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* parent)
 	m_apiKeyTimer->setInterval(500);
 	connect(m_apiKeyTimer, &QTimer::timeout, this, &Settings::saveApiKeyToServer);
 
-	connect(modelEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+	connect(m_apiKeyEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
 		m_pendingApiKey = text;
 		if (m_apiKeyTimer)
 			m_apiKeyTimer->start();
 		});
 
+	// 常驻设置系统：窗口被关闭（右上角 ✕ / ESC）后自动清理遮罩并隐藏，
+	// 对象本身不销毁，供下次 openSettings() 复用。
+	connect(this, &PopupWindow::closed, this, &Settings::closeSettings);
+
 	setContent(content);
 
 	resize(680, 480);
+	// 预设列表在每次打开时经 refreshOnOpen() 加载，这里不再预载
+	hide();
+}
 
+// ------------------------------------------------------------------
+// 窗口开关管理（设置系统自管，不再由 DSHHub 代管）
+// ------------------------------------------------------------------
+
+void Settings::openSettings()
+{
+	if (!m_host)
+		return;
+	// 判重：窗口已经打开时忽略重复请求
+	if (isVisible())
+		return;
+
+	// 遮罩：宿主主窗口的子控件，铺满并盖住主界面
+	if (!m_overlay) {
+		m_overlay = new QWidget(m_host);
+		m_overlay->setObjectName(QStringLiteral("settingsOverlay"));
+		m_overlay->setAttribute(Qt::WA_StyledBackground, true);
+	}
+	m_overlay->setGeometry(m_host->rect());
+	m_overlay->raise();
+	m_overlay->show();
+	// 强制先让遮罩画出来（否则与下方弹窗同一帧才呈现，观感像弹窗先出、遮罩延迟）
+	QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+
+	// 打开前刷新数据（API Key / Server 地址 / 预设列表）
+	refreshOnOpen();
+
+	// 居中于宿主并显示
+	move(m_host->geometry().center() - rect().center());
+	show();
+	raise();
+}
+
+void Settings::closeSettings()
+{
+	// 关闭遮罩（常驻复用：只隐藏，不销毁，避免每次开关重新创建全窗半透明控件）
+	if (m_overlay)
+		m_overlay->hide();
+	// 隐藏自己（常驻：不销毁，等待下次打开）
+	hide();
+}
+
+void Settings::syncOverlayToHost()
+{
+	if (m_overlay && m_host)
+		m_overlay->setGeometry(m_host->rect());
+}
+
+void Settings::refreshOnOpen()
+{
+	// API Key：每次打开时从凭据文件重新读取（可能与上次保存不同步）
+	if (m_apiKeyEdit)
+		m_apiKeyEdit->setText(readApiKeyFromCredentialsFile());
+
+	// Server 地址：跟随当前实际连接的 DSH 服务
+	m_serverUrlText = m_api ? m_api->baseUrl().toString() : QString();
+	if (m_serverUrlEdit)
+		m_serverUrlEdit->setText(m_serverUrlText);
+
+	// Agent 预设列表（异步加载，服务端未就绪时按钮显示“加载失败”）
 	loadAgentPresets();
 }
 

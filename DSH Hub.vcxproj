@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -75,7 +75,7 @@
     <ClCompile>
       <PreprocessorDefinitions>QT_NO_DEPRECATED_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)include;D:\Qt\6.11.2\msvc2022_64\include\QtCore\6.11.2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <Optimization>Disabled</Optimization>
+      <Optimization>MaxSpeed</Optimization>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="Configuration">
@@ -112,7 +112,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\chat\AgentMessageUnit.cpp" />
-    <ClCompile Include="src\ui\LoadingCard.cpp" />
+    <ClCompile Include="src\chat\CodeBlockView.cpp" />
     <ClCompile Include="src\ui\LoadMoreButton.cpp" />
     <ClCompile Include="src\ui\ChatInputWidget.cpp" />
     <ClCompile Include="src\ui\Sidebar.cpp" />
@@ -138,10 +138,11 @@
     <ClCompile Include="src\ui\Settings.cpp" />
     <ClCompile Include="src\common\ThemeManager.cpp" />
     <ClCompile Include="src\common\Logger.cpp" />
-    <ClCompile Include="src\ui\PluginsPopup.cpp" />
+    <ClCompile Include="src\ui\PluginsManager.cpp" />
     <ClCompile Include="src\ui\ExtensionManagerPopup.cpp" />
     <ClCompile Include="src\ExtensionSystem\DshNamedPipeBridge.cpp" />
-    <ClCompile Include="src\ExtensionSystem\DllJsonCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DllCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ComCaller.cpp" />
     <ClCompile Include="src\ExtensionSystem\Thunk.cpp" />
     <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp" />
     <None Include="resources\highlight_rules.json" />
@@ -154,7 +155,6 @@
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="include\Sidebar.h" />
-    <QtMoc Include="include\LoadingCard.h" />
     <QtMoc Include="include\LoadMoreButton.h" />
     <QtMoc Include="include\DshApiClient.h" />
     <QtMoc Include="include\DshNamedPipeBridge.h" />
@@ -164,7 +164,7 @@
     <QtMoc Include="include\TopBar.h" />
     <QtMoc Include="include\PopupWindow.h" />
     <QtMoc Include="include\Settings.h" />
-    <QtMoc Include="include\PluginsPopup.h" />
+    <QtMoc Include="include\PluginsManager.h" />
     <QtMoc Include="include\ExtensionManagerPopup.h" />
     <QtMoc Include="include\ChatInputWidget.h" />
   </ItemGroup>
@@ -173,7 +173,8 @@
     <QtMoc Include="include\AgentMessageUnit.h" />
     <ClInclude Include="include\DshEventParser.h" />
     <ClInclude Include="include\ExtensionLoader.h" />
-    <ClInclude Include="include\DllJsonCaller.h" />
+    <ClInclude Include="include\DllCaller.h" />
+    <ClInclude Include="include\ComCaller.h" />
     <ClInclude Include="include\Thunk.h" />
     <ClInclude Include="include\SystemMessageUnit.h" />
     <ClInclude Include="include\CodeHighlighter.h" />

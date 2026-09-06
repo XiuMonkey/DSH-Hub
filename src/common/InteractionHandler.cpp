@@ -1,7 +1,6 @@
 #include "InteractionHandler.h"
 
 #include "DshApiClient.h"
-#include "ThemeManager.h"
 
 #include <QAbstractButton>
 #include <QButtonGroup>
@@ -41,79 +40,6 @@ namespace
 		auto* panel = new QWidget;
 		panel->setObjectName(QStringLiteral("interactionPanel"));
 		panel->setAttribute(Qt::WA_StyledBackground, true);
-		panel->setStyleSheet(
-			QStringLiteral("QWidget#interactionPanel {")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";")
-			+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
-			+ QStringLiteral("  border-radius: 12px;")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QLabel {")
-			+ QStringLiteral("  background: transparent;")
-			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QFrame#questionCard {")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg")) + QStringLiteral(";")
-			+ QStringLiteral("  border-radius: 10px;")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QRadioButton,")
-			+ QStringLiteral("QWidget#interactionPanel QCheckBox {")
-			+ QStringLiteral("  background: transparent;")
-			+ QStringLiteral("  spacing: 8px;")
-			+ QStringLiteral("  font-size: 13px;")
-			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QRadioButton::indicator {")
-			+ QStringLiteral("  width: 18px;")
-			+ QStringLiteral("  height: 18px;")
-			+ QStringLiteral("  border-radius: 9px;")
-			+ QStringLiteral("  border: 2px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
-			+ QStringLiteral("  background: transparent;")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QRadioButton::indicator:hover {")
-			+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QRadioButton::indicator:checked {")
-			+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QCheckBox::indicator {")
-			+ QStringLiteral("  width: 18px;")
-			+ QStringLiteral("  height: 18px;")
-			+ QStringLiteral("  border-radius: 5px;")
-			+ QStringLiteral("  border: 2px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
-			+ QStringLiteral("  background: transparent;")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QCheckBox::indicator:hover {")
-			+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QCheckBox::indicator:checked {")
-			+ QStringLiteral("  border-color: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QLineEdit {")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("inputBg")) + QStringLiteral(";")
-			+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
-			+ QStringLiteral("  border-radius: 8px;")
-			+ QStringLiteral("  padding: 6px 10px;")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QPushButton {")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accent")) + QStringLiteral(";")
-			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textOnAccent")) + QStringLiteral(";")
-			+ QStringLiteral("  border: none;")
-			+ QStringLiteral("  border-radius: 8px;")
-			+ QStringLiteral("  padding: 6px 16px;")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QPushButton:hover {")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("accentHover")) + QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QPushButton#approvalRejectButton {")
-			+ QStringLiteral("  background: transparent;")
-			+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";")
-			+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";")
-			+ QStringLiteral("}")
-			+ QStringLiteral("QWidget#interactionPanel QPushButton#approvalRejectButton:hover {")
-			+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("dangerBg")) + QStringLiteral(";")
-			+ QStringLiteral("}"));
 
 		auto* panelLayout = new QVBoxLayout(panel);
 		panelLayout->setContentsMargins(14, 12, 14, 12);

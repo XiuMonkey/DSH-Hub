@@ -12,9 +12,11 @@
 
 class DshApiClient;
 class DshNamedPipeBridge;
-class DllJsonCaller;
+class DllCaller;
 class QLabel;
 class QLocalSocket;
+class QMoveEvent;
+class QThreadPool;
 class QUrl;
 class QResizeEvent;
 class ServerManager;
@@ -23,7 +25,7 @@ class ChatInputWidget;
 class Sidebar;
 class TopBar;
 class Settings;
-class PluginsPopup;
+class PluginsManager;
 class ExtensionManagerPopup;
 class QPushButton;
 class AgentMessageUnit;
@@ -32,7 +34,6 @@ class HistoryLoader;
 class QVBoxLayout;
 class QScrollArea;
 class QTimer;
-class LoadingCard;
 class LoadMoreButton;
 
 class DSHHub : public QMainWindow
@@ -73,22 +74,20 @@ private slots:
 	void onNoSessionAvailable();
 	void onSessionListError(const QString& code, const QString& message);
 	void onSessionCreateError(const QString& code, const QString& message);
-	void onHistoryLoadingChanged(bool loading);
 	void onHistoryLoadMoreButtonVisibleChanged(bool visible);
 	void onHistoryError(const QString& code, const QString& message);
 	void onIncrementalBuildReady(MessageQuery* query);
 
 private:
-	void hideLoadingIndicator();
 	void swapToMessageQuery(MessageQuery* query);
 	void finishInitialization();
 	void resizeEvent(QResizeEvent* event) override;
+	void moveEvent(QMoveEvent* event) override;
+	// 把当前打开的弹窗重新居中于宿主窗口（拖动/缩放宿主时保持跟随）
+	void keepOpenPopupsCentered();
 
 	void scrollToBottomNow();
 
-	void openSettings();
-	void closeSettings();
-	void openPlugins();
 	void openExtensions();
 
 	void cacheCurrentMessages();
@@ -120,10 +119,8 @@ private:
 
 	QWidget* m_initOverlay = nullptr;
 	QLabel* m_initLabel = nullptr;
-	QWidget* m_settingsOverlay = nullptr;
-	Settings* m_settings = nullptr;
-	QWidget* m_pluginsOverlay = nullptr;
-	PluginsPopup* m_pluginsPopup = nullptr;
+	Settings* m_settings = nullptr;          // 常驻“设置系统”（自管窗口开关）
+	PluginsManager* m_pluginsManager = nullptr;  // 常驻“插件系统”（自管窗口开关）
 	QWidget* m_extensionOverlay = nullptr;
 	ExtensionManagerPopup* m_extensionPopup = nullptr;
 
@@ -134,8 +131,6 @@ private:
 
 	LoadMoreButton* m_loadMoreButton = nullptr;
 	QLabel* m_toastLabel = nullptr;
-	LoadingCard* m_loadingCard = nullptr;
-	QWidget* m_loadingContainer = nullptr;
 	MessageQuery* m_messages = nullptr;
 	TopBar* m_topBar = nullptr;
 
@@ -153,6 +148,7 @@ private:
 	DshApiClient* m_api = nullptr;
 	ServerManager* m_serverManager = nullptr;
 	DshNamedPipeBridge* m_pipeBridge = nullptr;
-	DllJsonCaller* m_dllCaller = nullptr;
+	DllCaller* m_dllCaller = nullptr;
+	QThreadPool* m_toolPool = nullptr;         // DLL/COM 工具调用线程池（跨扩展并行）
 	bool m_cleanupResidualsAfterServerError = false;
 };

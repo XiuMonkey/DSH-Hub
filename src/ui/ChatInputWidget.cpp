@@ -1,5 +1,4 @@
 #include "ChatInputWidget.h"
-#include "ThemeManager.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QFrame>
@@ -21,7 +20,7 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 	setObjectName(QStringLiteral("inputCapsule"));
 	// 让 QWidget 子类真正绘制样式表里的背景和边框
 	setAttribute(Qt::WA_StyledBackground, true);
-	setStyleSheet(QStringLiteral("#inputCapsule {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("inputBorder")) + QStringLiteral(";") + QStringLiteral("  border-radius: 22px;") + QStringLiteral("}") + QStringLiteral("QPlainTextEdit {") + QStringLiteral("  border: none;") + QStringLiteral("  background: transparent;") + QStringLiteral("  padding: 8px 12px;") + QStringLiteral("  font-size: 14px;") + QStringLiteral("}") + QStringLiteral("QPushButton#sendButton {") + QStringLiteral("  border: none;") + QStringLiteral("  background: transparent;") + QStringLiteral("  border-radius: 16px;") + QStringLiteral("  min-width: 32px;") + QStringLiteral("  max-width: 32px;") + QStringLiteral("  min-height: 32px;") + QStringLiteral("  max-height: 32px;") + QStringLiteral("  padding: 0;") + QStringLiteral("}"));
+	// 外观规则见 resources/styles/chat.qss（#inputCapsule / #inputCapsule QPlainTextEdit / #inputCapsule QPushButton#sendButton）
 
 	m_editor = new QPlainTextEdit(this);
 	m_editor->setFrameShape(QFrame::NoFrame);

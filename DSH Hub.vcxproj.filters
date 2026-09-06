@@ -97,7 +97,10 @@
     <ClCompile Include="src\chat\AgentMessageUnit.cpp">
       <Filter>Source Files\Chat</Filter>
     </ClCompile>
-      <ClCompile Include="src\common\CodeHighlighter.cpp">
+    <ClCompile Include="src\chat\CodeBlockView.cpp">
+      <Filter>Source Files\Chat</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\CodeHighlighter.cpp">
         <Filter>Source Files\Common</Filter>
       </ClCompile>
 <ClCompile Include="src\common\InteractionHandler.cpp">
@@ -121,7 +124,7 @@
       <ClCompile Include="src\ui\Settings.cpp">
         <Filter>Source Files\UI</Filter>
       </ClCompile>
-        <ClCompile Include="src\ui\PluginsPopup.cpp">
+        <ClCompile Include="src\ui\PluginsManager.cpp">
           <Filter>Source Files\UI</Filter>
         </ClCompile>
         <ClCompile Include="src\ui\ExtensionManagerPopup.cpp">
@@ -136,15 +139,12 @@
 <ClCompile Include="src\bridge\DshNamedPipeBridge.cpp">
         <Filter>Source Files\Bridge</Filter>
       </ClCompile>
-<ClCompile Include="src\bridge\DllJsonCaller.cpp">
+<ClCompile Include="src\bridge\DllCaller.cpp">
         <Filter>Source Files\Bridge</Filter>
       </ClCompile>
 <ClCompile Include="src\bridge\ExtensionLoader.cpp">
         <Filter>Source Files\Bridge</Filter>
       </ClCompile>
-    <ClCompile Include="src\ui\LoadingCard.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
     <ClCompile Include="src\ui\LoadMoreButton.cpp">
       <Filter>Source Files\UI</Filter>
     </ClCompile>
@@ -165,9 +165,6 @@
       <QtMoc Include="include\Sidebar.h">
           <Filter>Header Files</Filter>
         </QtMoc>
-      <QtMoc Include="include\LoadingCard.h">
-        <Filter>Header Files</Filter>
-      </QtMoc>
       <QtMoc Include="include\LoadMoreButton.h">
         <Filter>Header Files</Filter>
       </QtMoc>
@@ -189,7 +186,7 @@
       <QtMoc Include="include\Settings.h">
         <Filter>Header Files</Filter>
       </QtMoc>
-        <QtMoc Include="include\PluginsPopup.h">
+        <QtMoc Include="include\PluginsManager.h">
           <Filter>Header Files</Filter>
         </QtMoc>
         <QtMoc Include="include\ExtensionManagerPopup.h">
@@ -215,7 +212,7 @@
 <ClInclude Include="include\ExtensionLoader.h">
         <Filter>Header Files</Filter>
       </ClInclude>
-<ClInclude Include="include\DllJsonCaller.h">
+<ClInclude Include="include\DllCaller.h">
         <Filter>Header Files</Filter>
       </ClInclude>
       <ClInclude Include="include\SystemMessageUnit.h">

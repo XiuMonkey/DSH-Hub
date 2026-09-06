@@ -1,82 +1,188 @@
 // ------------------------------------------------------------------
 // AgentMessageUnit.cpp
 // ------------------------------------------------------------------
-// 可复用富文本展示控件的实现。
+// 可复用 Agent 消息展示控件的实现（气泡容器化 · 路线2 第2步）。
+// 容器 = QWidget + QVBoxLayout 部件流：普通文本切 QTextBrowser(agentProse)，
+// 代码围栏切 CodeBlockView 子单元，Thinking/Tool 用富文本锚点挂宿主 ProseView。
 // ------------------------------------------------------------------
 
 #include "AgentMessageUnit.h"
-#include "ThemeManager.h"
+#include "CodeBlockView.h"
 #include "CodeHighlighter.h"
 #include "MarkdownPreprocess.h"
+#include "ThemeManager.h"
 
 #include <QAbstractTextDocumentLayout>
+#include <QCryptographicHash>
 #include <QFrame>
-#include <QTextBlock>
-#include <QTextBlockFormat>
+#include <QLabel>
 #include <QRegularExpression>
+#include <QResizeEvent>
+#include <QTextBrowser>
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QTextEdit>
+#include <QTextOption>
+#include <QTimer>
+#include <QUrl>
+#include <QVBoxLayout>
+
+namespace
+{
+	// 返回 widget（代码子单元的外层 QWidget，或代码块本体）里的 CodeBlockView；
+	// 本控件内部唯一的文本编辑控件就是 CodeBlockView（objectName=codeBlockView）。
+	QTextEdit* codeBlockEditIn(QWidget* widget)
+	{
+		if (!widget)
+			return nullptr;
+		if (auto* edit = qobject_cast<QTextEdit*>(widget))
+			return edit;
+		const QList<QTextEdit*> edits = widget->findChildren<QTextEdit*>();
+		for (QTextEdit* edit : edits)
+			return edit;
+		return nullptr;
+	}
+}
 
 AgentMessageUnit::AgentMessageUnit(QWidget* parent)
-	: QTextBrowser(parent)
+	: QWidget(parent)
 {
-	setOpenExternalLinks(true);
-
-	// 浅灰色圆角背景，去掉默认边框
-	setStyleSheet(QStringLiteral("AgentMessageUnit {") + QStringLiteral("  background-color: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("  border-radius: 12px;") + QStringLiteral("}"));
-	setViewportMargins(8, 8, 8, 8);
-	viewport()->setAutoFillBackground(false);
-	setFrameShape(QFrame::NoFrame);
-	setFrameShadow(QFrame::Plain);
-
-	// 关闭内部滚动，高度由 updateHeightToContent() 控制
-	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	setObjectName(QStringLiteral("agentUnit")); // 外观规则见 resources/styles/chat.qss（#agentUnit / #agentBubble #agentUnit）
+	setAttribute(Qt::WA_StyledBackground, true); // 让容器自己的 QSS 背景/圆角生效
 	setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
 	setFixedWidth(DefaultWidth);
-	setFixedHeight(600); // 初始高度，内容变化后会重新计算
-	document()->setDocumentMargin(0);
 
-	// 内容变化后重新计算高度
-	connect(document(), &QTextDocument::contentsChanged,
-		this, &AgentMessageUnit::updateHeightToContent);
-
-	// 点击思考标题时切换展开/收起
-	setOpenLinks(false);
-	connect(this, &QTextBrowser::anchorClicked, this, [this](const QUrl& url) {
-		if (url.scheme() != QStringLiteral("dsh"))
-			return;
-
-		if (url.host() == QStringLiteral("thinking")) {
-			bool ok = false;
-			const int index = url.path().remove(0, 1).toInt(&ok);
-			if (ok)
-				toggleThinking(index);
-		}
-		else if (url.host() == QStringLiteral("tool")) {
-			bool ok = false;
-			const int index = url.path().remove(0, 1).toInt(&ok);
-			if (ok)
-				toggleTool(index);
-		}
-		});
+	m_partsLayout = new QVBoxLayout(this);
+	// 区域间距由各子部件自身控制（代码单元自带上下呼吸间距）；
+	// 布局间距保持 0，避免“文本段 + 代码单元 + 文本段”之间产生额外叠加空白
+	m_partsLayout->setContentsMargins(8, 2, 8, 2);
+	m_partsLayout->setSpacing(0);
 }
 
 AgentMessageUnit::~AgentMessageUnit()
 {
-	// 析构期间断开文档信号，避免基类销毁文档时再次调用本类方法
-	disconnect(document(), nullptr, this, nullptr);
+	// 子部件（ProseView / 代码子单元）都是 this 的孩子，随容器一起销毁即可。
+}
+
+QTextBrowser* AgentMessageUnit::makeProseView()
+{
+	QTextBrowser* view = createRichPart(QStringLiteral("agentProse"));
+	m_proseViews.append(view);
+	m_partsLayout->addWidget(view);
+	return view;
+}
+
+QTextBrowser* AgentMessageUnit::createRichPart(const QString& objectName)
+{
+	auto* view = new QTextBrowser(this);
+	view->setObjectName(objectName); // 透明/无边框外观见 chat.qss（#agentProse 等）
+
+	view->setReadOnly(true);
+
+	// 关闭内部滚动：高度交给 fitProseView()；水平滚动条按需，防止极端 HTML 撑宽
+	view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	view->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	view->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+	view->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	view->setMinimumWidth(0);
+	view->setFrameShape(QFrame::NoFrame);
+	view->setFrameShadow(QFrame::Plain);
+	view->viewport()->setAutoFillBackground(false);
+	view->document()->setDocumentMargin(0);
+
+	// dsh:// 锚点由我们自己处理（展开/收起思考、工具），普通外链照常打开
+	view->setOpenLinks(false);
+	view->setOpenExternalLinks(true);
+	connect(view, &QTextBrowser::anchorClicked,
+		this, [this](const QUrl& url) { handleAnchorClicked(url); });
+
+	// 内容变化后自适应高度（整批重建期间先抑制，重建结束统一拟合）
+	connect(view->document(), &QTextDocument::contentsChanged,
+		this, [this, view]() {
+			if (!m_rebuilding)
+				fitProseView(view);
+		});
+
+	return view;
+}
+
+QTextBrowser* AgentMessageUnit::proseHost()
+{
+	if (!m_proseViews.isEmpty()) {
+		// 只有“末尾部件本身就是 ProseView”时才复用它，保证锚点/分隔始终追加在
+		// 当前消息真实尾部之后（若末尾是代码块则另起新的空 ProseView）。
+		QTextBrowser* tailProse = m_proseViews.last();
+		QWidget* lastWidget = nullptr;
+		if (m_partsLayout->count() > 0) {
+			if (QLayoutItem* item = m_partsLayout->itemAt(m_partsLayout->count() - 1))
+				lastWidget = item->widget();
+		}
+		if (static_cast<QWidget*>(tailProse) == lastWidget)
+			return tailProse;
+	}
+	return makeProseView();
+}
+
+void AgentMessageUnit::fitProseView(QTextBrowser* view)
+{
+	int textWidth = view->viewport()->width();
+	// 布局尚未生效时 viewport 宽度会很小/为 0：此时按容器固定内容宽度估算
+	// （DefaultWidth - 16 = 720 减左右布局边距），否则会把文档按极窄宽度排版，
+	// 算出一个离谱的高度
+	if (textWidth < 300)
+		textWidth = DefaultWidth - 16;
+
+	view->document()->setTextWidth(textWidth);
+
+	const qreal docHeight = view->document()->documentLayout()->documentSize().height();
+	int height = static_cast<int>(docHeight + 0.9999);
+	if (height <= 0)
+		height = view->fontMetrics().height() + 2;
+	view->setFixedHeight(height);
+}
+
+void AgentMessageUnit::refitParts()
+{
+	for (QTextBrowser* view : m_proseViews)
+		fitProseView(view);
+}
+
+void AgentMessageUnit::updateHeightToContent()
+{
+	if (m_rebuilding)
+		return;
+	refitParts();
+
+	// 子部件刚加入布局时几何可能还没生效（宽度仍很小），立即拟合会按错误宽度
+	// 算出过高的固定高度；延后到事件循环里布局真正跑完后，再按真实宽度重算一次。
+	QTimer::singleShot(0, this, [this]() {
+		if (!m_rebuilding)
+			refitParts();
+	});
+}
+
+void AgentMessageUnit::resizeEvent(QResizeEvent* event)
+{
+	QWidget::resizeEvent(event);
+	if (event->oldSize().width() != event->size().width())
+		refitParts();
+}
+
+void AgentMessageUnit::clearParts()
+{
+	QLayoutItem* item = nullptr;
+	while ((item = m_partsLayout->takeAt(0)) != nullptr) {
+		if (QWidget* widget = item->widget()) {
+			widget->hide();          // 先移出可视区
+			widget->deleteLater();   // 延迟删除：可能正处在自身 anchorClicked 信号处理中
+		}
+		delete item;
+	}
+	m_proseViews.clear();
 }
 
 void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 {
-	QTextCursor cursor = textCursor();
-	cursor.movePosition(QTextCursor::End);
-
-	// 如果当前已经有一段内容（例如思考内容），先新起一段，避免思考和回复挤在一起
-	if (!document()->isEmpty())
-		cursor.insertBlock();
-
 	// 统一换行符，避免 Windows \r\n 影响解析
 	QString text = markdown;
 	text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
@@ -93,49 +199,13 @@ void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 	while (it.hasNext()) {
 		QRegularExpressionMatch match = it.next();
 
-		// 代码块前面的普通 Markdown
+		// 代码块前面的普通 Markdown：一段普通文本 = 一个新 ProseView
 		const QString before = text.mid(pos, match.capturedStart() - pos);
-		if (!before.trimmed().isEmpty()) {
-			QStringList codes;
-			const QString marked = replaceInlineCodeWithPlaceholders(before, codes);
-			QTextDocument doc;
-			doc.setMarkdown(prepareMarkdownForQt(marked));
-			cursor.insertHtml(restoreInlineCodeHtml(doc.toHtml(), codes));
-		}
+		if (!before.trimmed().isEmpty())
+			appendProseRegion(before);
 
-		// 强制在代码块前新起一段，避免语言标签和普通文字挤在同一行
-		cursor.insertBlock();
-
-		// 自定义带阴影代码块
-		const QString language = match.captured(1);
-		const QString code = match.captured(2);
-		const int insertPos = cursor.position();
-		cursor.insertHtml(buildCodeShadowHtml(language, code));
-
-		// 清除语言名段落的上下间距，避免语言名和代码之间出现空隙。
-		// 只扫描本次插入的代码块区域，避免每个代码块都遍历整个文档。
-		QTextBlock startBlock = document()->findBlock(insertPos);
-		const QTextBlock endBlock = cursor.block();
-		if (!startBlock.isValid())
-			startBlock = document()->begin();
-		for (QTextBlock block = startBlock;
-			block.isValid() && (!endBlock.isValid() || block.position() <= endBlock.position());
-			block = block.next()) {
-			if (block.text().trimmed() == language) {
-				QTextCursor blockCursor(block);
-				QTextBlockFormat fmt = blockCursor.blockFormat();
-				fmt.setTopMargin(0);
-				fmt.setBottomMargin(0);
-				blockCursor.setBlockFormat(fmt);
-			}
-		}
-
-		// 强制新起一段，防止后续文字被阴影/布局盖住
-		cursor.insertBlock();
-
-		// 清除继承自代码块的背景色，避免后续普通文本被错误带上代码背景
-		QTextBlockFormat clearFormat;
-		cursor.setBlockFormat(clearFormat);
+		// 代码围栏 → 独立代码子单元（语言标签 + CodeBlockView）
+		addCodeBlockUnit(match.captured(1), match.captured(2));
 
 		pos = match.capturedEnd();
 	}
@@ -151,33 +221,14 @@ void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 
 		if (unclosedMatch.hasMatch()) {
 			const QString before = after.left(unclosedMatch.capturedStart());
-			if (!before.trimmed().isEmpty()) {
-				QStringList codes;
-				const QString marked = replaceInlineCodeWithPlaceholders(before, codes);
-				QTextDocument doc;
-				doc.setMarkdown(prepareMarkdownForQt(marked));
-				cursor.insertHtml(restoreInlineCodeHtml(doc.toHtml(), codes));
-			}
-
-			cursor.insertBlock();
-			const QString language = unclosedMatch.captured(1);
-			const QString code = unclosedMatch.captured(2);
-			cursor.insertHtml(buildCodeShadowHtml(language, code));
-			cursor.insertBlock();
+			if (!before.trimmed().isEmpty())
+				appendProseRegion(before);
+			addCodeBlockUnit(unclosedMatch.captured(1), unclosedMatch.captured(2));
 		}
 		else {
-			QStringList codes;
-			const QString marked = replaceInlineCodeWithPlaceholders(after, codes);
-			QTextDocument doc;
-			doc.setMarkdown(prepareMarkdownForQt(marked));
-			cursor.insertHtml(restoreInlineCodeHtml(doc.toHtml(), codes));
+			appendProseRegion(after);
 		}
 	}
-
-	setTextCursor(cursor);
-	ensureCursorVisible();
-
-	updateHeightToContent();
 }
 
 void AgentMessageUnit::appendMarkdownWithCodeShadow(const QString& markdown)
@@ -187,22 +238,69 @@ void AgentMessageUnit::appendMarkdownWithCodeShadow(const QString& markdown)
 	segment.text = markdown;
 	m_segments.append(segment);
 
-	// 只渲染新增的这一段，而不是每次 clear() 后全量重建，
-	// 避免连续追加多段内容时变成 O(n^2) 的重复渲染。
-	// 整段插入期间也先抑制高度重算，最后统一更新一次。
+	// 只渲染新增的这一段，而不是每次清空后全量重建，避免连续追加多段内容时
+	// 变成 O(n^2) 的重复渲染；整段插入期间先抑制逐段高度重算，最后统一更新一次。
 	m_rebuilding = true;
 	insertMarkdownWithCodeShadow(markdown);
 	m_rebuilding = false;
 	updateHeightToContent();
 }
 
+void AgentMessageUnit::appendProseRegion(const QString& markdown)
+{
+	// 修剪首尾空白：markdown 段落边缘的换行会在转换后形成多余空段，
+	// 这是“文本段之间大片空白”的主要来源之一
+	QString text = markdown.trimmed();
+	if (text.isEmpty())
+		return;
+
+	QTextBrowser* view = makeProseView();
+
+	// 保留现状的渲染风格：临时 QTextDocument.setMarkdown → toHtml → insertHtml，
+	// 并恢复行内代码占位符
+	QStringList codes;
+	const QString marked = replaceInlineCodeWithPlaceholders(text, codes);
+	QTextDocument doc;
+	doc.setMarkdown(prepareMarkdownForQt(marked));
+
+	QTextCursor cursor = view->textCursor();
+	cursor.movePosition(QTextCursor::End);
+	cursor.insertHtml(restoreInlineCodeHtml(doc.toHtml(), codes));
+	view->setTextCursor(cursor);
+}
+
+void AgentMessageUnit::addCodeBlockUnit(const QString& language, const QString& code)
+{
+	// 子单元 = 一个小 QVBoxLayout：[可选语言行(QLabel) + CodeBlockView]，
+	// 整体作为一个布局子部件插入 m_partsLayout，保证与普通文本严格按顺序排布。
+	auto* unit = new QWidget(this);
+	auto* unitLayout = new QVBoxLayout(unit);
+	// 代码单元上下各留少量呼吸间距（原 HTML 卡 margin 8 缩到 6，
+	// 且布局间距已为 0，不会与段落空白叠加）
+	unitLayout->setContentsMargins(0, 6, 0, 6);
+	unitLayout->setSpacing(0);
+
+	auto* langLabel = new QLabel(
+		language.isEmpty() ? QStringLiteral("code") : language, unit);
+	langLabel->setObjectName(QStringLiteral("codeBlockLang")); // 次要色外观见 chat.qss
+
+	auto* codeView = new CodeBlockView(unit);
+	codeView->setMinimumWidth(0); // 超长代码行交给横向滚动条，不撑宽容器
+	// 语法高亮（灰色底由 chat.qss #codeBlockView 提供），无高亮规则时也能正常显示原文
+	codeView->setCodeHtml(CodeHighlighter::instance().highlight(language, code));
+
+	unitLayout->addWidget(langLabel);
+	unitLayout->addWidget(codeView);
+	m_partsLayout->addWidget(unit);
+}
+
 void AgentMessageUnit::insertHtml(const QString& html)
 {
-	QTextCursor cursor = textCursor();
+	QTextBrowser* host = proseHost();
+	QTextCursor cursor = host->textCursor();
 	cursor.movePosition(QTextCursor::End);
 	cursor.insertHtml(html);
-	setTextCursor(cursor);
-	ensureCursorVisible();
+	host->setTextCursor(cursor);
 }
 
 void AgentMessageUnit::appendThinking(const QString& thinking)
@@ -265,7 +363,7 @@ void AgentMessageUnit::resetContent()
 	m_thinkingBlocks.clear();
 	m_toolBlocks.clear();
 	m_segments.clear();
-	clear(); // 清掉当前文档，再增量渲染新的内容
+	clearParts(); // 清空当前部件流，再增量渲染新的内容
 }
 
 void AgentMessageUnit::appendStreamChunk(StreamSegment::Type type, const QString& content,
@@ -289,6 +387,13 @@ void AgentMessageUnit::flushStream()
 	if (m_streamSegments.isEmpty())
 		return;
 
+	// 指纹去重：DSHHub 可能对同一批 chunk 触发多次 flush（追加即刷 + 定时器），
+	// 内容没变时跳过整段重建，避免流式期间每帧都清空/重放整条消息。
+	const QString fingerprint = streamFingerprint();
+	if (fingerprint == m_lastFlushedFingerprint && hasContent())
+		return;
+	m_lastFlushedFingerprint = fingerprint;
+
 	resetContent();
 
 	// 按原始顺序渲染：思考 → 工具调用 → 回复 → 再思考 → ...
@@ -311,15 +416,27 @@ void AgentMessageUnit::flushStream()
 	}
 }
 
+QString AgentMessageUnit::streamFingerprint() const
+{
+	QCryptographicHash hash(QCryptographicHash::Md5);
+	for (const StreamSegment& segment : m_streamSegments) {
+		hash.addData(QByteArray(1, static_cast<char>(segment.type)));
+		hash.addData(segment.content.toUtf8());
+		hash.addData(segment.toolName.toUtf8());
+	}
+	return QString::fromLatin1(hash.result().toHex());
+}
+
 void AgentMessageUnit::clearStreamSegments()
 {
 	m_streamSegments.clear();
+	m_lastFlushedFingerprint.clear();
 }
 
 void AgentMessageUnit::rebuild()
 {
 	m_rebuilding = true;
-	clear();
+	clearParts();
 
 	for (const Segment& segment : m_segments) {
 		switch (segment.type) {
@@ -346,29 +463,103 @@ void AgentMessageUnit::insertThinking(int index)
 {
 	if (index < 0 || index >= m_thinkingBlocks.size())
 		return;
+	addThinkingCard(index);
+}
 
-	const ThinkingBlock& block = m_thinkingBlocks.at(index);
-	const QString preview = thinkingPreview(block.content);
+void AgentMessageUnit::addThinkingCard(int index)
+{
+	ThinkingBlock& block = m_thinkingBlocks[index];
 	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 
-	QTextCursor cursor = textCursor();
-	cursor.movePosition(QTextCursor::End);
-	if (!document()->isEmpty())
-		cursor.insertBlock();
+	// 卡片 = 可点击标题（QLabel 富文本锚点）+ 展开时显示正文富文本
+	auto* card = new QWidget(this);
+	block.card = card;
+	auto* layout = new QVBoxLayout(card);
+	layout->setContentsMargins(0, 6, 0, 6);
+	layout->setSpacing(4);
 
-	const QString header = QStringLiteral(
-		"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary() + QStringLiteral("; text-decoration:none;\">%2 思考：%3</a>");
-	cursor.insertHtml(header.arg(index).arg(arrow, preview.toHtmlEscaped()));
+	auto* header = new QLabel(card);
+	header->setObjectName(QStringLiteral("agentThinkHeader"));
+	header->setTextFormat(Qt::RichText);
+	header->setWordWrap(true);
+	header->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	connect(header, &QLabel::linkActivated, this,
+		[this](const QString& link) { handleAnchorClicked(QUrl(link)); });
+
+	const QString anchor = QStringLiteral(
+		"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
+		+ QStringLiteral("; text-decoration:none;\">%2 思考：%3</a>");
+	header->setText(anchor.arg(index).arg(arrow, thinkingPreview(block.content).toHtmlEscaped()));
+	layout->addWidget(header);
 
 	if (block.expanded) {
-		cursor.insertBlock();
-		const QString paragraph = QStringLiteral(
+		QTextBrowser* body = createRichPart(QStringLiteral("agentThinkBody"));
+		block.body = body;
+		const QString html = QStringLiteral(
 			"<p style='color:") + Theme::textSecondary() + QStringLiteral(";'><i>%1</i></p>");
-		cursor.insertHtml(paragraph.arg(block.content.toHtmlEscaped()));
+		body->setHtml(html.arg(block.content.toHtmlEscaped()));
+		m_proseViews.append(body);
+		layout->addWidget(body);
 	}
 
-	setTextCursor(cursor);
-	ensureCursorVisible();
+	m_partsLayout->addWidget(card);
+}
+
+void AgentMessageUnit::updateThinkingCard(int index)
+{
+	ThinkingBlock& block = m_thinkingBlocks[index];
+	if (!block.card)
+		return; // 卡片还没建（异常路径），回到整条重建
+
+	QLabel* header = block.card->findChild<QLabel*>(QStringLiteral("agentThinkHeader"));
+	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
+	if (header) {
+		const QString anchor = QStringLiteral(
+			"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
+			+ QStringLiteral("; text-decoration:none;\">%2 思考：%3</a>");
+		header->setText(anchor.arg(index).arg(arrow, thinkingPreview(block.content).toHtmlEscaped()));
+	}
+
+	QVBoxLayout* cardLayout = qobject_cast<QVBoxLayout*>(block.card->layout());
+	if (block.expanded && !block.body) {
+		QTextBrowser* body = createRichPart(QStringLiteral("agentThinkBody"));
+		block.body = body;
+		const QString html = QStringLiteral(
+			"<p style='color:") + Theme::textSecondary() + QStringLiteral(";'><i>%1</i></p>");
+		body->setHtml(html.arg(block.content.toHtmlEscaped()));
+		m_proseViews.append(body);
+		if (cardLayout)
+			cardLayout->addWidget(body);
+	}
+	else if (!block.expanded && block.body) {
+		if (cardLayout)
+			cardLayout->removeWidget(block.body);
+		block.body->hide();
+		block.body->deleteLater();
+		m_proseViews.removeOne(block.body);
+		block.body = nullptr;
+	}
+
+	updateHeightToContent();
+}
+
+void AgentMessageUnit::handleAnchorClicked(const QUrl& url)
+{
+	if (url.scheme() != QStringLiteral("dsh"))
+		return;
+
+	if (url.host() == QStringLiteral("thinking")) {
+		bool ok = false;
+		const int index = url.path().remove(0, 1).toInt(&ok);
+		if (ok)
+			toggleThinking(index);
+	}
+	else if (url.host() == QStringLiteral("tool")) {
+		bool ok = false;
+		const int index = url.path().remove(0, 1).toInt(&ok);
+		if (ok)
+			toggleTool(index);
+	}
 }
 
 void AgentMessageUnit::toggleThinking(int index)
@@ -376,38 +567,98 @@ void AgentMessageUnit::toggleThinking(int index)
 	if (index < 0 || index >= m_thinkingBlocks.size())
 		return;
 
-	m_thinkingBlocks[index].expanded = !m_thinkingBlocks[index].expanded;
-	if (m_thinkingBlocks[index].expanded)
+	ThinkingBlock& block = m_thinkingBlocks[index];
+	block.expanded = !block.expanded;
+	if (block.expanded)
 		m_expandedThinkingIndices.insert(index);
 	else
 		m_expandedThinkingIndices.remove(index);
-	rebuild();
+
+	// 就地展开/收起卡片（不整条重建，避免跳动/抖动）；异常时兜底整条重建
+	if (block.card)
+		updateThinkingCard(index);
+	else
+		rebuild();
 }
 
 void AgentMessageUnit::insertTool(int index)
 {
 	if (index < 0 || index >= m_toolBlocks.size())
 		return;
+	addToolCard(index);
+}
 
-	const ToolBlock& block = m_toolBlocks.at(index);
+void AgentMessageUnit::addToolCard(int index)
+{
+	ToolBlock& block = m_toolBlocks[index];
 	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 
-	QTextCursor cursor = textCursor();
-	cursor.movePosition(QTextCursor::End);
-	if (!document()->isEmpty())
-		cursor.insertBlock();
+	// 卡片 = 可点击标题 + 展开时显示工具参数/结果富文本
+	auto* card = new QWidget(this);
+	block.card = card;
+	auto* layout = new QVBoxLayout(card);
+	layout->setContentsMargins(0, 6, 0, 6);
+	layout->setSpacing(4);
 
-	const QString header = QStringLiteral(
-		"<a href=\"dsh://tool/%1\" style=\"color:") + Theme::accent() + QStringLiteral("; text-decoration:none;\">%2 %3</a>");
-	cursor.insertHtml(header.arg(index).arg(arrow, block.title.toHtmlEscaped()));
+	auto* header = new QLabel(card);
+	header->setObjectName(QStringLiteral("agentToolHeader"));
+	header->setTextFormat(Qt::RichText);
+	header->setWordWrap(true);
+	header->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	connect(header, &QLabel::linkActivated, this,
+		[this](const QString& link) { handleAnchorClicked(QUrl(link)); });
+
+	const QString anchor = QStringLiteral(
+		"<a href=\"dsh://tool/%1\" style=\"color:") + Theme::accent()
+		+ QStringLiteral("; text-decoration:none;\">%2 %3</a>");
+	header->setText(anchor.arg(index).arg(arrow, block.title.toHtmlEscaped()));
+	layout->addWidget(header);
 
 	if (block.expanded) {
-		cursor.insertBlock();
-		cursor.insertHtml(block.content);
+		QTextBrowser* body = createRichPart(QStringLiteral("agentToolBody"));
+		block.body = body;
+		body->setHtml(block.content);
+		m_proseViews.append(body);
+		layout->addWidget(body);
 	}
 
-	setTextCursor(cursor);
-	ensureCursorVisible();
+	m_partsLayout->addWidget(card);
+}
+
+void AgentMessageUnit::updateToolCard(int index)
+{
+	ToolBlock& block = m_toolBlocks[index];
+	if (!block.card)
+		return; // 卡片还没建（异常路径），回到整条重建
+
+	QLabel* header = block.card->findChild<QLabel*>(QStringLiteral("agentToolHeader"));
+	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
+	if (header) {
+		const QString anchor = QStringLiteral(
+			"<a href=\"dsh://tool/%1\" style=\"color:") + Theme::accent()
+			+ QStringLiteral("; text-decoration:none;\">%2 %3</a>");
+		header->setText(anchor.arg(index).arg(arrow, block.title.toHtmlEscaped()));
+	}
+
+	QVBoxLayout* cardLayout = qobject_cast<QVBoxLayout*>(block.card->layout());
+	if (block.expanded && !block.body) {
+		QTextBrowser* body = createRichPart(QStringLiteral("agentToolBody"));
+		block.body = body;
+		body->setHtml(block.content);
+		m_proseViews.append(body);
+		if (cardLayout)
+			cardLayout->addWidget(body);
+	}
+	else if (!block.expanded && block.body) {
+		if (cardLayout)
+			cardLayout->removeWidget(block.body);
+		block.body->hide();
+		block.body->deleteLater();
+		m_proseViews.removeOne(block.body);
+		block.body = nullptr;
+	}
+
+	updateHeightToContent();
 }
 
 void AgentMessageUnit::toggleTool(int index)
@@ -415,12 +666,17 @@ void AgentMessageUnit::toggleTool(int index)
 	if (index < 0 || index >= m_toolBlocks.size())
 		return;
 
-	m_toolBlocks[index].expanded = !m_toolBlocks[index].expanded;
-	if (m_toolBlocks[index].expanded)
+	ToolBlock& block = m_toolBlocks[index];
+	block.expanded = !block.expanded;
+	if (block.expanded)
 		m_expandedToolIndices.insert(index);
 	else
 		m_expandedToolIndices.remove(index);
-	rebuild();
+
+	if (block.card)
+		updateToolCard(index);
+	else
+		rebuild();
 }
 
 QString AgentMessageUnit::thinkingPreview(const QString& content) const
@@ -431,52 +687,63 @@ QString AgentMessageUnit::thinkingPreview(const QString& content) const
 	return preview;
 }
 
-void AgentMessageUnit::updateHeightToContent()
+bool AgentMessageUnit::hasContent() const
 {
-	// 整批重建过程中不逐段重算高度，等所有段插入完后再统一计算一次
-	if (m_rebuilding)
-		return;
-
-	int textWidth = viewport()->width();
-	if (textWidth <= 0)
-		textWidth = width() - frameWidth() * 2 - 8;
-
-	document()->setTextWidth(textWidth);
-
-	const qreal docHeight = document()->documentLayout()->documentSize().height();
-	const int verticalPadding = 16; // QSS padding: 8px top + 8px bottom
-	const int frame = frameWidth() * 2;
-
-	setFixedHeight(static_cast<int>(docHeight) + verticalPadding + frame);
+	for (const QTextBrowser* view : m_proseViews) {
+		if (view->document() && !view->document()->isEmpty())
+			return true;
+	}
+	for (int i = 0; i < m_partsLayout->count(); ++i) {
+		QLayoutItem* item = m_partsLayout->itemAt(i);
+		if (item && codeBlockEditIn(item->widget()))
+			return true;
+	}
+	return false;
 }
 
-QString AgentMessageUnit::buildCodeShadowHtml(const QString& language, const QString& code)
+QString AgentMessageUnit::textContent() const
 {
-	const QString lang = language.isEmpty() ? QStringLiteral("code") : language;
+	QString out;
+	for (int i = 0; i < m_partsLayout->count(); ++i) {
+		QLayoutItem* item = m_partsLayout->itemAt(i);
+		QWidget* widget = item ? item->widget() : nullptr;
+		if (!widget)
+			continue;
 
-	// 使用字符串拼接而不是 QString::arg，避免代码/语言里出现 %1、%2 时被占位符误替换
-	QString html;
-	html += QStringLiteral("<div style='box-shadow:0 2px 8px ") + Theme::color(QStringLiteral("shadow"))
-		+ QStringLiteral(";border:1px solid ") + Theme::border()
-		+ QStringLiteral(";border-radius:8px;background:") + Theme::windowBg()
-		+ QStringLiteral(";margin:8px 0;padding:0;'>");
+		QString piece;
+		if (auto* prose = qobject_cast<QTextBrowser*>(widget))
+			piece = prose->toPlainText();
+		else if (QTextEdit* code = codeBlockEditIn(widget))
+			piece = code->toPlainText();
+		else {
+			// 思考/工具卡片：标题（QLabel，去掉 HTML 标签）与展开正文（QTextBrowser）
+			for (QLabel* label : widget->findChildren<QLabel*>()) {
+				QString text = label->text();
+				text.remove(QRegularExpression(QStringLiteral("<[^>]*>")));
+				text = text.trimmed();
+				if (text.isEmpty())
+					continue;
+				if (!piece.isEmpty())
+					piece += QLatin1Char('\n');
+				piece += text;
+			}
+			for (QTextBrowser* sub : widget->findChildren<QTextBrowser*>()) {
+				const QString text = sub->toPlainText().trimmed();
+				if (text.isEmpty())
+					continue;
+				if (!piece.isEmpty())
+					piece += QLatin1Char('\n');
+				piece += text;
+			}
+		}
+		if (piece.isEmpty())
+			continue;
 
-	// 语言名称栏
-	html += QStringLiteral("<p style='background:") + Theme::windowBg()
-		+ QStringLiteral(";padding:4px 10px;font-family:Consolas,Menlo,monospace;font-size:12px;font-style:italic;color:")
-		+ Theme::textSecondary()
-		+ QStringLiteral(";border-bottom:1px solid ") + Theme::border()
-		+ QStringLiteral(";'>") + lang.toHtmlEscaped() + QStringLiteral("</p>");
-
-	// 代码内容
-	html += QStringLiteral("<pre style='margin:0;padding:10px;font-family:Consolas,Menlo,monospace;font-size:13px;color:")
-		+ Theme::textPrimary()
-		+ QStringLiteral(";white-space:pre-wrap;word-break:break-all;'>")
-		+ CodeHighlighter::instance().highlight(lang, code)
-		+ QStringLiteral("</pre>");
-
-	html += QStringLiteral("</div>");
-	return html;
+		if (!out.isEmpty())
+			out += QLatin1Char('\n');
+		out += piece;
+	}
+	return out;
 }
 
 QString AgentMessageUnit::replaceInlineCodeWithPlaceholders(const QString& markdown, QStringList& codes) const

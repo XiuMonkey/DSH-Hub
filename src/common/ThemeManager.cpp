@@ -3,117 +3,327 @@
 #include "DSHHub.h"
 #include "SpinnerWidget.h"
 
+#include <QApplication>
+#include <QCoreApplication>
+#include <QDir>
+#include <QEventLoop>
+#include <QFile>
 #include <QGuiApplication>
 #include <QHash>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QObject>
-#include <QUrl>
+#include <QRegularExpression>
+#include <QResource>
 #include <QScreen>
+#include <QUrl>
 #include <QVBoxLayout>
+#include <QWidget>
 #include <QDebug>
+
+#include <future>
+#include <utility>
 
 namespace Theme
 {
-	Mode g_mode = Mode::Light;
+	namespace
+	{
+		const QString kResourcePrefix = QStringLiteral(":/DSHHub/styles/");
+		// 各板块样式文件（与 resources/styles 下的默认模板一一对应）
+		const QStringList kModules = {
+			QStringLiteral("base.qss"),
+			QStringLiteral("chat.qss"),
+			QStringLiteral("sidebar.qss"),
+			QStringLiteral("panels.qss"),
+			QStringLiteral("settings.qss"),
+			QStringLiteral("plugins.qss"),
+		};
+
+		QString resourcePath(const QString& fileName)
+		{
+			return kResourcePrefix + fileName;
+		}
+
+		QString modeKey(Theme::Mode mode)
+		{
+			return mode == Theme::Mode::Dark ? QStringLiteral("dark") : QStringLiteral("light");
+		}
+
+		struct Impl
+		{
+			QString stylesDir;                 // 外部可覆盖目录（通常 exe 同目录 /styles）
+			Mode mode = Mode::Light;
+
+			// 当前生效主题的镜像（供 color()/styleSheet()/applyToWindow() 快速读取）
+			QHash<QString, QString> palette;
+			QString qss;
+
+			// 两套主题的预合成缓存：键 = modeKey()；切主题只做缓存命中，不做字符串计算
+			QHash<QString, QHash<QString, QString>> paletteCache;
+			QHash<QString, QString> qssCache;
+
+			QString paletteFileFor(Mode m) const
+			{
+				return m == Mode::Dark
+					? QStringLiteral("theme-dark.json")
+					: QStringLiteral("theme-light.json");
+			}
+
+			// 释放默认模板：stylesDir 里缺失的文件从 qrc 拷出；已存在不覆盖
+			void ensureDefaults()
+			{
+				QDir dir(stylesDir);
+				if (!dir.exists() && !dir.mkpath(QStringLiteral("."))) {
+					qWarning().noquote() << "[Theme] cannot create styles dir:" << stylesDir;
+					return;
+				}
+
+				const QStringList files = QStringList(kModules)
+					<< QStringLiteral("theme-light.json")
+					<< QStringLiteral("theme-dark.json");
+				for (const QString& file : files) {
+					const QString target = dir.filePath(file);
+					if (QFile::exists(target))
+						continue; // 已存在 -> 不覆盖（用户定制优先）
+
+					QFile res(resourcePath(file));
+					if (!res.open(QIODevice::ReadOnly)) {
+						qWarning().noquote() << "[Theme] missing default template in qrc:" << file;
+						continue;
+					}
+					const QByteArray data = res.readAll();
+					res.close();
+
+					QFile out(target);
+					if (out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+						out.write(data);
+						out.close();
+						qInfo().noquote() << "[Theme] released default style:" << target;
+					}
+					else {
+						qWarning().noquote() << "[Theme] cannot write style file:" << target;
+					}
+				}
+			}
+
+			// 外部优先、qrc 兜底地读取一个文本文件
+			QString loadText(const QString& fileName) const
+			{
+				const QString external = QDir(stylesDir).filePath(fileName);
+				if (QFile::exists(external)) {
+					QFile f(external);
+					if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+						return QString::fromUtf8(f.readAll());
+				}
+
+				QFile res(resourcePath(fileName));
+				if (res.open(QIODevice::ReadOnly | QIODevice::Text))
+					return QString::fromUtf8(res.readAll());
+
+				qWarning().noquote() << "[Theme] style file not found (external/qrc):" << fileName;
+				return QString();
+			}
+
+			// 读取某个主题的色板 JSON：{ "key": "颜色" }
+			QHash<QString, QString> loadPaletteFor(Mode m) const
+			{
+				QHash<QString, QString> result;
+
+				const QString fileName = paletteFileFor(m);
+				const QByteArray raw = loadText(fileName).toUtf8();
+				QJsonParseError parseError;
+				const QJsonDocument doc = QJsonDocument::fromJson(raw, &parseError);
+				if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+					qWarning().noquote() << "[Theme] palette parse error:" << fileName
+						<< parseError.errorString();
+					return result;
+				}
+
+				const QJsonObject obj = doc.object();
+				for (auto it = obj.constBegin(); it != obj.constEnd(); ++it)
+					result.insert(it.key(), it.value().toString());
+				return result;
+			}
+
+			// 把 {{key}} 占位替换成色板颜色（找不到的 key 原样保留以便排查）
+			static QString substituteWith(const QString& qss,
+				const QHash<QString, QString>& palette)
+			{
+				static const QRegularExpression token(
+					QStringLiteral("\\{\\{\\s*([A-Za-z][A-Za-z0-9]*)\\s*\\}\\}"));
+
+				QString out;
+				out.reserve(qss.size());
+
+				int last = 0;
+				QRegularExpressionMatchIterator it = token.globalMatch(qss);
+				while (it.hasNext()) {
+					const QRegularExpressionMatch match = it.next();
+					out += qss.mid(last, match.capturedStart() - last);
+
+					const QString value = palette.value(match.captured(1));
+					out += value.isEmpty() ? match.captured(0) : value;
+
+					last = match.capturedEnd();
+				}
+				out += qss.mid(last);
+				return out;
+			}
+
+			// 用给定色板合成一份完整 QSS（模块按 kModules 顺序拼接）
+			QString composeQssFor(const QHash<QString, QString>& palette) const
+			{
+				QString combined;
+				for (const QString& module : kModules) {
+					const QString text = loadText(module);
+					if (!text.isEmpty())
+						combined += substituteWith(text, palette) + QStringLiteral("\n\n");
+				}
+				return combined;
+			}
+
+			// 计算单个主题的（色板, QSS）——纯计算，供工作线程调用
+			std::pair<QHash<QString, QString>, QString> buildFor(Mode m) const
+			{
+				const auto pal = loadPaletteFor(m);
+				return std::make_pair(pal, composeQssFor(pal));
+			}
+
+			// 预合成两套主题（计算放后台线程），结果写回缓存
+			void buildAllCaches()
+			{
+				auto light = std::async(std::launch::async, [this]() { return buildFor(Mode::Light); });
+				auto dark = std::async(std::launch::async, [this]() { return buildFor(Mode::Dark); });
+
+				const auto lightResult = light.get();
+				const auto darkResult = dark.get();
+				paletteCache.insert(modeKey(Mode::Light), lightResult.first);
+				qssCache.insert(modeKey(Mode::Light), lightResult.second);
+				paletteCache.insert(modeKey(Mode::Dark), darkResult.first);
+				qssCache.insert(modeKey(Mode::Dark), darkResult.second);
+			}
+
+			// 若某个主题还没合成过，同步补一次（reload/reset 后首次读取用）
+			void ensureCached(Mode m)
+			{
+				const QString key = modeKey(m);
+				if (qssCache.contains(key))
+					return;
+				const auto result = buildFor(m);
+				paletteCache.insert(key, result.first);
+				qssCache.insert(key, result.second);
+			}
+
+			// 把某个主题的缓存镜像到当前生效成员
+			void activate(Mode m)
+			{
+				mode = m;
+				palette = paletteCache.value(modeKey(m));
+				qss = qssCache.value(modeKey(m));
+			}
+		};
+
+		Impl& impl()
+		{
+			static Impl instance;
+			return instance;
+		}
+	} // namespace
+
+	void init(const QString& stylesDir, Mode mode)
+	{
+		Impl& s = impl();
+		s.stylesDir = stylesDir;
+		s.ensureDefaults();
+
+		// 计算放线程：启动时一次性预合成亮/暗两套（切主题时主线程零计算）
+		s.buildAllCaches();
+
+		setMode(mode);
+		qInfo().noquote() << "[Theme] styles initialized from:" << stylesDir
+			<< "mode=" << (mode == Mode::Dark ? "Dark" : "Light")
+			<< "paletteKeys=" << s.palette.size();
+	}
 
 	void setMode(Mode mode)
 	{
-		g_mode = mode;
-		qInfo().noquote() << "[Theme] set mode:" << (mode == Mode::Dark ? "Dark" : "Light");
+		Impl& s = impl();
+		s.ensureCached(mode);
+		s.activate(mode);
+		qInfo().noquote() << "[Theme] set mode:" << (mode == Mode::Dark ? "Dark" : "Light")
+			<< "qssBytes=" << s.qss.size();
+	}
+
+	// 把当前合成样式表安装到单个窗口（及其子树）。
+	// 各顶层窗口（主窗 / 弹窗 / 主题切换卡）自行调用；切主题时旧窗口不再全局重 polish。
+	void applyToWindow(QWidget* window)
+	{
+		if (window)
+			window->setStyleSheet(impl().qss);
+	}
+
+	void reload()
+	{
+		Impl& s = impl();
+		// 重新从磁盘/资源合成（含用户改动后的外部文件）
+		s.buildAllCaches();
+		s.activate(s.mode);
+
+		// 重挂到所有顶层窗口（开发期热调 / 重置默认后）
+		const QList<QWidget*> topLevels = QApplication::topLevelWidgets();
+		for (QWidget* window : topLevels)
+			applyToWindow(window);
+		qInfo().noquote() << "[Theme] styles reloaded from:" << s.stylesDir;
+	}
+
+	void resetStyles()
+	{
+		Impl& s = impl();
+		if (s.stylesDir.isEmpty()) {
+			qWarning().noquote() << "[Theme] resetStyles called before init";
+			return;
+		}
+
+		// 只删除已知的默认模板文件（qss + 色板），保留目录里其它可能存在的文件
+		QDir dir(s.stylesDir);
+		const QStringList files = QStringList(kModules)
+			<< QStringLiteral("theme-light.json")
+			<< QStringLiteral("theme-dark.json");
+		for (const QString& file : files) {
+			const QString target = dir.filePath(file);
+			if (QFile::exists(target) && !QFile::remove(target))
+				qWarning().noquote() << "[Theme] cannot remove style file:" << target;
+		}
+
+		s.ensureDefaults();
+		reload();
+		qInfo().noquote() << "[Theme] styles reset to defaults in:" << s.stylesDir;
 	}
 
 	bool isDark()
 	{
-		return g_mode == Mode::Dark;
+		return impl().mode == Mode::Dark;
 	}
 
 	QString color(const QString& key)
 	{
-		static const QHash<QString, QString> light = {
-			{QStringLiteral("windowBg"), QStringLiteral("#F8F9FB")},
-			{QStringLiteral("panelBg"), QStringLiteral("#FFFFFF")},
-			{QStringLiteral("cardBg"), QStringLiteral("#FFFFFF")},
-			{QStringLiteral("hoverBg"), QStringLiteral("#F3F4F6")},
-			{QStringLiteral("activeBg"), QStringLiteral("#EEF0F2")},
-			{QStringLiteral("border"), QStringLiteral("#E5E7EB")},
-			{QStringLiteral("textPrimary"), QStringLiteral("#1F2328")},
-			{QStringLiteral("textSecondary"), QStringLiteral("#6B7280")},
-			{QStringLiteral("accent"), QStringLiteral("#4C8BF5")},
-			{QStringLiteral("accentHover"), QStringLiteral("#3A7AE0")},
-			{QStringLiteral("danger"), QStringLiteral("#DC2626")},
-			{QStringLiteral("dangerBg"), QStringLiteral("#FEF2F2")},
-			{QStringLiteral("inputBg"), QStringLiteral("#F9FAFB")},
-			{QStringLiteral("userBubbleBg"), QStringLiteral("#E0F2FE")},
-			{QStringLiteral("userBubbleText"), QStringLiteral("#0C4A6E")},
-			{QStringLiteral("scrollbar"), QStringLiteral("#D1D5DB")},
-			{QStringLiteral("scrollbarHover"), QStringLiteral("#9CA3AF")},
-		};
+		const Impl& s = impl();
+		const auto it = s.palette.constFind(key);
+		if (it != s.palette.constEnd())
+			return it.value();
+		return QStringLiteral("#000000");
+	}
 
-		static const QHash<QString, QString> dark = {
-			{QStringLiteral("windowBg"), QStringLiteral("#111827")},
-			{QStringLiteral("panelBg"), QStringLiteral("#1F2937")},
-			{QStringLiteral("cardBg"), QStringLiteral("#1F2937")},
-			{QStringLiteral("hoverBg"), QStringLiteral("#374151")},
-			{QStringLiteral("activeBg"), QStringLiteral("#374151")},
-			{QStringLiteral("border"), QStringLiteral("#374151")},
-			{QStringLiteral("textPrimary"), QStringLiteral("#F9FAFB")},
-			{QStringLiteral("textSecondary"), QStringLiteral("#9CA3AF")},
-			{QStringLiteral("accent"), QStringLiteral("#4C8BF5")},
-			{QStringLiteral("accentHover"), QStringLiteral("#3A7AE0")},
-			{QStringLiteral("danger"), QStringLiteral("#F87171")},
-			{QStringLiteral("dangerBg"), QStringLiteral("#7F1D1D")},
-			{QStringLiteral("inputBg"), QStringLiteral("#111827")},
-			{QStringLiteral("userBubbleBg"), QStringLiteral("#0C4A6E")},
-			{QStringLiteral("userBubbleText"), QStringLiteral("#BAE6FD")},
-			{QStringLiteral("scrollbar"), QStringLiteral("#4B5563")},
-			{QStringLiteral("scrollbarHover"), QStringLiteral("#6B7280")},
-		};
-
-		// 原先硬编码在样式表里的颜色，暂时不区分亮/暗主题，统一保持原值
-		static const QHash<QString, QString> shared = {
-			{QStringLiteral("inputBorder"), QStringLiteral("#D0D7DE")},
-			{QStringLiteral("buttonBg"), QStringLiteral("#E8EAED")},
-			{QStringLiteral("buttonHover"), QStringLiteral("#DDE0E4")},
-			{QStringLiteral("buttonPressed"), QStringLiteral("#CDD0D5")},
-			{QStringLiteral("scrollbarHandle"), QStringLiteral("#C1C7CF")},
-			{QStringLiteral("scrollbarHandleHover"), QStringLiteral("#A8B0B9")},
-			{QStringLiteral("sendButtonHover"), QStringLiteral("#E0E7FF")},
-			{QStringLiteral("sendButtonPressed"), QStringLiteral("#C7D2FE")},
-			{QStringLiteral("toastBg"), QStringLiteral("rgba(31,35,40,0.85)")},
-			{QStringLiteral("overlayBg"), QStringLiteral("rgba(128,128,128,0.65)")},
-			{QStringLiteral("tagBg"), QStringLiteral("#EEF2FF")},
-			{QStringLiteral("dangerButtonBg"), QStringLiteral("#E5484D")},
-			{QStringLiteral("selectionBg"), QStringLiteral("#BFDBFE")},
-			{QStringLiteral("iconButtonText"), QStringLiteral("#666666")},
-			{QStringLiteral("iconButtonTextHover"), QStringLiteral("#222222")},
-			{QStringLiteral("iconButtonHoverBg"), QStringLiteral("rgba(0,0,0,0.08)")},
-			{QStringLiteral("iconButtonPressedBg"), QStringLiteral("rgba(0,0,0,0.12)")},
-			{QStringLiteral("loadingText"), QStringLiteral("#57606A")},
-			{QStringLiteral("loadingBorder"), QStringLiteral("#E1E4E8")},
-			{QStringLiteral("systemMessageText"), QStringLiteral("#999999")},
-			{QStringLiteral("shadow"), QStringLiteral("rgba(0,0,0,0.06)")},
-			{QStringLiteral("shadowSubtle"), QStringLiteral("rgba(0,0,0,0.05)")},
-			{QStringLiteral("textOnAccent"), QStringLiteral("white")},
-		};
-
-		const auto sharedIt = shared.constFind(key);
-		if (sharedIt != shared.constEnd())
-			return sharedIt.value();
-
-		const QHash<QString, QString>& palette = isDark() ? dark : light;
-		return palette.value(key, QStringLiteral("#000000"));
+	QString styleSheet()
+	{
+		return impl().qss;
 	}
 
 	void switchTheme(QWidget* currentWindow)
 	{
-		// 先切换到目标主题，弹窗会使用新主题的颜色
-		setMode(isDark() ? Mode::Light : Mode::Dark);
-		qInfo().noquote() << "[Theme] switch theme ->" << (isDark() ? "Dark" : "Light");
-
-		if (currentWindow)
-			currentWindow->hide();
-
-		// 临时过渡弹窗：和初始化标签风格一致，使用即将生效的新主题
+		// 先构造并显示“切换中”过渡卡片（使用当前主题），确保点击后立刻出现，
+		// 而不是等 setMode（重建 + 全应用重设样式表，较耗时）做完才显示。
 		auto* popup = new QWidget(nullptr, Qt::FramelessWindowHint | Qt::Dialog);
 		popup->setAttribute(Qt::WA_TranslucentBackground);
 		popup->setFixedSize(360, 200);
@@ -124,7 +334,6 @@ namespace Theme
 		auto* body = new QWidget(popup);
 		body->setObjectName(QStringLiteral("themeSwitchBody"));
 		body->setAttribute(Qt::WA_StyledBackground, true);
-		body->setStyleSheet(QStringLiteral("QWidget#themeSwitchBody {") + QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";") + QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";") + QStringLiteral("  border-radius: 20px;") + QStringLiteral("}"));
 		outerLayout->addWidget(body);
 
 		auto* layout = new QVBoxLayout(body);
@@ -137,15 +346,26 @@ namespace Theme
 		layout->addWidget(spinner, 0, Qt::AlignHCenter);
 
 		auto* label = new QLabel(QStringLiteral("正在切换主题..."), body);
+		label->setObjectName(QStringLiteral("themeSwitchLabel"));
 		label->setAlignment(Qt::AlignCenter);
-		label->setStyleSheet(QStringLiteral("QLabel {") + QStringLiteral("  background: transparent;") + QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";") + QStringLiteral("  font-size: 16px;") + QStringLiteral("}"));
 		layout->addWidget(label);
 
 		layout->addStretch(1);
 
 		popup->move(QGuiApplication::primaryScreen()->geometry().center() - popup->rect().center());
+		applyToWindow(popup); // 窗口级安装：卡片自己挂样式（不再依赖全局 qApp 表）
 		popup->show();
 		popup->raise();
+		// 强制先画出一帧（否则会与下方 setMode 的耗时操作同一帧出现，观感仍是“卡”）
+		QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+
+		if (currentWindow)
+			currentWindow->hide();
+
+		// 再切换主题：预合成缓存命中，主线程只做缓存取用，不再重建字符串
+		setMode(isDark() ? Mode::Light : Mode::Dark);
+		// 让过渡卡立刻换上新主题
+		applyToWindow(popup);
 
 		// 切换主题时复用当前 DSH server，不创建新 server
 		QUrl oldBaseUrl;

@@ -1,6 +1,5 @@
 #include "ExtensionManagerPopup.h"
 #include "ExtensionLoader.h"
-#include "ThemeManager.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -8,6 +7,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -113,33 +113,14 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 	toolbar->setSpacing(8);
 
 	m_installButton = new QPushButton(QStringLiteral("安装扩展"), content);
+	m_installButton->setObjectName(QStringLiteral("extPopupInstallButton"));
 	m_removeButton = new QPushButton(QStringLiteral("移除选中"), content);
+	m_removeButton->setObjectName(QStringLiteral("extPopupRemoveButton"));
 	m_refreshButton = new QPushButton(QStringLiteral("刷新"), content);
-
-	const QString buttonStyle = QStringLiteral("QPushButton {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("  border: none;")
-		+ QStringLiteral("  border-radius: 10px;")
-		+ QStringLiteral("  padding: 8px 14px;")
-		+ QStringLiteral("  font-size: 13px;")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QPushButton:hover {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("border"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QPushButton:disabled {")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textSecondary"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("inputBg"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("}");
+	m_refreshButton->setObjectName(QStringLiteral("extPopupRefreshButton"));
 
 	for (QPushButton* button : { m_installButton, m_removeButton, m_refreshButton }) {
 		button->setCursor(Qt::PointingHandCursor);
-		button->setStyleSheet(buttonStyle);
 	}
 
 	toolbar->addWidget(m_installButton);
@@ -151,41 +132,14 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 
 	// 扩展列表
 	m_listWidget = new QListWidget(content);
+	m_listWidget->setObjectName(QStringLiteral("extPopupList"));
 	m_listWidget->setSelectionMode(QAbstractItemView::SingleSelection);
-	m_listWidget->setStyleSheet(QStringLiteral("QListWidget {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("  border-radius: 12px;")
-		+ QStringLiteral("  padding: 8px;")
-		+ QStringLiteral("  font-size: 13px;")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget::item {")
-		+ QStringLiteral("  padding: 8px 10px;")
-		+ QStringLiteral("  border-radius: 8px;")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget::item:selected {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("activeBg"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("}")
-		+ QStringLiteral("QListWidget::item:hover {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("hoverBg"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("}"));
 
 	rootLayout->addWidget(m_listWidget, 1);
 
 	// 状态栏
 	m_statusLabel = new QLabel(content);
-	m_statusLabel->setStyleSheet(QStringLiteral("QLabel {")
-		+ QStringLiteral("  background: transparent;")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textSecondary"))
-		+ QStringLiteral(";")
-		+ QStringLiteral("  font-size: 12px;")
-		+ QStringLiteral("}"));
+	m_statusLabel->setObjectName(QStringLiteral("extPopupStatus"));
 
 	rootLayout->addWidget(m_statusLabel);
 
@@ -267,6 +221,18 @@ void ExtensionManagerPopup::saveInstalledExtensions(const QStringList& names)
 	}
 }
 
+void ExtensionManagerPopup::setStatus(const QString& text)
+{
+	if (!m_statusLabel)
+		return;
+	// 超长文本按当前可用宽度省略号截断，全文放 tooltip，避免把弹窗撑大
+	m_statusLabel->setToolTip(text);
+	int width = m_statusLabel->width();
+	if (width <= 10)
+		width = 640; // 尚未布局时按内容区宽度估算
+	m_statusLabel->setText(m_statusLabel->fontMetrics().elidedText(text, Qt::ElideRight, width));
+}
+
 void ExtensionManagerPopup::populateList()
 {
 	m_listWidget->clear();
@@ -276,10 +242,10 @@ void ExtensionManagerPopup::populateList()
 		m_listWidget->addItem(name);
 
 	if (names.isEmpty()) {
-		m_statusLabel->setText(QStringLiteral("暂无已安装扩展，点击“安装扩展”选择 .ext 文件。"));
+		setStatus(QStringLiteral("暂无已安装扩展，点击“安装扩展”选择 .ext 文件。"));
 	}
 	else {
-		m_statusLabel->setText(QStringLiteral("已安装 %1 个扩展。").arg(names.size()));
+		setStatus(QStringLiteral("已安装 %1 个扩展。").arg(names.size()));
 	}
 
 	m_removeButton->setEnabled(false);
@@ -302,7 +268,7 @@ void ExtensionManagerPopup::installExtension()
 	m_installing = true;
 	if (m_installButton)
 		m_installButton->setEnabled(false);
-	m_statusLabel->setText(QStringLiteral("正在安装扩展..."));
+	setStatus(QStringLiteral("正在安装扩展..."));
 	m_pendingError.clear();
 	m_pendingExt = ExtensionLoader::LoadedExtension();
 
@@ -333,7 +299,7 @@ void ExtensionManagerPopup::pollInstall()
 
 	const bool ok = m_installFuture.get();
 	if (!ok) {
-		m_statusLabel->setText(QStringLiteral("扩展安装失败: %1").arg(m_pendingError));
+		setStatus(QStringLiteral("扩展安装失败: %1").arg(m_pendingError));
 		return;
 	}
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] loadAndInstall returned ok=%1").arg(ok);
@@ -346,7 +312,7 @@ void ExtensionManagerPopup::pollInstall()
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] installed registry updated");
 
 	populateList();
-	m_statusLabel->setText(QStringLiteral("扩展安装成功: %1").arg(m_pendingExt.pluginName));
+	setStatus(QStringLiteral("扩展安装成功: %1").arg(m_pendingExt.pluginName));
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] list populated, emitting extensionInstalled");
 
 	// 使用持久化到扩展目录的 regulation.json5 / main.dll，
@@ -395,14 +361,14 @@ void ExtensionManagerPopup::removeSelected()
 	populateList();
 
 	if (dirRemoved && patchRemoved) {
-		m_statusLabel->setText(QStringLiteral("已移除扩展: %1").arg(name));
+		setStatus(QStringLiteral("已移除扩展: %1").arg(name));
 	}
 	else if (!dirRemoved) {
-		m_statusLabel->setText(
+		setStatus(
 			QStringLiteral("已清理扩展配置，但部分文件删除失败: %1").arg(dirError));
 	}
 	else {
-		m_statusLabel->setText(
+		setStatus(
 			QStringLiteral("扩展目录已删除，但更新 cordis.patch.yml 失败: %1").arg(name));
 	}
 
@@ -415,7 +381,7 @@ void ExtensionManagerPopup::cleanupResiduals()
 	const QString patchPath = m_serverProfilePath + QStringLiteral("/cordis.patch.yml");
 	QFile patchFile(patchPath);
 	if (!patchFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-		m_statusLabel->setText(QStringLiteral("无法读取 cordis.patch.yml"));
+		setStatus(QStringLiteral("无法读取 cordis.patch.yml"));
 		return;
 	}
 
@@ -463,7 +429,7 @@ void ExtensionManagerPopup::cleanupResiduals()
 	}
 
 	populateList();
-	m_statusLabel->setText(removed.isEmpty()
+	setStatus(removed.isEmpty()
 		? QStringLiteral("未发现残留扩展配置")
 		: QStringLiteral("已清理残留扩展: %1").arg(removed.join(QLatin1String(", "))));
 
