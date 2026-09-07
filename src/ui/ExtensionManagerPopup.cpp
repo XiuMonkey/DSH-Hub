@@ -4,6 +4,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -140,6 +141,7 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 	// 状态栏
 	m_statusLabel = new QLabel(content);
 	m_statusLabel->setObjectName(QStringLiteral("extPopupStatus"));
+	m_statusLabel->installEventFilter(this); // 宽度布局生效后重排状态文本
 
 	rootLayout->addWidget(m_statusLabel);
 
@@ -221,16 +223,76 @@ void ExtensionManagerPopup::saveInstalledExtensions(const QStringList& names)
 	}
 }
 
+static QString statusTextTwoLines(const QString& text, int width, const QFontMetrics& fm)
+{
+	if (text.isEmpty() || fm.horizontalAdvance(text) <= width)
+		return text;
+
+	const int ellipsisWidth = fm.horizontalAdvance(QStringLiteral("…"));
+
+	const auto takeLine = [&fm](const QString& src, int start, int maxWidth) -> QString {
+		QString out;
+		int used = 0;
+		for (int i = start; i < src.size(); ++i) {
+			const int charWidth = fm.horizontalAdvance(src.at(i));
+			if (charWidth > 0 && used + charWidth > maxWidth)
+				break;
+			out += src.at(i);
+			if (charWidth > 0)
+				used += charWidth;
+		}
+		return out;
+	};
+
+	const QString first = takeLine(text, 0, width);
+	const QString rest = text.mid(first.size());
+	if (fm.horizontalAdvance(rest) <= width)
+		return first + QLatin1Char('\n') + rest;
+
+	const int secondMax = qMax(20, width - ellipsisWidth);
+	QString second = takeLine(rest, 0, secondMax);
+	if (rest.size() > second.size())
+		second += QStringLiteral("…");
+	return first + QLatin1Char('\n') + second;
+}
+
 void ExtensionManagerPopup::setStatus(const QString& text)
 {
 	if (!m_statusLabel)
 		return;
-	// 超长文本按当前可用宽度省略号截断，全文放 tooltip，避免把弹窗撑大
 	m_statusLabel->setToolTip(text);
+	m_lastStatusText = text;
+	updateStatusDisplay();
+}
+
+void ExtensionManagerPopup::updateStatusDisplay()
+{
+	if (!m_statusLabel)
+		return;
+
+	// 布局后按真实宽度排版；还没拿到真实宽度时先全量显示，
+	// 等 Resize 事件（布局真正生效）到来再按实际宽度决定是否省略。
 	int width = m_statusLabel->width();
-	if (width <= 10)
-		width = 640; // 尚未布局时按内容区宽度估算
-	m_statusLabel->setText(m_statusLabel->fontMetrics().elidedText(text, Qt::ElideRight, width));
+	if (width <= 10) {
+		const QWidget* win = m_statusLabel->window();
+		width = win && win->width() > 40 ? win->width() - 40 : 0;
+	}
+	if (width <= 10) {
+		m_statusLabel->setWordWrap(false);
+		m_statusLabel->setText(m_lastStatusText);
+		return;
+	}
+
+	m_statusLabel->setWordWrap(false);
+	m_statusLabel->setText(statusTextTwoLines(m_lastStatusText, width, m_statusLabel->fontMetrics()));
+}
+
+bool ExtensionManagerPopup::eventFilter(QObject* watched, QEvent* event)
+{
+	// 布局真正生效（标签宽度变化）时重算一次，避免早期按窄宽度错误截断
+	if (watched == m_statusLabel && event->type() == QEvent::Resize)
+		updateStatusDisplay();
+	return PopupWindow::eventFilter(watched, event);
 }
 
 void ExtensionManagerPopup::populateList()

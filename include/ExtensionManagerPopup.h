@@ -22,6 +22,7 @@ class QTimer;
 class QListWidget;
 class QPushButton;
 class QVBoxLayout;
+class QEvent;
 
 class ExtensionManagerPopup : public PopupWindow
 {
@@ -45,6 +46,9 @@ private slots:
 	void removeSelected();
 	void refresh();
 
+protected:
+	bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
 	QString serverProfilePath() const;
 	QString nodeModulesPath() const;
@@ -54,8 +58,9 @@ private:
 	void saveInstalledExtensions(const QStringList& names);
 
 	void populateList();
-	// 更新状态栏：超长文本按标签当前宽度用省略号截断，避免把弹窗撑大
+	// 更新状态栏：按“当前真实宽度”重排版（首次/宽度变化后）
 	void setStatus(const QString& text);
+	void updateStatusDisplay();
 
 	bool removeExtensionDirectory(const QString& name, QString* error);
 
@@ -65,6 +70,7 @@ private:
 	QPushButton* m_installButton = nullptr;
 	QPushButton* m_removeButton = nullptr;
 	QPushButton* m_refreshButton = nullptr;
+	QString m_lastStatusText; // 最近一次完整状态文本（供宽度变化后重排）
 	std::future<bool> m_installFuture;
 	ExtensionLoader::LoadedExtension m_pendingExt;
 	QString m_pendingError;

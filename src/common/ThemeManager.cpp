@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QObject>
+#include <QPalette>
 #include <QRegularExpression>
 #include <QResource>
 #include <QScreen>
@@ -229,6 +230,55 @@ namespace Theme
 			static Impl instance;
 			return instance;
 		}
+
+		// 生成并应用与当前主题一致的 QPalette：QSS 没覆盖到的默认文字/底色
+		// （输入框文字、列表项、上下文菜单等）在暗色模式下会退化成 Qt 默认的
+		// 亮色调色板（黑字），这里统一按当前色板修正。
+		QString token(const QHash<QString, QString>& p, const QString& key,
+			const QString& fallback)
+		{
+			const auto it = p.constFind(key);
+			return it == p.constEnd() ? fallback : it.value();
+		}
+
+		void installPaletteFor(const QHash<QString, QString>& p)
+		{
+			QPalette pal = QApplication::palette();
+			const QColor window(token(p, QStringLiteral("windowBg"), QStringLiteral("#FFFFFF")));
+			const QColor panel(token(p, QStringLiteral("panelBg"), QStringLiteral("#FFFFFF")));
+			const QColor text(token(p, QStringLiteral("textPrimary"), QStringLiteral("#000000")));
+			const QColor textDim(token(p, QStringLiteral("textSecondary"), QStringLiteral("#666666")));
+			const QColor accent(token(p, QStringLiteral("accent"), QStringLiteral("#4C8BF5")));
+			const QColor onAccent(token(p, QStringLiteral("textOnAccent"), QStringLiteral("#FFFFFF")));
+			const QColor border(token(p, QStringLiteral("border"), QStringLiteral("#E5E7EB")));
+
+			const auto apply = [&pal](QPalette::ColorRole role, const QColor& color) {
+				for (int i = 0; i < QPalette::NColorGroups; ++i) {
+					if (i == QPalette::Disabled) {
+						pal.setColor(static_cast<QPalette::ColorGroup>(i), role,
+							color.lighter(150));
+					}
+					else {
+						pal.setColor(static_cast<QPalette::ColorGroup>(i), role, color);
+					}
+				}
+			};
+			apply(QPalette::Window, window);
+			apply(QPalette::WindowText, text);
+			apply(QPalette::Base, panel);
+			apply(QPalette::AlternateBase, border);
+			apply(QPalette::Text, text);
+			apply(QPalette::Button, window);
+			apply(QPalette::ButtonText, text);
+			apply(QPalette::PlaceholderText, textDim);
+			apply(QPalette::Highlight, accent);
+			apply(QPalette::HighlightedText, onAccent);
+			apply(QPalette::ToolTipBase, panel);
+			apply(QPalette::ToolTipText, text);
+
+			if (qApp)
+				qApp->setPalette(pal);
+		}
 	} // namespace
 
 	void init(const QString& stylesDir, Mode mode)
@@ -251,6 +301,8 @@ namespace Theme
 		Impl& s = impl();
 		s.ensureCached(mode);
 		s.activate(mode);
+		// 同步应用 QPalette（QSS 未覆盖的默认文字/底色随主题走）
+		installPaletteFor(s.palette);
 		qInfo().noquote() << "[Theme] set mode:" << (mode == Mode::Dark ? "Dark" : "Light")
 			<< "qssBytes=" << s.qss.size();
 	}
@@ -269,6 +321,7 @@ namespace Theme
 		// 重新从磁盘/资源合成（含用户改动后的外部文件）
 		s.buildAllCaches();
 		s.activate(s.mode);
+		installPaletteFor(s.palette);
 
 		// 重挂到所有顶层窗口（开发期热调 / 重置默认后）
 		const QList<QWidget*> topLevels = QApplication::topLevelWidgets();

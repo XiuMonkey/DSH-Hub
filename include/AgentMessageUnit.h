@@ -150,6 +150,24 @@ private:
 	// 计算 m_streamSegments 的内容指纹（类型 + 内容哈希）
 	QString streamFingerprint() const;
 
+	// —— 流式增量渲染：只重画“正在增长的最后一段回复”，不再整条清空重建 ——
+	// 思考/工具/已封闭的回复段由既有 append* 一次性插入；下面状态只跟踪
+	// “最后一个 Reply 段”的实时区域，文本增长时仅替换该区域。
+	int m_streamSealedCount = 0; // 已渲染完的“封闭段”数量（不含 live 段）
+	int m_liveIndex = -1;        // live Reply 在 m_streamSegments 的下标；-1=无
+	int m_liveLayoutMark = -1;   // live 区域在 m_partsLayout 中的起始项下标
+	int m_liveSegmentEntry = -1; // live Reply 在 m_segments 里对应的 Markdown 段下标
+	QString m_liveRenderedText;  // 上次已渲染的 live Reply 全文（未变则跳过）
+
+	/** 重建 live 区域：删掉上一次该区域的部件，按最新全文重新渲染。 */
+	void renderLiveReply(const QString& markdown);
+	/** 结束 live 区域（内容已完整渲染，仅清标记；不删除部件）。 */
+	void closeLiveReply();
+	/** 重置流式增量渲染的簿记（resetContent / clearStreamSegments 时调用）。 */
+	void resetLiveState();
+	/** 整条 rebuild 之后，把 live 标记对齐到新的尾部（防止后续 flush 误删旧区域）。 */
+	void syncLiveAfterRebuild();
+
 	void rebuild();
 	void insertMarkdownWithCodeShadow(const QString& markdown);
 	void insertHtml(const QString& html);

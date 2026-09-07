@@ -364,6 +364,7 @@ void AgentMessageUnit::resetContent()
 	m_toolBlocks.clear();
 	m_segments.clear();
 	clearParts(); // 清空当前部件流，再增量渲染新的内容
+	resetLiveState();
 }
 
 void AgentMessageUnit::appendStreamChunk(StreamSegment::Type type, const QString& content,
@@ -388,32 +389,129 @@ void AgentMessageUnit::flushStream()
 		return;
 
 	// 指纹去重：DSHHub 可能对同一批 chunk 触发多次 flush（追加即刷 + 定时器），
-	// 内容没变时跳过整段重建，避免流式期间每帧都清空/重放整条消息。
+	// 内容没变时跳过，避免流式期间每帧都重画。
 	const QString fingerprint = streamFingerprint();
 	if (fingerprint == m_lastFlushedFingerprint && hasContent())
 		return;
 	m_lastFlushedFingerprint = fingerprint;
 
-	resetContent();
+	const int count = m_streamSegments.size();
+	int i = 0;
+	while (i < count) {
+		const StreamSegment& seg = m_streamSegments.at(i);
+		const bool isTailReply = (i == count - 1) && seg.type == StreamSegment::Reply;
 
-	// 按原始顺序渲染：思考 → 工具调用 → 回复 → 再思考 → ...
-	for (const StreamSegment& segment : m_streamSegments) {
-		switch (segment.type) {
-		case StreamSegment::Thinking:
-			appendThinking(segment.content);
-			break;
-		case StreamSegment::Reply:
-			appendMarkdownWithCodeShadow(segment.content);
-			break;
-		case StreamSegment::ToolCall:
-			appendToolCall(segment.toolName.isEmpty() ? QStringLiteral("工具") : segment.toolName,
-				segment.content);
-			break;
-		case StreamSegment::ToolResult:
-			appendToolResult(segment.content);
-			break;
+		if (isTailReply) {
+			// 最后一段是“正在流式增长”的回复：只更新这一段的尾部区域，
+			// 之前已封闭的思考/工具/回复段一律不动（O(n^2) 全量重建的根源）。
+			if (m_liveIndex != i) {
+				if (m_liveIndex >= 0)
+					closeLiveReply();
+				m_liveIndex = i;
+				m_liveLayoutMark = m_partsLayout->count();
+				m_liveSegmentEntry = -1;
+				m_liveRenderedText.clear();
+			}
+			renderLiveReply(seg.content);
+			return;
+		}
+
+		// —— 非尾部段：要么把上一轮 live 段“封闭”（内容已完整渲染，只清状态），
+		//    要么这是首次出现的段，用既有 append* 一次性渲染（它们本来就是
+		//    只追加、不重建既有内容）——
+		if (i == m_liveIndex) {
+			closeLiveReply();
+			m_streamSealedCount = i + 1;
+		}
+		else if (i >= m_streamSealedCount) {
+			switch (seg.type) {
+			case StreamSegment::Thinking:
+				appendThinking(seg.content);
+				break;
+			case StreamSegment::Reply:
+				appendMarkdownWithCodeShadow(seg.content);
+				break;
+			case StreamSegment::ToolCall:
+				appendToolCall(seg.toolName.isEmpty() ? QStringLiteral("工具") : seg.toolName,
+					seg.content);
+				break;
+			case StreamSegment::ToolResult:
+				appendToolResult(seg.content);
+				break;
+			}
+			m_streamSealedCount = i + 1;
+		}
+		++i;
+	}
+}
+
+void AgentMessageUnit::renderLiveReply(const QString& markdown)
+{
+	// 文本没变且区域已渲染过 -> 跳过（指纹在 flushStream 已挡掉绝大多数重复）
+	if (markdown == m_liveRenderedText && m_liveSegmentEntry >= 0)
+		return;
+
+	// m_segments 里只保留该 Reply 的最新全文（整条 rebuild / 主题重载时可重放）
+	if (m_liveSegmentEntry < 0) {
+		Segment segment;
+		segment.type = Segment::Markdown;
+		segment.text = markdown;
+		m_segments.append(segment);
+		m_liveSegmentEntry = static_cast<int>(m_segments.size()) - 1;
+	}
+	else {
+		m_segments[m_liveSegmentEntry].text = markdown;
+	}
+
+	// 删除上一次 live 区域（位于布局尾部、m_liveLayoutMark 之后）的部件：
+	// 代码子单元 + 该区域新建的 ProseView。
+	if (m_liveLayoutMark >= 0) {
+		while (m_partsLayout->count() > m_liveLayoutMark) {
+			QLayoutItem* item = m_partsLayout->takeAt(m_liveLayoutMark);
+			if (QWidget* widget = item ? item->widget() : nullptr) {
+				if (auto* prose = qobject_cast<QTextBrowser*>(widget))
+					m_proseViews.removeOne(prose);
+				widget->hide();
+				widget->deleteLater();
+			}
+			delete item;
 		}
 	}
+	else {
+		m_liveLayoutMark = m_partsLayout->count();
+	}
+
+	// 只重新渲染 live 区域；插入期间抑制逐段高度重算，结束统一拟合一次
+	m_rebuilding = true;
+	insertMarkdownWithCodeShadow(markdown);
+	m_rebuilding = false;
+	m_liveRenderedText = markdown;
+	updateHeightToContent();
+}
+
+void AgentMessageUnit::closeLiveReply()
+{
+	m_liveIndex = -1;
+	m_liveLayoutMark = -1;
+	m_liveSegmentEntry = -1;
+	m_liveRenderedText.clear();
+}
+
+void AgentMessageUnit::resetLiveState()
+{
+	m_streamSealedCount = 0;
+	closeLiveReply();
+}
+
+void AgentMessageUnit::syncLiveAfterRebuild()
+{
+	if (m_liveIndex < 0)
+		return;
+	m_liveLayoutMark = m_partsLayout->count();
+	if (m_liveSegmentEntry >= 0 && m_liveSegmentEntry < m_segments.size())
+		m_liveRenderedText = m_segments[m_liveSegmentEntry].text;
+	else
+		m_liveRenderedText.clear();
 }
 
 QString AgentMessageUnit::streamFingerprint() const
@@ -431,6 +529,7 @@ void AgentMessageUnit::clearStreamSegments()
 {
 	m_streamSegments.clear();
 	m_lastFlushedFingerprint.clear();
+	resetLiveState(); // 只清簿记；已渲染的部件/内容保留（对应已完成的消息）
 }
 
 void AgentMessageUnit::rebuild()
@@ -457,6 +556,7 @@ void AgentMessageUnit::rebuild()
 
 	m_rebuilding = false;
 	updateHeightToContent();
+	syncLiveAfterRebuild();
 }
 
 void AgentMessageUnit::insertThinking(int index)

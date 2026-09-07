@@ -9,6 +9,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QList>
+#include <QPointer>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QTimer>
@@ -415,6 +416,10 @@ void MessageQuery::prependOlderEvents(QVBoxLayout* layout, const QJsonArray& eve
 	for (int i = 0; i < newCount - oldCount; ++i)
 		older.append(events.at(i));
 
+	qInfo().noquote() << "[MessageQuery] prependOlderEvents add=" << older.size()
+		<< "layoutIndex=" << layoutIndex
+		<< "childrenBefore=" << (layout ? layout->count() : -1);
+
 	prependEvents(layout, older, layoutIndex);
 }
 
@@ -547,8 +552,9 @@ void HistoryLoader::load(const QString& sessionId)
 		return;
 
 	if (sessionId != m_sessionId) {
-		m_builder.cancel();
+		cancelBuild();
 		m_usingPrefetched = false;
+		m_reachedEnd = false; // 新会话重新判定
 	}
 
 	m_sessionId = sessionId;
@@ -588,11 +594,28 @@ void HistoryLoader::load(const QString& sessionId)
 			const QJsonArray events = value.value(QStringLiteral("events")).toArray();
 			const int newCount = events.size();
 
+			// 到顶判定只用“服务端回包数量”：拉不到比已有更多的条数才算到顶。
+			// 用 hasMore 判定在部分流程会误判（有更多却被当成没有更多）。
+			if (newCount > oldCount)
+				m_reachedEnd = false;
+			else
+				m_reachedEnd = true;
+
+			qInfo().noquote() << "[History] events arrived sessionId=" << requestedSessionId
+				<< "old=" << oldCount << "new=" << newCount
+				<< "usingPrefetched=" << m_usingPrefetched;
+
 			if (oldCount == 0) {
 				m_history->setEventCount(newCount);
 				m_history->setHasMore(newCount >= m_history->limit());
 				emit loadMoreButtonVisibleChanged(false);
-				startBuild(events);
+
+				// 从零打开的会话：像流式输出一样把历史分批直接铺到可见列表，
+				// 不必等离屏整段构建完再整体换入（避免打开长会话时长时间空白）。
+				if (m_messages && m_messages->messages.empty())
+					startLiveAppend(events);
+				else
+					startBuild(events);
 			}
 			else if (newCount > oldCount) {
 				m_history->setEventCount(newCount);
@@ -602,17 +625,64 @@ void HistoryLoader::load(const QString& sessionId)
 					startBuild(events);
 				}
 				else {
+					// 头部插入会改变内容高度。为避免“闪到底部/位置漂移”，
+					// 用“视口顶部附近的某个已有消息”做锚点：记录插入前它相对
+					// 视口顶部的偏移，插入后把该偏移保持住。由于气泡有延迟
+					// refit（高度晚一步才稳定），分多次校正直到几何稳定。
+					QScrollBar* bar = m_scrollArea ? m_scrollArea->verticalScrollBar() : nullptr;
+					const int beforeVal = bar ? bar->value() : 0;
+
+					// “加载更多”按钮位于列表顶部：若用户本来就在顶部（value≈0），
+					// 新插入的老消息应当自然出现在视口顶部，Qt 会保持 value=0；
+					// 此时做锚点校正反而会把视口往下推插入高度那么多
+					// （看起来像“闪到底部”），所以顶部场景跳过全部校正。
+					const bool userAtTop = bar && beforeVal <= 8;
+
+					QPointer<QWidget> anchor;
+					int anchorTopBefore = 0;
+					if (!userAtTop && bar && m_scrollArea->widget() && m_layout) {
+						QWidget* content = m_scrollArea->widget();
+						for (int i = 0; i < m_layout->count(); ++i) {
+							QLayoutItem* item = m_layout->itemAt(i);
+							QWidget* w = item ? item->widget() : nullptr;
+							if (!w || !w->isVisible())
+								continue;
+							const int top = w->geometry().top();
+							const int bottom = top + w->geometry().height();
+							if (bottom > beforeVal) {
+								anchor = w;
+								anchorTopBefore = top;
+								break;
+							}
+						}
+						if (anchor.isNull() && m_layout->count() > 0) {
+							if (QLayoutItem* item = m_layout->itemAt(m_layout->count() - 1)) {
+								if (QWidget* w = item->widget()) {
+									anchor = w;
+									anchorTopBefore = w->geometry().top();
+								}
+							}
+						}
+						Q_UNUSED(content)
+					}
+
 					if (m_messages && m_layout)
 						m_messages->prependOlderEvents(m_layout, events, oldCount, 1);
 
-					if (m_scrollArea) {
-						QTimer::singleShot(0, this, [this, oldScroll, oldScrollMax]() {
-							if (!m_scrollArea || !m_scrollArea->verticalScrollBar())
+					if (!userAtTop && m_scrollArea && !anchor.isNull()) {
+						const int keep = anchorTopBefore - beforeVal;
+						const auto applyAnchor = [this, anchor, keep]() {
+							if (!m_scrollArea)
 								return;
-							QScrollBar* bar = m_scrollArea->verticalScrollBar();
-							const int delta = bar->maximum() - oldScrollMax;
-							bar->setValue(oldScroll + delta);
-							});
+							QScrollBar* scrollBar = m_scrollArea->verticalScrollBar();
+							if (!scrollBar || anchor.isNull())
+								return;
+							const int newTop = anchor->geometry().top();
+							scrollBar->setValue(qBound(0, newTop - keep, scrollBar->maximum()));
+						};
+						QTimer::singleShot(0, this, applyAnchor);
+						QTimer::singleShot(40, this, applyAnchor);
+						QTimer::singleShot(120, this, applyAnchor);
 					}
 				}
 			}
@@ -620,12 +690,15 @@ void HistoryLoader::load(const QString& sessionId)
 				m_history->setHasMore(false);
 			}
 
+			// 服务端确认没有更多：弹 toast（若本次点击请求过）；按钮仍保持原样
 			if (m_history->loadMoreRequested() && !m_history->hasMore())
 				emit noMoreHistory();
 			m_history->setLoadMoreRequested(false);
 
-			if (!m_builder.isActive())
-				emit loadMoreButtonVisibleChanged(true);
+			// 按钮显隐以 hasMore 为准；DSHHub 侧在列表非空时会保持按钮原样，
+			// 不因 hide/toast 造成整列重排。
+			if (!m_builder.isActive() && !m_liveActive)
+				emit loadMoreButtonVisibleChanged(m_history ? m_history->hasMore() : false);
 		},
 		[this, generation, requestedSessionId](const DshApiClient::RpcError& error) {
 			if (generation != m_loadGeneration)
@@ -647,6 +720,23 @@ void HistoryLoader::loadMore()
 	if (!m_history)
 		return;
 
+	// 正在“可视增量”铺历史（会话刚打开），先别叠加加载更多请求
+	if (m_liveActive)
+		return;
+
+	// 到顶（由服务端回包确认过“没有更多”）才本地弹 toast 并短路；
+	// 其它情况一律真实请求，避免 hasMore 误判导致“有更多却加载不出来”。
+	if (m_reachedEnd) {
+		emit noMoreHistory();
+		return;
+	}
+
+	qInfo().noquote() << "[History] loadMore sessionId=" << m_sessionId
+		<< "reachedEnd=" << m_reachedEnd
+		<< "hasMore=" << m_history->hasMore()
+		<< "limit=" << m_history->limit()
+		<< "count=" << m_history->eventCount();
+
 	m_history->setLoadMoreRequested(true);
 	m_history->increaseLimit(20);
 	load(m_sessionId);
@@ -664,7 +754,69 @@ void HistoryLoader::setMessages(MessageQuery* messages)
 
 void HistoryLoader::cancelBuild()
 {
+	m_liveActive = false;
+	m_liveEvents = QJsonArray();
+	m_liveIndex = 0;
 	m_builder.cancel();
+}
+
+void HistoryLoader::startLiveAppend(const QJsonArray& events)
+{
+	m_liveActive = true;
+	m_liveEvents = events;
+	m_liveIndex = 0;
+	m_liveGeneration = m_loadGeneration;
+	// 开始时在底部（空列表/最新消息处）才自动贴底；用户一旦上翻就停止跟随
+	QScrollBar* bar = m_scrollArea ? m_scrollArea->verticalScrollBar() : nullptr;
+	m_liveFollow = bar && (bar->value() >= bar->maximum() - 24);
+	QTimer::singleShot(0, this, [this]() { liveAppendStep(); });
+}
+
+void HistoryLoader::liveAppendStep()
+{
+	if (!m_liveActive)
+		return;
+
+	// 期间会话被切换/重新加载则放弃本次增量
+	if (m_liveGeneration != m_loadGeneration) {
+		cancelBuild();
+		return;
+	}
+
+	constexpr int batchSize = 8;
+	const int end = qMin(m_liveIndex + batchSize, m_liveEvents.size());
+	if (m_liveIndex < end && m_messages && m_layout) {
+		QJsonArray batch;
+		for (int i = m_liveIndex; i < end; ++i)
+			batch.append(m_liveEvents.at(i));
+		m_liveIndex = end;
+		m_messages->appendEvents(m_layout, batch);
+
+		// 像流式输出一样贴底：用户接近底部才继续跟随，上翻则停止，
+		// 避免增量期间反复把视口拽回去。
+		if (m_scrollArea && m_scrollArea->verticalScrollBar()) {
+			QScrollBar* bar = m_scrollArea->verticalScrollBar();
+			if (m_liveFollow) {
+				if (bar->value() < bar->maximum() - 24)
+					m_liveFollow = false; // 用户上翻，停止自动贴底
+				else
+					QTimer::singleShot(0, this, [this]() {
+						if (m_scrollArea && m_scrollArea->verticalScrollBar())
+							m_scrollArea->verticalScrollBar()->setValue(
+								m_scrollArea->verticalScrollBar()->maximum());
+					});
+			}
+		}
+	}
+
+	if (m_liveIndex >= m_liveEvents.size()) {
+		const bool hasMore = m_history ? m_history->hasMore() : false;
+		cancelBuild();
+		emit loadMoreButtonVisibleChanged(hasMore);
+		return;
+	}
+
+	QTimer::singleShot(0, this, [this]() { liveAppendStep(); });
 }
 
 void HistoryLoader::startBuild(const QJsonArray& events)

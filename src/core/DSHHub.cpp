@@ -413,9 +413,9 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	connect(m_historyLoader, &HistoryLoader::incrementalBuildReady,
 		this, &DSHHub::onIncrementalBuildReady);
 	connect(m_historyLoader, &HistoryLoader::noMoreHistory, this, [this]() {
+		// 弹“没有更多了”toast；按钮保持原样不隐藏不改文案，
+		// 避免 hide/显隐造成整列消息重排重绘。
 		showNoMoreToast();
-		if (m_loadMoreButton)
-			m_loadMoreButton->hide();
 		});
 	connect(m_loadMoreButton, &QPushButton::clicked, m_historyLoader, &HistoryLoader::loadMore);
 
@@ -880,15 +880,18 @@ bool DSHHub::tryRestoreCachedMessages(const QString& sessionId)
 	if (m_loadMoreButton)
 		m_loadMoreButton->setVisible(!m_messages->messages.empty());
 
+	// 恢复缓存（无论是否 partial）后，同样要把当前列表同步给 HistoryLoader，
+	// 避免 loader 停留在上一个（可能已删除/被缓存接管）会话的对象上。
+	if (m_historyLoader)
+		m_historyLoader->setMessages(m_messages);
+
 	scrollToBottomNow();
 
 	// If this is a partial cache built from prefetched history, continue loading full history.
 	if (partial) {
 		m_history.reset();
-		if (m_historyLoader) {
-			m_historyLoader->setMessages(m_messages);
+		if (m_historyLoader)
 			m_historyLoader->load(sessionId);
-		}
 	}
 
 	return true;
@@ -911,6 +914,12 @@ void DSHHub::swapToMessageQuery(MessageQuery* query)
 
 	m_messages = query;
 	m_messages->attachToLayout(m_messagesLayout);
+
+	// 关键：消息列表被整体替换（旧对象已 delete）后，必须同步 HistoryLoader，
+	// 否则 loader 仍持有指向已释放 MessageQuery 的悬垂指针，加载更多/历史回调
+	// 会在 prepend/insert 时崩溃（访问已释放的 messages 容器）。
+	if (m_historyLoader)
+		m_historyLoader->setMessages(m_messages);
 
 	// 在刷新前同步滚到底部，避免先显示顶部再闪烁
 	scrollToBottomNow();
@@ -1287,8 +1296,22 @@ void DSHHub::onSessionCreateError(const QString& code, const QString& message)
 
 void DSHHub::onHistoryLoadMoreButtonVisibleChanged(bool visible)
 {
-	if (m_loadMoreButton)
-		m_loadMoreButton->setVisible(visible);
+	if (!m_loadMoreButton)
+		return;
+
+	// 到“历史顶部”不隐藏也不改样式：只要列表里有内容，按钮就保持
+	// 原样“加载更多”（置灰/文案变化都会带来额外重绘，且用户不需要该提示）；
+	// 只有列表为空（新会话/加载中）时才真正 hide——那时布局里没有内容可重排。
+	const bool hasContent = m_messages && !m_messages->messages.empty();
+	if (visible || hasContent) {
+		m_loadMoreButton->show();
+		m_loadMoreButton->setEnabled(true);
+		if (m_loadMoreButton->text() != QStringLiteral("加载更多"))
+			m_loadMoreButton->setText(QStringLiteral("加载更多"));
+	}
+	else {
+		m_loadMoreButton->hide();
+	}
 }
 
 void DSHHub::onHistoryError(const QString& code, const QString& message)

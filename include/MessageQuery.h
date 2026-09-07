@@ -126,6 +126,20 @@ private:
 	QString m_buildSessionId;
 	int m_loadGeneration = 0;
 	int m_buildGeneration = 0;
+	// “已到历史顶部”标志：只由服务端回包驱动——
+	// 某次请求返回条数 ≤ 已有条数时置 true；拉到了更多则置 false。
+	// 不要用 m_history->hasMore() 做门控（部分流程里该值与服务端实际不符，
+	// 会导致“明明还有更多却一直提示没有更多”）。
+	bool m_reachedEnd = false;
 	bool m_usingPrefetched = false;
+	// —— 会话历史“可视增量”构建（像流式输出一样分批出现在列表里）——
+	QJsonArray m_liveEvents;
+	int m_liveIndex = 0;
+	int m_liveGeneration = 0;
+	bool m_liveActive = false;
+	bool m_liveFollow = false; // 增量铺历史期间是否跟随底部（用户上翻即停）
+	void startLiveAppend(const QJsonArray& events);
+	void liveAppendStep();
+
 	bool m_loading = false;
 };
