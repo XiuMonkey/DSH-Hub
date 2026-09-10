@@ -8,6 +8,7 @@
 // 完成后通过信号把结果交回主线程。
 // ------------------------------------------------------------------
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QJsonArray>
 #include <QObject>
@@ -37,4 +38,5 @@ private:
 
 	QTimer* m_pollTimer = nullptr;
 	QHash<QString, std::shared_ptr<std::future<QJsonArray>>> m_futures;
+	QHash<QString, QElapsedTimer> m_started; // sessionId -> 预取开始时刻（用于记录耗时）
 };

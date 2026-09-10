@@ -1,8 +1,11 @@
 #include "DSHHub.h"
 #include "ServerManager.h"
+#include "SessionCommands.h"
 #include "ThemeManager.h"
+#include "ToolRequestDispatcher.h"
 #include "ChatInputWidget.h"
 #include "Sidebar.h"
+#include "TimingLogger.h"
 
 #include "DshApiClient.h"
 #include "SessionPrefetcher.h"
@@ -62,35 +65,78 @@
 #include <QRunnable>
 #include <QThreadPool>
 
-#include <functional>
-
-namespace
-{
-	// 简单 std::function 任务，投递到 QThreadPool 执行（QtCore，无需 QtConcurrent）
-	class FunctorTask : public QRunnable
-	{
-	public:
-		explicit FunctorTask(std::function<void()> fn)
-			: m_fn(std::move(fn))
-		{
-		}
-
-		void run() override
-		{
-			if (m_fn)
-				m_fn();
-		}
-
-	private:
-		std::function<void()> m_fn;
-	};
-} // namespace
-
 DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialServerProcess)
 	: QMainWindow(parent)
 	, m_api(new DshApiClient(this))
 {
 	qInfo().noquote() << QStringLiteral("[DSH Hub] constructor started");
+	TimingLogger::mark(QStringLiteral("DSHHub ctor enter"));
+
+	// 服务端 spawn 提前到构造函数最前：Node 进程启动（0.9~1.6s）与下面
+	// 的扩展加载 / UI 构建 / 首帧真正并行，缩短初始化墙钟时间。
+	// ServerManager::start 会同步填充 dshHome，因此之后创建的
+	// Settings/PluginsManager 仍可正常使用它。
+	m_serverManager = new ServerManager(this);
+	connect(m_serverManager, &ServerManager::baseUrlReady, this, [this](const QUrl& url) {
+		TimingLogger::mark(QStringLiteral("server baseUrl ready -> open WS streams"));
+		if (!m_api)
+			return;
+		m_api->setBaseUrl(url);
+		if (m_pluginsManager)
+			m_pluginsManager->setBaseUrl(url);
+		m_api->openStreams();
+		});
+	connect(m_serverManager, &ServerManager::errorLine, this, [this](const QString& line) {
+		if (m_messages) {
+			m_messages->addSystemMessage(
+				QStringLiteral("DSH 服务端: %1").arg(line),
+				m_messagesLayout);
+		}
+		// 移除扩展后服务端启动失败时，自动清理 cordis.patch.yml 残留
+		if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
+			m_cleanupResidualsAfterServerError = false;
+			m_extensionPopup->cleanupResiduals();
+		}
+		if (!isInitializationComplete())
+			finishInitialization();
+		});
+	connect(m_serverManager, &ServerManager::outputLine, this, [](const QString& line) {
+		// 只记录服务端里可能与插件市场/扩展/服务本身相关的输出，避免刷爆日志；
+		// 设置环境变量 DSH_HUB_SERVER_TRACE=1 可转储服务端全部 stdout。
+		const QString lower = line.toLower();
+		if (qEnvironmentVariableIsSet("DSH_HUB_SERVER_TRACE")
+			|| lower.contains(QStringLiteral("dshmarket"))
+			|| lower.contains(QStringLiteral("market"))
+			|| lower.contains(QStringLiteral("install"))
+			|| lower.contains(QStringLiteral("pnpm"))
+			|| lower.contains(QStringLiteral("plugin"))
+			|| lower.contains(QStringLiteral("registry"))
+			|| lower.contains(QStringLiteral("snapshot"))
+			|| lower.contains(QStringLiteral("error"))
+			|| lower.contains(QStringLiteral("fail"))) {
+			qInfo().noquote() << "[DSH Server]" << line;
+		}
+		});
+	connect(m_serverManager, &ServerManager::finished, this, [this](int exitCode, QProcess::ExitStatus) {
+		if (m_serverManager && m_serverManager->isRestarting())
+			return;
+
+		if (m_api && !m_api->isConnected()) {
+			if (m_messages) {
+				m_messages->addSystemMessage(
+					QStringLiteral("DSH 服务端已退出，代码: %1").arg(exitCode),
+					m_messagesLayout);
+			}
+			if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
+				m_cleanupResidualsAfterServerError = false;
+				m_extensionPopup->cleanupResiduals();
+			}
+			if (exitCode != 0 && !isInitializationComplete())
+				finishInitialization();
+		}
+		});
+
+	m_serverManager->start(initialBaseUrl, initialServerProcess);
 
 	// DLL/COM 工具调用线程池：请求在 Worker 上执行（GUI 不阻塞）；
 	// DllCaller 内部按 DLL 串行、跨 DLL 并行。
@@ -178,167 +224,9 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		}
 	}
 
-	// 创建界面（外观由 Theme 启动时从 styles/*.qss 统一安装，控件只负责提供 objectName）
-	auto* central = new QWidget(this);
-	central->setObjectName(QStringLiteral("dshhubCentral"));
-	central->setAttribute(Qt::WA_StyledBackground, true);
-	auto* layout = new QVBoxLayout(central);
+	TimingLogger::mark(QStringLiteral("extension DLLs loaded"));
 
-	m_scrollArea = new QScrollArea(central);
-	m_scrollArea->setObjectName(QStringLiteral("chatScrollArea"));
-	m_scrollArea->setFixedWidth(900);
-	m_scrollArea->setFrameShape(QFrame::NoFrame);
-
-	auto* scrollContent = new QWidget;
-	scrollContent->setObjectName(QStringLiteral("chatScrollContent"));
-	scrollContent->setAttribute(Qt::WA_StyledBackground, true);
-	auto* scrollLayout = new QVBoxLayout(scrollContent);
-	scrollLayout->setContentsMargins(10, 0, 0, 0);
-	scrollLayout->setAlignment(Qt::AlignTop);
-
-	m_messagesLayout = scrollLayout;
-	m_messages = new MessageQuery;
-	scrollContent->setLayout(scrollLayout);
-
-	// 顶部“加载更多”按钮，默认隐藏
-	m_loadMoreButton = new LoadMoreButton(scrollContent);
-	m_loadMoreButton->hide();
-	scrollLayout->insertWidget(0, m_loadMoreButton, 0, Qt::AlignHCenter);
-
-	m_scrollArea->setWidget(scrollContent);
-	m_scrollArea->setWidgetResizable(true);
-	m_scrollArea->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-	m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-
-	// 右侧面板与主窗口同色
-	auto* rightPanel = new QWidget(central);
-	rightPanel->setObjectName(QStringLiteral("chatPanel"));
-	rightPanel->setFixedWidth(900);
-	rightPanel->setAttribute(Qt::WA_StyledBackground, true);
-
-	m_chatInput = new ChatInputWidget(rightPanel);
-
-	// 底部“没有更多了”提示
-	m_toastLabel = new QLabel(QStringLiteral("啊哦，没有更多了"), this);
-	m_toastLabel->setObjectName(QStringLiteral("toastLabel"));
-	m_toastLabel->setAlignment(Qt::AlignCenter);
-	m_toastLabel->hide();
-
-	auto* panelLayout = new QVBoxLayout(rightPanel);
-	panelLayout->setContentsMargins(0, 0, 0, 0);
-	panelLayout->setSpacing(0);
-
-	// 左侧灰色会话列表
-	m_sidebar = new Sidebar(central);
-	m_sidebar->setFixedWidth(240);
-
-	panelLayout->addWidget(m_scrollArea);
-
-	auto* inputLayout = new QHBoxLayout;
-	inputLayout->addWidget(m_chatInput, 1);
-
-	inputLayout->setContentsMargins(10, 8, 10, 8);
-	inputLayout->setSpacing(8);
-	panelLayout->addLayout(inputLayout);
-
-	// 对话顶部栏：宽度与对话栏一致，放在右侧对话栏上方
-	auto* rightColumn = new QWidget(central);
-	rightColumn->setFixedWidth(900);
-	auto* rightColumnLayout = new QVBoxLayout(rightColumn);
-	rightColumnLayout->setContentsMargins(0, 0, 0, 0);
-	rightColumnLayout->setSpacing(8);
-
-	m_topBar = new TopBar(rightColumn);
-	auto* topBarRow = new QWidget(rightColumn);
-	auto* topBarRowLayout = new QHBoxLayout(topBarRow);
-	topBarRowLayout->setContentsMargins(10, 0, 0, 0);
-	topBarRowLayout->setSpacing(0);
-	topBarRowLayout->addWidget(m_topBar);
-	topBarRowLayout->addStretch();
-
-	rightColumnLayout->addWidget(topBarRow);
-	rightColumnLayout->addWidget(rightPanel, 1);
-
-	auto* bodyLayout = new QHBoxLayout;
-	bodyLayout->setSpacing(0);
-
-	bodyLayout->addWidget(m_sidebar);
-	bodyLayout->addWidget(rightColumn);
-
-	// 内容容器：整体居中
-	auto* content = new QWidget(central);
-	content->setFixedWidth(1140);
-	auto* contentLayout = new QVBoxLayout(content);
-	contentLayout->setContentsMargins(0, 0, 0, 0);
-	contentLayout->addLayout(bodyLayout, 1);
-
-	layout->addWidget(content, 0, Qt::AlignHCenter);
-	// 输入框是 rightPanel 的子控件，随右侧面板一起布局，无需加入主布局
-
-	setCentralWidget(central);
-
-	setMinimumWidth(1160);
-	resize(1000, 700);
-
-	// 初始化灰色蒙版 + 居中标签
-	m_initOverlay = new QWidget(this);
-	m_initOverlay->setObjectName(QStringLiteral("initOverlay"));
-	m_initOverlay->setAttribute(Qt::WA_StyledBackground, true);
-	auto* overlayLayout = new QVBoxLayout(m_initOverlay);
-
-	// 现代化横版卡片：宽高比约 5:3
-	auto* initCard = new QWidget(m_initOverlay);
-	initCard->setObjectName(QStringLiteral("initCard"));
-	initCard->setAttribute(Qt::WA_StyledBackground, true);
-	initCard->setFixedSize(400, 240);
-
-	auto* cardLayout = new QVBoxLayout(initCard);
-	cardLayout->setContentsMargins(24, 20, 24, 20);
-	cardLayout->setSpacing(8);
-
-	// 卡片内顶部显示 Logo
-	auto* cardLogo = new QLabel(initCard);
-	cardLogo->setAlignment(Qt::AlignCenter);
-	cardLogo->setAttribute(Qt::WA_TranslucentBackground);
-	const QString cardLogoResource = Theme::isDark()
-		? QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny-Dark@2x.png")
-		: QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny@2x.png");
-	QPixmap cardLogoPix(cardLogoResource);
-	if (!cardLogoPix.isNull()) {
-		cardLogoPix.setDevicePixelRatio(2.0);
-		cardLogo->setPixmap(cardLogoPix);
-	}
-	else {
-		cardLogo->setText(QStringLiteral("DSH Hub"));
-	}
-	cardLayout->addWidget(cardLogo);
-
-	// 下方：旋转条 + 初始化文字
-	auto* rowLayout = new QHBoxLayout;
-	rowLayout->setSpacing(16);
-
-	auto* spinner = new SpinnerWidget(initCard);
-	spinner->setFixedSize(40, 40);
-	spinner->start();
-
-	rowLayout->addStretch(1);
-	rowLayout->addWidget(spinner, 0, Qt::AlignVCenter);
-
-	m_initLabel = new QLabel(QStringLiteral("DSH Hub 正在初始化..."), initCard);
-	m_initLabel->setObjectName(QStringLiteral("initLabel"));
-	m_initLabel->setAlignment(Qt::AlignCenter);
-	rowLayout->addWidget(m_initLabel, 0, Qt::AlignVCenter);
-	rowLayout->addStretch(1);
-
-	cardLayout->addLayout(rowLayout);
-	cardLayout->addStretch(1);
-
-	overlayLayout->addWidget(initCard, 0, Qt::AlignCenter);
-
-	m_initOverlay->setGeometry(rect());
-	m_initOverlay->raise();
-	m_initOverlay->show();
-
+	buildUi();
 	// 初始化时从 Qt 资源中加载代码高亮规则
 	{
 		if (!CodeHighlighter::instance().loadFromFile(QStringLiteral(":/DSHHub/highlight_rules.json"))) {
@@ -406,6 +294,8 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		this, &DSHHub::onSessionCreateError);
 
 	m_historyLoader = new HistoryLoader(m_api, m_messages, m_messagesLayout, &m_history, m_scrollArea, this);
+	connect(m_historyLoader, &HistoryLoader::firstHistoryArrived,
+		this, &DSHHub::finishInitialization);
 	connect(m_historyLoader, &HistoryLoader::loadMoreButtonVisibleChanged,
 		this, &DSHHub::onHistoryLoadMoreButtonVisibleChanged);
 	connect(m_historyLoader, &HistoryLoader::historyError,
@@ -418,68 +308,6 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		showNoMoreToast();
 		});
 	connect(m_loadMoreButton, &QPushButton::clicked, m_historyLoader, &HistoryLoader::loadMore);
-
-	// 服务端统一交给 ServerManager 管理
-	m_serverManager = new ServerManager(this);
-	connect(m_serverManager, &ServerManager::baseUrlReady, this, [this](const QUrl& url) {
-		if (!m_api)
-			return;
-		m_api->setBaseUrl(url);
-		if (m_pluginsManager)
-			m_pluginsManager->setBaseUrl(url);
-		m_api->openStreams();
-		});
-	connect(m_serverManager, &ServerManager::errorLine, this, [this](const QString& line) {
-		if (m_messages) {
-			m_messages->addSystemMessage(
-				QStringLiteral("DSH 服务端: %1").arg(line),
-				m_messagesLayout);
-		}
-		// 移除扩展后服务端启动失败时，自动清理 cordis.patch.yml 残留
-		if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
-			m_cleanupResidualsAfterServerError = false;
-			m_extensionPopup->cleanupResiduals();
-		}
-		if (!isInitializationComplete())
-			finishInitialization();
-		});
-	connect(m_serverManager, &ServerManager::outputLine, this, [](const QString& line) {
-		// 只记录服务端里可能与插件市场/扩展/服务本身相关的输出，避免刷爆日志；
-		// 设置环境变量 DSH_HUB_SERVER_TRACE=1 可转储服务端全部 stdout。
-		const QString lower = line.toLower();
-		if (qEnvironmentVariableIsSet("DSH_HUB_SERVER_TRACE")
-			|| lower.contains(QStringLiteral("dshmarket"))
-			|| lower.contains(QStringLiteral("market"))
-			|| lower.contains(QStringLiteral("install"))
-			|| lower.contains(QStringLiteral("pnpm"))
-			|| lower.contains(QStringLiteral("plugin"))
-			|| lower.contains(QStringLiteral("registry"))
-			|| lower.contains(QStringLiteral("snapshot"))
-			|| lower.contains(QStringLiteral("error"))
-			|| lower.contains(QStringLiteral("fail"))) {
-			qInfo().noquote() << "[DSH Server]" << line;
-		}
-		});
-	connect(m_serverManager, &ServerManager::finished, this, [this](int exitCode, QProcess::ExitStatus) {
-		if (m_serverManager && m_serverManager->isRestarting())
-			return;
-
-		if (m_api && !m_api->isConnected()) {
-			if (m_messages) {
-				m_messages->addSystemMessage(
-					QStringLiteral("DSH 服务端已退出，代码: %1").arg(exitCode),
-					m_messagesLayout);
-			}
-			if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
-				m_cleanupResidualsAfterServerError = false;
-				m_extensionPopup->cleanupResiduals();
-			}
-			if (exitCode != 0 && !isInitializationComplete())
-				finishInitialization();
-		}
-		});
-
-	m_serverManager->start(initialBaseUrl, initialServerProcess);
 
 	// ------------------------------------------------------------------
 	// 常驻“设置系统”：随主窗口存在，自管设置窗口的开关/遮罩/居中。
@@ -495,10 +323,8 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	connect(m_settings, &Settings::agentPresetChanged, this, [this](const QString& presetId) {
 		m_defaultAgentPreset = presetId;
 		if (!m_sessionId.isEmpty() && m_api) {
-			QJsonObject payload;
-			payload.insert(QStringLiteral("sessionId"), m_sessionId);
-			payload.insert(QStringLiteral("agentPreset"), presetId);
-			m_api->callMethod(QStringLiteral("agentPreset.select"), payload, {}, {});
+			m_api->callMethod(QStringLiteral("agentPreset.select"),
+				SessionCommands::agentPresetSelect(m_sessionId, presetId), {}, {});
 		}
 		});
 	connect(m_settings, &Settings::serverSettingsSaved, this, [this]() {
@@ -514,6 +340,8 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	m_pluginsManager = new PluginsManager(m_api ? m_api->baseUrl() : QUrl(), this);
 	connect(m_pluginsManager, &PluginsManager::serverRestartRequested,
 		m_serverManager, &ServerManager::restart);
+
+	TimingLogger::mark(QStringLiteral("DSHHub ctor done (server spawned / UI ready)"));
 }
 
 void DSHHub::resizeEvent(QResizeEvent* event)
@@ -561,6 +389,7 @@ void DSHHub::finishInitialization()
 
 	m_initializationComplete = true;
 	qInfo().noquote() << QStringLiteral("[DSH Hub] initialization complete");
+	TimingLogger::mark(QStringLiteral("initialization complete (overlay hidden)"));
 
 	if (m_initOverlay) {
 		m_initOverlay->hide();
@@ -649,12 +478,9 @@ void DSHHub::onStopRequested()
 		return;
 	}
 
-	QJsonObject payload;
-	payload.insert(QStringLiteral("sessionId"), m_sessionId);
-
 	m_api->callMethod(
 		QStringLiteral("session.cancel"),
-		payload,
+		SessionCommands::sessionCancel(m_sessionId),
 		[this](const QJsonObject&) {
 			m_streaming = false;
 			if (m_streamTimer)
@@ -709,12 +535,9 @@ void DSHHub::onNewWorkspaceClicked()
 	if (path.isEmpty())
 		return;
 
-	QJsonObject payload;
-	payload.insert(QStringLiteral("path"), path);
-
 	m_api->callMethod(
 		QStringLiteral("workspace.create"),
-		payload,
+		SessionCommands::workspaceCreate(path),
 		[this](const QJsonObject&) {
 			if (m_sidebar && m_api && m_prefetcher)
 				m_sidebar->refreshSessions(m_api, m_prefetcher);
@@ -731,39 +554,18 @@ void DSHHub::onNewWorkspaceClicked()
 
 void DSHHub::onCreateSessionInWorkspace(const QString& workspaceId)
 {
-	QJsonObject payload;
-	if (!workspaceId.isEmpty())
-		payload.insert(QStringLiteral("workspaceId"), workspaceId);
-	if (!m_defaultAgentPreset.isEmpty())
-		payload.insert(QStringLiteral("agentPreset"), m_defaultAgentPreset);
-
 	m_api->callMethod(
 		QStringLiteral("session.create"),
-		payload,
+		SessionCommands::sessionCreate(workspaceId, m_defaultAgentPreset),
 		[this, workspaceId](const QJsonObject& value) {
 			const QString newSessionId = value.value(QStringLiteral("sessionId")).toString();
 			if (newSessionId.isEmpty())
 				return;
 
-			cacheCurrentMessages();
-			m_messages = new MessageQuery;
-			m_sessionId = newSessionId;
-			if (m_topBar)
-				m_topBar->setTitle(QStringLiteral("未命名会话"));
+			switchToFreshSession(newSessionId, QStringLiteral("未命名会话"), /*loadHistory=*/true);
 			if (m_sidebar) {
 				m_sidebar->workspaceList()->addSessionToWorkspace(newSessionId, QStringLiteral("未命名会话"), workspaceId);
 				m_sidebar->workspaceList()->setCurrentSession(newSessionId);
-			}
-
-			m_history.reset();
-			m_usingPrefetched = false;
-			if (m_loadMoreButton)
-				m_loadMoreButton->hide();
-
-			if (m_historyLoader) {
-				m_historyLoader->setMessages(m_messages);
-				m_historyLoader->setUsingPrefetched(false);
-				m_historyLoader->load(newSessionId);
 			}
 		},
 		[this](const DshApiClient::RpcError& error) {
@@ -787,20 +589,9 @@ void DSHHub::sendPrompt(const QString& text)
 	updateStreamingUi();
 	m_messages->addUserMessage(text, m_messagesLayout);
 
-	QJsonObject payload;
-	payload.insert(QStringLiteral("sessionId"), m_sessionId);
-	payload.insert(QStringLiteral("mode"), QStringLiteral("queue"));
-
-	QJsonArray content;
-	QJsonObject textPart;
-	textPart.insert(QStringLiteral("type"), QStringLiteral("text"));
-	textPart.insert(QStringLiteral("text"), text);
-	content.append(textPart);
-	payload.insert(QStringLiteral("content"), content);
-
 	m_api->callMethod(
 		QStringLiteral("session.prompt"),
-		payload,
+		SessionCommands::sessionPrompt(m_sessionId, text),
 		[this](const QJsonObject&) {
 		},
 		[this](const DshApiClient::RpcError& error) {
@@ -819,37 +610,20 @@ void DSHHub::createSessionAndSend(const QString& text)
 	if (!m_api)
 		return;
 
-	QJsonObject payload;
-	if (!m_defaultAgentPreset.isEmpty())
-		payload.insert(QStringLiteral("agentPreset"), m_defaultAgentPreset);
 	m_api->callMethod(
 		QStringLiteral("session.create"),
-		payload,
+		SessionCommands::sessionCreate(QString(), m_defaultAgentPreset),
 		[this, text](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
 			if (sid.isEmpty())
 				return;
 
-			if (m_historyLoader)
-				m_historyLoader->cancelBuild();
-			cacheCurrentMessages();
-			m_messages = new MessageQuery;
-			m_sessionId = sid;
-			m_history.reset();
-
-			if (m_topBar)
-				m_topBar->setTitle(QStringLiteral("未命名会话"));
+			// 不 load 历史：等首条 prompt 的 mux 事件即可；adoptSession 让
+			// loader 绑定新会话，之后"加载更多"不会误用旧会话 id。
+			switchToFreshSession(sid, QStringLiteral("未命名会话"), /*loadHistory=*/false);
 			if (m_sidebar) {
 				m_sidebar->workspaceList()->addSession(sid, QStringLiteral("未命名会话"));
 				m_sidebar->workspaceList()->setCurrentSession(sid);
-			}
-			if (m_loadMoreButton)
-				m_loadMoreButton->hide();
-
-			m_usingPrefetched = false;
-			if (m_historyLoader) {
-				m_historyLoader->setMessages(m_messages);
-				m_historyLoader->setUsingPrefetched(false);
 			}
 
 			sendPrompt(text);
@@ -866,32 +640,107 @@ void DSHHub::createSessionAndSend(const QString& text)
 
 void DSHHub::cacheCurrentMessages()
 {
+	const QString cachedSessionId = m_sessionId;
 	m_cacheManager.cacheOrDiscardCurrentSession(m_sessionId, m_messages, m_messagesLayout);
+	// 把当前分页状态（原始事件数 / 是否有更早内容）一并快照进缓存，
+	// 恢复该会话时可直接播种、跳过重拉与二次渲染。
+	if (!cachedSessionId.isEmpty()) {
+		m_cacheManager.storeCacheMeta(cachedSessionId,
+			m_history.eventCount(),
+			m_history.hasMore());
+	}
 	m_messages = nullptr;
+}
+
+void DSHHub::switchToFreshSession(const QString& sessionId, const QString& title, bool loadHistory)
+{
+	// 与 onSessionSelected 切换语义保持一致：先取消上一个会话未完成的
+	// 增量/老页构建，停流式与交互面板，避免旧状态污染新会话。
+	if (m_historyLoader)
+		m_historyLoader->cancelBuild();
+	m_streaming = false;
+	if (m_streamTimer)
+		m_streamTimer->stop();
+	updateStreamingUi();
+	clearInteractionPanels();
+
+	cacheCurrentMessages();
+	m_messages = new MessageQuery;
+	m_sessionId = sessionId;
+
+	if (m_topBar)
+		m_topBar->setTitle(title);
+
+	m_history.reset();
+	m_usingPrefetched = false;
+	if (m_loadMoreButton)
+		m_loadMoreButton->hide();
+
+	if (m_historyLoader) {
+		m_historyLoader->setMessages(m_messages);
+		m_historyLoader->setUsingPrefetched(false);
+		if (loadHistory)
+			m_historyLoader->load(sessionId);
+		else
+			m_historyLoader->adoptSession(sessionId);
+	}
 }
 
 bool DSHHub::tryRestoreCachedMessages(const QString& sessionId)
 {
-	const bool partial = m_cacheManager.isPartialCache(sessionId);
+	const bool dirty = m_cacheManager.isDirtyCache(sessionId);
+	int cachedRawCount = 0;
+	bool cachedHasMore = false;
+	// 快照必须先于 restore 取出：restoreCachedSession(take) 会清掉缓存快照
+	const bool haveMeta = m_cacheManager.takeCacheMeta(sessionId, &cachedRawCount, &cachedHasMore);
 	m_messages = m_cacheManager.restoreCachedSession(sessionId, m_messagesLayout);
 	if (!m_messages)
 		return false;
 
+	TimingLogger::mark(QStringLiteral("cache hit -> instant restore (dirty=%1)")
+		.arg(dirty ? QStringLiteral("true") : QStringLiteral("false")));
+
 	if (m_loadMoreButton)
 		m_loadMoreButton->setVisible(!m_messages->messages.empty());
 
-	// 恢复缓存（无论是否 partial）后，同样要把当前列表同步给 HistoryLoader，
-	// 避免 loader 停留在上一个（可能已删除/被缓存接管）会话的对象上。
+	// 恢复缓存后把当前列表同步给 HistoryLoader，避免 loader 停留在上一个
+	// （可能已删除/被缓存接管）会话的对象上。
 	if (m_historyLoader)
 		m_historyLoader->setMessages(m_messages);
 
 	scrollToBottomNow();
 
-	// If this is a partial cache built from prefetched history, continue loading full history.
-	if (partial) {
+	if (dirty) {
+		// 缓存建立之后有后台事件流入：内容确实过期，必须重拉重建。
+		// 这是唯一需要"预览+重建"双渲染的场景，且重建内容必然不同。
+		TimingLogger::mark(QStringLiteral("dirty cache -> full history reload begin"));
 		m_history.reset();
 		if (m_historyLoader)
 			m_historyLoader->load(sessionId);
+	}
+	else {
+		// 缓存与重拉请求是同一个 maxMessages 尾窗口，且无后台变更：
+		// 内容一致，跳过重拉与二次渲染；用快照播种分页状态即可，
+		// "加载更多"仍可正常使用。
+		if (!haveMeta) {
+			// 兜底（无快照的旧缓存）：按可见内容估算，不显示"加载更多"
+			cachedRawCount = static_cast<int>(m_messages->messages.size());
+			cachedHasMore = false;
+		}
+		TimingLogger::mark(QStringLiteral("cache (clean) -> skip reload, seed pagination (rawCount=%1 hasMore=%2)")
+			.arg(cachedRawCount)
+			.arg(cachedHasMore ? QStringLiteral("true") : QStringLiteral("false")));
+
+		m_history.reset();
+		m_history.setEventCount(cachedRawCount);
+		m_history.setHasMore(cachedHasMore);
+		m_usingPrefetched = false;
+		if (m_historyLoader) {
+			m_historyLoader->cancelBuild();
+			m_historyLoader->setUsingPrefetched(false);
+			m_historyLoader->adoptSession(sessionId);
+		}
+		onHistoryLoadMoreButtonVisibleChanged(cachedHasMore);
 	}
 
 	return true;
@@ -976,6 +825,10 @@ void DSHHub::onHistoryPrefetched(const QString& sessionId, const QJsonArray& eve
 	if (sessionId == m_sessionId) {
 		if (!m_messages || !m_messages->messages.empty())
 			return;
+		// HistoryLoader 正在拉全量历史/增量构建时不要重复塞预取，
+		// 避免同一份历史被渲染两遍（预取只用于给空列表快速垫底）
+		if (m_historyLoader && m_historyLoader->isLoading())
+			return;
 		m_messages->appendEvents(m_messagesLayout, events);
 		m_history.setEventCount(events.size());
 		m_usingPrefetched = true;
@@ -1013,10 +866,11 @@ void DSHHub::processPrebuildQueue()
 		if (events.isEmpty())
 			continue;
 
-		// 只预构建少量预取消息，控件树很小，避免初始化时卡顿
+		// 只预构建少量预取消息，控件树很小，避免初始化时卡顿；
+		// 缓存建立时记录分页快照，恢复该会话时可直接播种、跳过重拉。
 		MessageQuery* query = MessageQuery::fromEvents(events);
 		m_cacheManager.cacheSessionMessages(sessionId, query);
-		m_cacheManager.markPartialCache(sessionId);
+		m_cacheManager.storeCacheMeta(sessionId, events.size(), events.size() >= 20);
 		break;
 	}
 
@@ -1031,6 +885,8 @@ void DSHHub::onSessionSelected(const QString& sessionId)
 {
 	if (sessionId.isEmpty())
 		return;
+
+	TimingLogger::mark(QStringLiteral("session selected: cache restore begin"));
 
 	// 切换会话时先取消上一个会话尚未完成的增量构建，避免旧消息覆盖新会话
 	if (m_historyLoader)
@@ -1053,6 +909,8 @@ void DSHHub::onSessionSelected(const QString& sessionId)
 
 	if (tryRestoreCachedMessages(sessionId))
 		return;
+
+	TimingLogger::mark(QStringLiteral("cache miss -> history fetch begin"));
 
 	m_messages = new MessageQuery;
 	m_history.setLimit(20);
@@ -1094,12 +952,9 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 	if (ret != QMessageBox::Yes)
 		return;
 
-	QJsonObject payload;
-	payload.insert(QStringLiteral("sessionId"), sessionId);
-
 	m_api->callMethod(
 		QStringLiteral("workspace.archiveSession"),
-		payload,
+		SessionCommands::sessionArchive(sessionId),
 		[this, sessionId](const QJsonObject&) {
 			qInfo().noquote() << "[DSH Hub] session archived:" << sessionId;
 
@@ -1187,36 +1042,18 @@ void DSHHub::callSessionCreate()
 	if (!m_api)
 		return;
 
-	QJsonObject payload;
-	if (!m_defaultAgentPreset.isEmpty())
-		payload.insert(QStringLiteral("agentPreset"), m_defaultAgentPreset);
 	m_api->callMethod(
 		QStringLiteral("session.create"),
-		payload,
+		SessionCommands::sessionCreate(QString(), m_defaultAgentPreset),
 		[this](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
 			if (sid.isEmpty())
 				return;
 
-			cacheCurrentMessages();
-			m_messages = new MessageQuery;
-			m_sessionId = sid;
-			m_history.reset();
-
-			if (m_topBar)
-				m_topBar->setTitle(QStringLiteral("未命名会话"));
+			switchToFreshSession(sid, QStringLiteral("未命名会话"), /*loadHistory=*/true);
 			if (m_sidebar) {
 				m_sidebar->workspaceList()->addSession(sid, QStringLiteral("未命名会话"));
 				m_sidebar->workspaceList()->setCurrentSession(sid);
-			}
-			if (m_loadMoreButton)
-				m_loadMoreButton->hide();
-
-			m_usingPrefetched = false;
-			if (m_historyLoader) {
-				m_historyLoader->setMessages(m_messages);
-				m_historyLoader->setUsingPrefetched(false);
-				m_historyLoader->load(sid);
 			}
 		},
 		[this](const DshApiClient::RpcError& error) {
@@ -1232,6 +1069,7 @@ void DSHHub::callSessionCreate()
 void DSHHub::handleConnected()
 {
 	qInfo().noquote() << QStringLiteral("[DSH Hub] connected to DSH");
+	TimingLogger::mark(QStringLiteral("WS streams connected (mux + host)"));
 	if (m_sidebar && m_api && m_prefetcher)
 		m_sidebar->refreshSessions(m_api, m_prefetcher);
 }
@@ -1244,31 +1082,17 @@ void DSHHub::onInitialSessionReady(const QString& sessionId, const QString& titl
 
 void DSHHub::onSessionCreated(const QString& sessionId, const QString& workspaceId)
 {
-	// Cache the current session before switching to the new session.
-	cacheCurrentMessages();
-	m_messages = new MessageQuery;
-	m_sessionId = sessionId;
+	// 统一入口：取消旧构建/停流式/缓存当前会话/换空列表/绑定并加载新会话
+	switchToFreshSession(sessionId, QStringLiteral("未命名会话"), /*loadHistory=*/true);
 	if (!m_defaultAgentPreset.isEmpty() && m_api) {
-		QJsonObject presetPayload;
-		presetPayload.insert(QStringLiteral("sessionId"), sessionId);
-		presetPayload.insert(QStringLiteral("agentPreset"), m_defaultAgentPreset);
-		m_api->callMethod(QStringLiteral("agentPreset.select"), presetPayload, {}, {});
+		m_api->callMethod(QStringLiteral("agentPreset.select"),
+			SessionCommands::agentPresetSelect(sessionId, m_defaultAgentPreset), {}, {});
 	}
-	m_history.reset();
 
 	if (m_sidebar)
 		m_sidebar->addCreatedSession(sessionId, workspaceId);
 	if (m_sidebar)
 		m_sidebar->workspaceList()->setCurrentSession(sessionId);
-	if (m_topBar)
-		m_topBar->setTitle(QStringLiteral("New session"));
-	if (m_loadMoreButton)
-		m_loadMoreButton->hide();
-
-	if (m_historyLoader) {
-		m_historyLoader->setMessages(m_messages);
-		m_historyLoader->load(sessionId);
-	}
 }
 
 void DSHHub::onNoSessionAvailable()
@@ -1325,6 +1149,7 @@ void DSHHub::onIncrementalBuildReady(MessageQuery* query)
 {
 	if (!query)
 		return;
+	TimingLogger::mark(QStringLiteral("history built -> swap into UI"));
 	swapToMessageQuery(query);
 	finishInitialization();
 }
@@ -1384,50 +1209,9 @@ void DSHHub::openExtensions()
 
 void DSHHub::handlePipeRequest(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket)
 {
-	if (!m_dllCaller || !m_pipeBridge || !m_toolPool)
-		return;
-
-	// DLL/COM 调用挪到 Worker 线程执行：GUI 线程不再被长任务（如 ffmpeg
-	// 转码、COM 调用）卡住；不同扩展/不同 DLL 的工具可并行。QLocalSocket
-	// 只在 GUI 线程读写，Worker 完成后把响应投递回 GUI 线程发送。
-	// 同一连接上多个请求的响应可能乱序返回，Node 端按请求 id 配对，无碍。
-	struct PipeJob
-	{
-		int id = 0;
-		QPointer<QLocalSocket> socket;
-		QString tool;
-		QJsonObject args;
-	};
-
-	auto* job = new PipeJob;
-	job->id = id;
-	job->socket = socket;
-	job->tool = tool;
-	job->args = args;
-
-	auto* task = new FunctorTask([this, job]() {
-		QJsonObject result;
-		QString error;
-		const bool ok = m_dllCaller->callTool(job->tool, job->args, result, &error);
-
-		const int jobId = job->id;
-		const QPointer<QLocalSocket> client = job->socket;
-		const bool success = ok;
-		const QJsonObject payload = result;
-		const QString errText = error;
-		delete job;
-
-		QMetaObject::invokeMethod(this, [this, jobId, client, success, payload, errText]() {
-			if (!m_pipeBridge || client.isNull())
-				return; // 客户端已断开，丢弃响应
-			if (success)
-				m_pipeBridge->sendResponse(client.data(), jobId, true, payload);
-			else
-				m_pipeBridge->sendResponse(client.data(), jobId, false, QJsonObject(), errText);
-			}, Qt::QueuedConnection);
-		});
-
-	m_toolPool->start(task);
+	// DLL/COM 调用与响应回投（Worker 线程执行 + GUI 线程发送）收敛在
+	// ToolRequestDispatcher，见其头文件注释。
+	ToolRequestDispatcher::dispatch(m_dllCaller, m_pipeBridge, m_toolPool, id, tool, args, socket);
 }
 
 void DSHHub::handleMuxFrame(const QJsonObject& frame)
@@ -1439,127 +1223,38 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 	if (type == QStringLiteral("session/event")) {
 		const QJsonObject event = payload.value(QStringLiteral("event")).toObject();
 		// 防止在 A 会话输出时切到 B 会话，A 的流式内容错误地显示到 B 里；
-		// 同时把 A 标记为 partial cache，切回 A 时会重新拉取历史，不丢失后台输出
+		// 同时把 A 的缓存标记为 dirty（若有），切回 A 时重新拉取历史，
+		// 不丢失后台输出、也不用旧缓存冒充最新内容。
 		if (!frameSessionId.isEmpty() && frameSessionId != m_sessionId) {
-			m_cacheManager.markPartialCache(frameSessionId);
+			m_cacheManager.markDirtyCache(frameSessionId);
 			return;
 		}
-		const QString eventType = event.value(QStringLiteral("type")).toString();
+		// “事件 → 气泡内容”的解析与更新下沉到 MessageQuery::applyStreamEvent，
+		// 这里只保留控制器策略：streaming 标志 / 节流定时器 / 标题刷新。
+		if (!m_messages)
+			return;
 
-		if (eventType == QStringLiteral("assistant/message")) {
-			const QString thinking = extractThinking(event);
+		const MessageQuery::StreamFrameResult streamResult =
+			m_messages->applyStreamEvent(event, m_messagesLayout, m_streaming);
 
-			const QString reply = extractReply(event);
-
+		if (streamResult.kind == MessageQuery::StreamFrameResult::FinalMessage) {
+			// assistant/message 收尾：结束流式渲染状态（内容已在内部合并/封存）
 			if (m_streaming) {
-				// 已经通过 assistant/chunk 流式显示过，最终消息不再重复追加
 				m_streaming = false;
 				if (m_streamTimer)
 					m_streamTimer->stop();
 				updateStreamingUi();
-				if (AgentMessageUnit* target = m_messages->lastAgentUnitIfLast())
-					target->flushStream();
-			}
-			else {
-				// 如果没有流式 chunk，也要先把已积压的工具调用/结果渲染出来
-				if (AgentMessageUnit* target = m_messages->lastAgentUnitIfLast())
-					target->flushStream();
-
-				if (!thinking.isEmpty() || !reply.isEmpty()) {
-					// 如果上一条仍然是 Agent 消息，就继续追加到同一个气泡里，保持连续
-					AgentMessageUnit* target = m_messages->lastAgentUnitIfLast();
-					if (target) {
-						if (!thinking.isEmpty()) {
-							target->appendThinking(thinking);
-						}
-						if (!reply.isEmpty())
-							target->appendMarkdownWithCodeShadow(reply);
-					}
-					else {
-						// 否则创建新的 AgentMessageUnit
-						m_messages->addAgentMessage(reply, m_messagesLayout, thinking);
-					}
-				}
 			}
 			// 一次对话完成后，刷新会话标题（如果服务端已经生成了标题）
 			if (m_sidebar && m_api)
 				m_sidebar->workspaceList()->refreshTitles(m_api);
 		}
-		else if (eventType == QStringLiteral("assistant/chunk")) {
-			const QString chunk = extractEventText(event);
-
-			{
-				const QString chunkType = extractChunkType(event);
-
-				AgentMessageUnit* streamTarget = m_messages->lastAgentUnitIfLast();
-				if (!streamTarget)
-					streamTarget = m_messages->addAgentMessage(QString(), m_messagesLayout);
-
-				if (chunkType == QStringLiteral("reasoning-delta") && !chunk.isEmpty()) {
-					streamTarget->appendStreamChunk(StreamSegment::Thinking, chunk);
-				}
-				else if (chunkType == QStringLiteral("text-delta") && !chunk.isEmpty()) {
-					streamTarget->appendStreamChunk(StreamSegment::Reply, chunk);
-				}
-				// 节流 50ms 批量全量重渲染一次，保证 Markdown/HTML 即时显示
-				if (m_streamTimer && !m_streamTimer->isActive())
-					m_streamTimer->start();
-
-				m_streaming = true;
-				updateStreamingUi();
-			}
-		}
-		else if (eventType == QStringLiteral("text-chunks") || eventType == QStringLiteral("reasoning-chunks")) {
-			const QJsonObject eventData = event.value(QStringLiteral("data")).toObject();
-			const QJsonArray texts = eventData.value(QStringLiteral("texts")).toArray();
-			if (!m_messages || texts.isEmpty())
-				return;
-			AgentMessageUnit* target = m_messages->lastAgentUnitIfLast();
-			if (!target)
-				target = m_messages->addAgentMessage(QString(), m_messagesLayout);
-			const bool thinking = eventType == QStringLiteral("reasoning-chunks");
-			for (const auto& value : texts) {
-				const QString chunk = value.toString();
-				if (chunk.isEmpty())
-					continue;
-				target->appendStreamChunk(thinking ? StreamSegment::Thinking : StreamSegment::Reply, chunk);
-			}
+		else if (streamResult.kind == MessageQuery::StreamFrameResult::Streaming) {
+			// 收到流式内容（chunk/tool…）：进入流式态，节流 50ms 批量重渲染
+			m_streaming = true;
 			if (m_streamTimer && !m_streamTimer->isActive())
 				m_streamTimer->start();
-			m_streaming = true;
 			updateStreamingUi();
-		}
-		else if (eventType == QStringLiteral("user/message")) {
-			// 用户消息已在 onSendClicked 中创建 UserMessageUnit，这里避免重复显示。
-		}
-		else if (eventType == QStringLiteral("tool/call")) {
-			const ToolCallInfo tool = extractToolCall(event);
-			if (tool.valid && m_messages) {
-				AgentMessageUnit* target = m_messages->lastAgentUnitIfLast();
-				if (!target)
-					target = m_messages->addAgentMessage(QString(), m_messagesLayout);
-				const QString html = QStringLiteral("<pre>%1</pre>")
-					.arg(QString::fromUtf8(
-						QJsonDocument(tool.arguments).toJson(QJsonDocument::Indented))
-						.toHtmlEscaped());
-				target->appendStreamChunk(StreamSegment::ToolCall, html, tool.name);
-				// 工具调用即使没有 assistant/chunk 也要能显示出来
-				if (m_streamTimer && !m_streamTimer->isActive())
-					m_streamTimer->start();
-			}
-		}
-		else if (eventType == QStringLiteral("tool/result")) {
-			const ToolResultInfo result = extractToolResult(event);
-			if (result.valid && m_messages) {
-				AgentMessageUnit* target = m_messages->lastAgentUnitIfLast();
-				if (!target)
-					target = m_messages->addAgentMessage(QString(), m_messagesLayout);
-				const QString html = QStringLiteral("<pre>%1</pre>").arg(result.message.toHtmlEscaped());
-				target->appendStreamChunk(StreamSegment::ToolResult, html);
-				// 工具结果即使没有 assistant/chunk 也要能显示出来
-				if (m_streamTimer && !m_streamTimer->isActive())
-					m_streamTimer->start();
-			}
 		}
 	}
 	else if (type == QStringLiteral("question/requested")) {

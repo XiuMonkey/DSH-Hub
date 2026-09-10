@@ -91,6 +91,13 @@ private:
 	void openExtensions();
 
 	void cacheCurrentMessages();
+	// 切换到"刚创建的空会话"的统一入口：取消旧构建、停流式、缓存当前会话、
+	// 换空列表、重置分页状态并按需绑定/加载 HistoryLoader。
+	// loadHistory=true → loader->load(sessionId)；false → adoptSession（等待首条 prompt
+	// 的 mux 事件，例如"无会话时直接发送"）。
+	void switchToFreshSession(const QString& sessionId, const QString& title, bool loadHistory);
+	// 主窗口 UI 搭建（实现位于 src/ui/Main.cpp，减少构造函数体积）
+	void buildUi();
 	void callSessionCreate();
 	void sendPrompt(const QString& text);
 	void updateStreamingUi();

@@ -14,6 +14,7 @@
 
 #include <QAbstractTextDocumentLayout>
 #include <QCryptographicHash>
+#include <QElapsedTimer>
 #include <QFrame>
 #include <QLabel>
 #include <QRegularExpression>
@@ -26,6 +27,25 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
+
+namespace
+{
+	// 渲染分段计时（仅当设置环境变量 DSH_HUB_RENDER_TRACE=1 时输出）：
+	// 用于分辨“文本加工”（Markdown→HTML/代码高亮等纯计算）与
+	// “控件装配/排版”（QTextBrowser/CodeBlockView 创建、布局、高度拟合）
+	// 各自耗时，为把纯计算段搬去 worker 线程提供依据。
+	bool renderTraceEnabled()
+	{
+		static const bool on = qEnvironmentVariableIsSet("DSH_HUB_RENDER_TRACE");
+		return on;
+	}
+
+	void traceRender(const char* where, qint64 ms)
+	{
+		if (renderTraceEnabled())
+			qInfo().noquote() << "[Render]" << where << ms << "ms";
+	}
+}
 
 namespace
 {
@@ -151,6 +171,10 @@ void AgentMessageUnit::updateHeightToContent()
 {
 	if (m_rebuilding)
 		return;
+
+	QElapsedTimer timer;
+	timer.start();
+
 	refitParts();
 
 	// 子部件刚加入布局时几何可能还没生效（宽度仍很小），立即拟合会按错误宽度
@@ -159,6 +183,8 @@ void AgentMessageUnit::updateHeightToContent()
 		if (!m_rebuilding)
 			refitParts();
 	});
+
+	traceRender("updateHeightToContent", timer.elapsed());
 }
 
 void AgentMessageUnit::resizeEvent(QResizeEvent* event)
@@ -233,6 +259,9 @@ void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 
 void AgentMessageUnit::appendMarkdownWithCodeShadow(const QString& markdown)
 {
+	QElapsedTimer timer;
+	timer.start();
+
 	Segment segment;
 	segment.type = Segment::Markdown;
 	segment.text = markdown;
@@ -243,7 +272,10 @@ void AgentMessageUnit::appendMarkdownWithCodeShadow(const QString& markdown)
 	m_rebuilding = true;
 	insertMarkdownWithCodeShadow(markdown);
 	m_rebuilding = false;
-	updateHeightToContent();
+	if (!m_bulkFit)
+		updateHeightToContent();
+
+	traceRender("appendMarkdownWithCodeShadow", timer.elapsed());
 }
 
 void AgentMessageUnit::appendProseRegion(const QString& markdown)
@@ -253,6 +285,9 @@ void AgentMessageUnit::appendProseRegion(const QString& markdown)
 	QString text = markdown.trimmed();
 	if (text.isEmpty())
 		return;
+
+	QElapsedTimer timer;
+	timer.start();
 
 	QTextBrowser* view = makeProseView();
 
@@ -267,10 +302,15 @@ void AgentMessageUnit::appendProseRegion(const QString& markdown)
 	cursor.movePosition(QTextCursor::End);
 	cursor.insertHtml(restoreInlineCodeHtml(doc.toHtml(), codes));
 	view->setTextCursor(cursor);
+
+	traceRender("appendProseRegion", timer.elapsed());
 }
 
 void AgentMessageUnit::addCodeBlockUnit(const QString& language, const QString& code)
 {
+	QElapsedTimer timer;
+	timer.start();
+
 	// 子单元 = 一个小 QVBoxLayout：[可选语言行(QLabel) + CodeBlockView]，
 	// 整体作为一个布局子部件插入 m_partsLayout，保证与普通文本严格按顺序排布。
 	auto* unit = new QWidget(this);
@@ -292,6 +332,8 @@ void AgentMessageUnit::addCodeBlockUnit(const QString& language, const QString& 
 	unitLayout->addWidget(langLabel);
 	unitLayout->addWidget(codeView);
 	m_partsLayout->addWidget(unit);
+
+	traceRender("addCodeBlockUnit", timer.elapsed());
 }
 
 void AgentMessageUnit::insertHtml(const QString& html)
@@ -315,7 +357,8 @@ void AgentMessageUnit::appendThinking(const QString& thinking)
 
 	// 只渲染新增的思考块，避免把已有回复全部重绘一遍。
 	insertThinking(index);
-	updateHeightToContent();
+	if (!m_bulkFit)
+		updateHeightToContent();
 }
 
 void AgentMessageUnit::appendToolCall(const QString& name, const QString& argumentsHtml)
@@ -330,7 +373,8 @@ void AgentMessageUnit::appendToolCall(const QString& name, const QString& argume
 	m_segments.append(segment);
 
 	insertTool(index);
-	updateHeightToContent();
+	if (!m_bulkFit)
+		updateHeightToContent();
 }
 
 void AgentMessageUnit::appendToolResult(const QString& resultHtml)
@@ -344,7 +388,8 @@ void AgentMessageUnit::appendToolResult(const QString& resultHtml)
 	m_segments.append(segment);
 
 	insertTool(index);
-	updateHeightToContent();
+	if (!m_bulkFit)
+		updateHeightToContent();
 }
 
 void AgentMessageUnit::appendSeparator()
@@ -355,16 +400,8 @@ void AgentMessageUnit::appendSeparator()
 	m_segments.append(segment);
 
 	insertHtml(segment.text);
-	updateHeightToContent();
-}
-
-void AgentMessageUnit::resetContent()
-{
-	m_thinkingBlocks.clear();
-	m_toolBlocks.clear();
-	m_segments.clear();
-	clearParts(); // 清空当前部件流，再增量渲染新的内容
-	resetLiveState();
+	if (!m_bulkFit)
+		updateHeightToContent();
 }
 
 void AgentMessageUnit::appendStreamChunk(StreamSegment::Type type, const QString& content,
@@ -396,14 +433,24 @@ void AgentMessageUnit::flushStream()
 	m_lastFlushedFingerprint = fingerprint;
 
 	const int count = m_streamSegments.size();
+
+	// 若 live 思考段已不再是"尾部思考段"（例如开始出现 Reply/tool 段），
+	// 先封闭它：卡片保留，并把该段计入已封存数量，防止下方循环再次
+	// appendThinking 重复建卡。
+	if (m_liveThinkingSegment >= 0) {
+		const bool stillTailThinking = (m_liveThinkingSegment == count - 1)
+			&& m_streamSegments.last().type == StreamSegment::Thinking;
+		if (!stillTailThinking)
+			sealLiveThinking();
+	}
+
 	int i = 0;
 	while (i < count) {
 		const StreamSegment& seg = m_streamSegments.at(i);
-		const bool isTailReply = (i == count - 1) && seg.type == StreamSegment::Reply;
+		const bool isTail = (i == count - 1);
 
-		if (isTailReply) {
-			// 最后一段是“正在流式增长”的回复：只更新这一段的尾部区域，
-			// 之前已封闭的思考/工具/回复段一律不动（O(n^2) 全量重建的根源）。
+		// 尾部回复：live 增量（只更新最后一段的尾部区域）
+		if (isTail && seg.type == StreamSegment::Reply) {
 			if (m_liveIndex != i) {
 				if (m_liveIndex >= 0)
 					closeLiveReply();
@@ -413,6 +460,18 @@ void AgentMessageUnit::flushStream()
 				m_liveRenderedText.clear();
 			}
 			renderLiveReply(seg.content);
+			return;
+		}
+
+		// 尾部思考：思考也随 token 流式增长，应像 Reply 一样 live 更新
+		if (isTail && seg.type == StreamSegment::Thinking) {
+			if (m_liveIndex >= 0)
+				closeLiveReply(); // 上一个 live 区域是 Reply
+			if (m_liveThinkingSegment != i) {
+				m_liveThinkingSegment = i;
+				m_liveThinkingBlock = -1; // 强制重建/接管卡片
+			}
+			updateLiveThinking(seg.content);
 			return;
 		}
 
@@ -445,11 +504,69 @@ void AgentMessageUnit::flushStream()
 	}
 }
 
+void AgentMessageUnit::updateLiveThinking(const QString& content)
+{
+	if (m_liveThinkingBlock < 0) {
+		// 首次出现该思考段：建一张折叠的思考卡
+		const int index = m_thinkingBlocks.size();
+		const bool wasExpanded = m_expandedThinkingIndices.contains(index);
+		m_thinkingBlocks.append({ content, wasExpanded });
+
+		Segment segment;
+		segment.type = Segment::Thinking;
+		segment.thinkingIndex = index;
+		m_segments.append(segment);
+
+		insertThinking(index);
+		m_liveThinkingBlock = index;
+		return;
+	}
+
+	ThinkingBlock& block = m_thinkingBlocks[m_liveThinkingBlock];
+	if (block.content == content)
+		return; // 内容没变（指纹已挡掉绝大多数重复）
+	block.content = content;
+
+	// 标题预览原地刷新（折叠时用户看到的摘要）
+	if (block.card) {
+		if (QLabel* header = block.card->findChild<QLabel*>(QStringLiteral("agentThinkHeader"))) {
+			const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
+			const QString anchor = QStringLiteral(
+				"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
+				+ QStringLiteral("; text-decoration:none;\">%2 思考：%3</a>");
+			header->setText(anchor.arg(m_liveThinkingBlock)
+				.arg(arrow, thinkingPreview(content).toHtmlEscaped()));
+		}
+	}
+	// 展开时正文原地刷新
+	if (block.expanded && block.body) {
+		const QString html = QStringLiteral(
+			"<p style='color:") + Theme::textSecondary() + QStringLiteral(";'><i>%1</i></p>");
+		block.body->setHtml(html.arg(content.toHtmlEscaped()));
+	}
+	if (!m_bulkFit)
+		updateHeightToContent();
+}
+
+void AgentMessageUnit::sealLiveThinking()
+{
+	if (m_liveThinkingSegment < 0)
+		return;
+	const int sealedThrough = m_liveThinkingSegment + 1;
+	if (m_streamSealedCount < sealedThrough)
+		m_streamSealedCount = sealedThrough;
+	m_liveThinkingSegment = -1;
+	m_liveThinkingBlock = -1;
+}
+
 void AgentMessageUnit::renderLiveReply(const QString& markdown)
 {
 	// 文本没变且区域已渲染过 -> 跳过（指纹在 flushStream 已挡掉绝大多数重复）
 	if (markdown == m_liveRenderedText && m_liveSegmentEntry >= 0)
 		return;
+
+	QElapsedTimer timer;
+	timer.start();
 
 	// m_segments 里只保留该 Reply 的最新全文（整条 rebuild / 主题重载时可重放）
 	if (m_liveSegmentEntry < 0) {
@@ -486,7 +603,10 @@ void AgentMessageUnit::renderLiveReply(const QString& markdown)
 	insertMarkdownWithCodeShadow(markdown);
 	m_rebuilding = false;
 	m_liveRenderedText = markdown;
-	updateHeightToContent();
+	if (!m_bulkFit)
+		updateHeightToContent();
+
+	traceRender("renderLiveReply", timer.elapsed());
 }
 
 void AgentMessageUnit::closeLiveReply()
@@ -501,6 +621,8 @@ void AgentMessageUnit::resetLiveState()
 {
 	m_streamSealedCount = 0;
 	closeLiveReply();
+	m_liveThinkingSegment = -1;
+	m_liveThinkingBlock = -1;
 }
 
 void AgentMessageUnit::syncLiveAfterRebuild()
@@ -555,7 +677,8 @@ void AgentMessageUnit::rebuild()
 	}
 
 	m_rebuilding = false;
-	updateHeightToContent();
+	if (!m_bulkFit)
+		updateHeightToContent();
 	syncLiveAfterRebuild();
 }
 
@@ -640,7 +763,8 @@ void AgentMessageUnit::updateThinkingCard(int index)
 		block.body = nullptr;
 	}
 
-	updateHeightToContent();
+	if (!m_bulkFit)
+		updateHeightToContent();
 }
 
 void AgentMessageUnit::handleAnchorClicked(const QUrl& url)
@@ -758,7 +882,8 @@ void AgentMessageUnit::updateToolCard(int index)
 		block.body = nullptr;
 	}
 
-	updateHeightToContent();
+	if (!m_bulkFit)
+		updateHeightToContent();
 }
 
 void AgentMessageUnit::toggleTool(int index)

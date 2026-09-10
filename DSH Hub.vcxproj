@@ -115,6 +115,9 @@
     <ClCompile Include="src\chat\CodeBlockView.cpp" />
     <ClCompile Include="src\ui\LoadMoreButton.cpp" />
     <ClCompile Include="src\ui\ChatInputWidget.cpp" />
+    <ClCompile Include="src\ui\Main.cpp">
+      <ObjectFileName>$(IntDir)ui-Main.obj</ObjectFileName>
+    </ClCompile>
     <ClCompile Include="src\ui\Sidebar.cpp" />
     <ClCompile Include="src\chat\UserMessageUnit.cpp" />
     <QtRcc Include="resources\DSHHub.qrc" />

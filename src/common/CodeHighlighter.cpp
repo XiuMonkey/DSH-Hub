@@ -24,6 +24,7 @@ bool CodeHighlighter::loadFromFile(const QString& filePath)
 	if (!doc.isObject())
 		return false;
 
+	QMutexLocker locker(&m_mutex);
 	m_rules.clear();
 	clearCache();
 
@@ -57,11 +58,14 @@ bool CodeHighlighter::loadFromFile(const QString& filePath)
 
 void CodeHighlighter::clearCache()
 {
+	QMutexLocker locker(&m_mutex);
 	m_cache.clear();
 }
 
 QString CodeHighlighter::highlight(const QString& language, const QString& code) const
 {
+	QMutexLocker locker(&m_mutex);
+
 	const QString key = language + QLatin1Char('\n') + code;
 	const auto cached = m_cache.constFind(key);
 	if (cached != m_cache.constEnd())

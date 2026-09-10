@@ -1,8 +1,11 @@
 #include "Sidebar.h"
 #include "ThemeManager.h"
+#include "TimingLogger.h"
 
 #include "DshApiClient.h"
 #include "SessionPrefetcher.h"
+
+#include <memory>
 
 #include <QContextMenuEvent>
 #include <QDialog>
@@ -652,56 +655,86 @@ void Sidebar::refreshSessions(DshApiClient* api, SessionPrefetcher* prefetcher)
 	if (!api)
 		return;
 
-	const auto loadSessions = [this, api, prefetcher]() {
-		api->callMethod(
-			QStringLiteral("session.list"),
-			{},
-			[this, api, prefetcher](const QJsonObject& value) {
-				const QJsonArray items = value.value(QStringLiteral("items")).toArray();
-				setSessions(items);
+	// workspace.list 与 session.list 互不依赖：并行发出，两个都返回后再统一
+	// 应用（保证 archived/workspace 状态先就位，再处理会话列表与自动选中），
+	// 省掉原先一次串行 RPC 往返。
+	struct ListState
+	{
+		bool workspaceDone = false;
+		bool workspaceOk = false;
+		QJsonArray workspaces;
+		QSet<QString> archivedIds;
+		bool sessionsDone = false;
+		bool sessionsOk = false;
+		QJsonArray sessions;
+		QString errorCode;
+		QString errorMessage;
+	};
+	auto state = std::make_shared<ListState>();
 
-				// prefetch recent history for each visible session
-				if (prefetcher) {
-					for (const auto& item : items) {
-						const QJsonObject session = item.toObject();
-						const QString origin = session.value(QStringLiteral("origin")).toString();
-						if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
-							continue;
-						const QString sid = session.value(QStringLiteral("sessionId")).toString();
-						if (!sid.isEmpty())
-							prefetcher->prefetchHistory(api->baseUrl(), sid, 3);
-					}
-				}
+	auto applyWhenBothDone = [this, api, prefetcher, state]() {
+		if (!state->workspaceDone || !state->sessionsDone)
+			return;
 
-				// auto select the first available non-running session
-				bool autoSelected = false;
-				for (const auto& item : items) {
-					const QJsonObject session = item.toObject();
-					const QString origin = session.value(QStringLiteral("origin")).toString();
-					if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
-						continue;
-					const bool running = session.value(QStringLiteral("running")).toBool();
-					const QString sid = session.value(QStringLiteral("sessionId")).toString();
-					if (sid.isEmpty() || running)
-						continue;
-					const QString label = m_workspaceList ? m_workspaceList->titleForSession(sid) : QString();
-					emit initialSessionReady(sid, label);
-					autoSelected = true;
-					break;
-				}
+		if (state->workspaceOk && m_workspaceList)
+			m_workspaceList->setArchivedSessionIds(state->archivedIds);
+		setWorkspaces(state->workspaceOk ? state->workspaces : QJsonArray());
 
-				if (!autoSelected)
-					emit noSessionAvailable();
-			},
-			[this](const DshApiClient::RpcError& error) {
-				emit sessionListError(error.code, error.message);
-			});
-		};
+		if (!state->sessionsOk) {
+			emit sessionListError(state->errorCode, state->errorMessage);
+			return;
+		}
+
+		const QJsonArray items = state->sessions;
+		setSessions(items);
+
+		// 先确定会被自动选中的会话（第一个非 running 会话）：
+		// 它马上要由 HistoryLoader 拉全量历史，预取同一份历史只会
+		// 让服务端多建一次视图、客户端多一次重复渲染，直接跳过。
+		QString autoSid;
+		for (const auto& item : items) {
+			const QJsonObject session = item.toObject();
+			const QString origin = session.value(QStringLiteral("origin")).toString();
+			if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
+				continue;
+			const bool running = session.value(QStringLiteral("running")).toBool();
+			const QString sid = session.value(QStringLiteral("sessionId")).toString();
+			if (sid.isEmpty() || running)
+				continue;
+			autoSid = sid;
+			break;
+		}
+
+		// prefetch recent history for each visible session (except the auto-selected one)
+		if (prefetcher) {
+			for (const auto& item : items) {
+				const QJsonObject session = item.toObject();
+				const QString origin = session.value(QStringLiteral("origin")).toString();
+				if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
+					continue;
+				const QString sid = session.value(QStringLiteral("sessionId")).toString();
+				if (sid.isEmpty() || sid == autoSid)
+					continue;
+				prefetcher->prefetchHistory(api->baseUrl(), sid, 20);
+			}
+		}
+		TimingLogger::mark(QStringLiteral("session.list loaded (%1 items) + prefetch scheduled")
+			.arg(items.size()));
+
+		// auto select the first available non-running session
+		if (!autoSid.isEmpty()) {
+			const QString label = m_workspaceList ? m_workspaceList->titleForSession(autoSid) : QString();
+			emit initialSessionReady(autoSid, label);
+		}
+		else {
+			emit noSessionAvailable();
+		}
+	};
 
 	api->callMethod(
 		QStringLiteral("workspace.list"),
 		{},
-		[this, loadSessions](const QJsonObject& value) {
+		[this, state, applyWhenBothDone](const QJsonObject& value) {
 			QSet<QString> archivedIds;
 			const QJsonArray archivedArray = value.value(QStringLiteral("archivedSessionIds")).toArray();
 			for (const auto& idValue : archivedArray) {
@@ -709,15 +742,31 @@ void Sidebar::refreshSessions(DshApiClient* api, SessionPrefetcher* prefetcher)
 				if (!id.isEmpty())
 					archivedIds.insert(id);
 			}
-			if (m_workspaceList)
-				m_workspaceList->setArchivedSessionIds(archivedIds);
-
-			setWorkspaces(value.value(QStringLiteral("items")).toArray());
-			loadSessions();
+			state->workspaceOk = true;
+			state->archivedIds = archivedIds;
+			state->workspaces = value.value(QStringLiteral("items")).toArray();
+			state->workspaceDone = true;
+			applyWhenBothDone();
 		},
-		[this, loadSessions](const DshApiClient::RpcError&) {
-			setWorkspaces(QJsonArray());
-			loadSessions();
+		[state, applyWhenBothDone](const DshApiClient::RpcError&) {
+			state->workspaceDone = true;
+			applyWhenBothDone();
+		});
+
+	api->callMethod(
+		QStringLiteral("session.list"),
+		{},
+		[state, applyWhenBothDone](const QJsonObject& value) {
+			state->sessions = value.value(QStringLiteral("items")).toArray();
+			state->sessionsOk = true;
+			state->sessionsDone = true;
+			applyWhenBothDone();
+		},
+		[state, applyWhenBothDone](const DshApiClient::RpcError& error) {
+			state->sessionsDone = true;
+			state->errorCode = error.code;
+			state->errorMessage = error.message;
+			applyWhenBothDone();
 		});
 }
 

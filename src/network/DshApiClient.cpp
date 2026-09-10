@@ -13,14 +13,40 @@
 #include "DshApiClient.h"
 
 #include <QJsonDocument>
+#include <QMetaObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QThreadPool>
 #include <QUrl>
 #include <QUuid>
 #include <QWebSocket>
 
 #include <QDebug>
+
+DshApiClient::JsonParseRunnable::JsonParseRunnable(
+	DshApiClient* client, QString rpcId, QByteArray body)
+	: m_client(client)
+	, m_rpcId(std::move(rpcId))
+	, m_body(std::move(body))
+{
+}
+
+// 在线程池 worker 中执行：只做纯 JSON 解析，不触碰任何回调；
+// 完成后把文档回投到主线程的 handleParsedResponse() 再拆信封、调回调。
+void DshApiClient::JsonParseRunnable::run()
+{
+	const QJsonDocument doc = QJsonDocument::fromJson(m_body);
+	m_body.clear();
+	if (m_client.isNull())
+		return;
+	QMetaObject::invokeMethod(m_client.data(),
+		[client = m_client, rpcId = std::move(m_rpcId), doc]() {
+			if (client)
+				client->handleParsedResponse(rpcId, doc);
+		},
+		Qt::QueuedConnection);
+}
 
 /**
  * 构造函数。
@@ -314,7 +340,34 @@ void DshApiClient::onReplyFinished()
 		return;
 	}
 
-	const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+	// 传输成功：把响应体解析挪到线程池 worker（大回包如 session.history
+	// 可达几百 KB~1MB，避免 fromJson 卡主线程），完成后回投 handleParsedResponse。
+	const QByteArray body = reply->readAll();
+	reply->deleteLater();
+
+	m_parsing.insert(rpcId, pending);
+	auto* task = new JsonParseRunnable(this, rpcId, body);
+	QThreadPool::globalInstance()->start(task);
+}
+
+/**
+ * 主线程：处理线程池解析完成的 HTTP 响应（拆 result 信封并调用回调）。
+ */
+void DshApiClient::handleParsedResponse(
+	const QString& rpcId, const QJsonDocument& doc)
+{
+	if (m_destroyed)
+		return;
+
+	const auto it = m_parsing.constFind(rpcId);
+	if (it == m_parsing.constEnd()) {
+		qWarning().noquote() << "[DshApi] stale parsed response rpcId=" << rpcId;
+		return;
+	}
+	PendingCall pending = it.value();
+	m_parsing.erase(it);
+
+	const QJsonObject root = doc.object();
 
 	qInfo().noquote() << "[DshApi] HTTP response path=" << pending.path << " rpcId=" << rpcId;
 
@@ -333,7 +386,6 @@ void DshApiClient::onReplyFinished()
 				QJsonObject(),
 				});
 		}
-		reply->deleteLater();
 		return;
 	}
 
@@ -352,8 +404,6 @@ void DshApiClient::onReplyFinished()
 				});
 		}
 	}
-
-	reply->deleteLater();
 }
 
 /**

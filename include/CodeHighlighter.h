@@ -8,6 +8,7 @@
 // ------------------------------------------------------------------
 
 #include <QHash>
+#include <QMutex>
 #include <QRegularExpression>
 #include <QString>
 #include <QVector>
@@ -39,4 +40,7 @@ private:
 
 	QHash<QString, QVector<Rule>> m_rules;
 	mutable QHash<QString, QString> m_cache;
+	// 高亮可能被渲染 worker 线程并发调用：规则/缓存读写统一加锁。
+	// 用递归锁：loadFromFile 持锁期间会调用同样加锁的 clearCache()。
+	mutable QRecursiveMutex m_mutex;
 };

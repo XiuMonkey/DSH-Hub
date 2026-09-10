@@ -70,12 +70,20 @@ SessionPrefetcher::SessionPrefetcher(QObject* parent)
 
 void SessionPrefetcher::prefetchHistory(const QUrl& baseUrl, const QString& sessionId, int maxMessages)
 {
+	// 同一会话已有预取在途时直接忽略：重复 insert 会覆盖旧 future，
+	// 其析构会阻塞主线程直到该次 HTTP 结束（std::async 的 future 析构会等待）。
+	if (m_futures.contains(sessionId))
+		return;
+
 	qInfo().noquote() << "[SessionPrefetcher] prefetch started sessionId=" << sessionId << " maxMessages=" << maxMessages;
 
 	auto future = std::make_shared<std::future<QJsonArray>>(
 		std::async(std::launch::async, fetchSessionHistory, baseUrl, sessionId, maxMessages));
 
 	m_futures.insert(sessionId, future);
+	QElapsedTimer started;
+	started.start();
+	m_started.insert(sessionId, started);
 	if (!m_pollTimer->isActive())
 		m_pollTimer->start();
 }
@@ -85,7 +93,13 @@ void SessionPrefetcher::pollFutures()
 	for (auto it = m_futures.begin(); it != m_futures.end();) {
 		if (it.value()->wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
 			const QJsonArray events = it.value()->get();
-			qInfo().noquote() << "[SessionPrefetcher] history fetched sessionId=" << it.key() << " events=" << events.size();
+			const qint64 elapsedMs = m_started.contains(it.key())
+				? m_started.value(it.key()).elapsed()
+				: -1;
+			m_started.remove(it.key());
+			qInfo().noquote() << "[SessionPrefetcher] history fetched sessionId=" << it.key()
+				<< " events=" << events.size()
+				<< " prefetchMs=" << elapsedMs;
 			emit historyFetched(it.key(), events);
 			it = m_futures.erase(it);
 		}

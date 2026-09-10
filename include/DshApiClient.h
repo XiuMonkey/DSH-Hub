@@ -12,12 +12,16 @@
 //   - 支持通过 /api/respond 应答审批/提问。
 // ------------------------------------------------------------------
 
+#include <QByteArray>
 #include <QHash>
 #include <QJsonObject>
 #include <QObject>
+#include <QPointer>
+#include <QRunnable>
 #include <QUrl>
 #include <functional>
 
+class QJsonDocument;
 class QNetworkAccessManager;
 class QNetworkReply;
 class QWebSocket;
@@ -164,6 +168,27 @@ private:
 	};
 
 	/**
+	 * 在线程池里解析 HTTP 响应体的任务（大 JSON 回包不在主线程 fromJson）。
+	 * 解析完成后通过 queued invokeMethod 回投主线程的 handleParsedResponse()。
+	 */
+	class JsonParseRunnable : public QRunnable
+	{
+	public:
+		JsonParseRunnable(DshApiClient* client, QString rpcId, QByteArray body);
+		void run() override;
+
+	private:
+		QPointer<DshApiClient> m_client; // 仅用于把解析结果回投主线程
+		QString m_rpcId;
+		QByteArray m_body;
+	};
+
+	/**
+	 * 主线程处理解析完成后的响应（拆 result 信封并调用成功/失败回调）。
+	 */
+	void handleParsedResponse(const QString& rpcId, const QJsonDocument& doc);
+
+	/**
 	 * 把 HTTP URL 转换成对应的 WebSocket URL。
 	 * http -> ws，https -> wss。
 	 */
@@ -191,6 +216,7 @@ private:
 	QWebSocket* m_host = nullptr;           // host 事件流
 	QUrl m_baseUrl;                         // DSH 服务基础地址
 	QHash<QString, PendingCall> m_pending;  // rpcId -> 待处理请求
+	QHash<QString, PendingCall> m_parsing;  // rpcId -> 响应体已在后台解析、待回投的请求
 	bool m_muxConnected = false;            // mux 是否已连接
 	bool m_hostConnected = false;           // host 是否已连接
 	bool m_destroyed = false;               // 正在析构，忽略后续回调

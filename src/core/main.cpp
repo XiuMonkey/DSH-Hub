@@ -1,6 +1,7 @@
 #include "DSHHub.h"
 #include "Logger.h"
 #include "ThemeManager.h"
+#include "TimingLogger.h"
 
 #include <QCoreApplication>
 #include <QFont>
@@ -12,6 +13,7 @@ int main(int argc, char* argv[])
 	QApplication app(argc, argv);
 
 	Logger::init();
+	TimingLogger::mark(QStringLiteral("Logger init (baseline)"));
 
 	// 根据系统颜色模式自动切换亮色/暗色主题
 	const bool dark = app.styleHints()->colorScheme() == Qt::ColorScheme::Dark;
@@ -22,6 +24,7 @@ int main(int argc, char* argv[])
 	const QString stylesDir = QCoreApplication::applicationDirPath()
 		+ QStringLiteral("/styles");
 	Theme::init(stylesDir, dark ? Theme::Mode::Dark : Theme::Mode::Light);
+	TimingLogger::mark(QStringLiteral("theme styles init"));
 
 	// 更现代的标准字体：Windows 下优先使用 Microsoft YaHei UI
 	QFont font(QStringLiteral("Microsoft YaHei UI"));

@@ -16,6 +16,10 @@ void CacheManager::cacheSessionMessages(const QString& sessionId, MessageQuery* 
 	if (sessionId.isEmpty() || !messages)
 		return;
 
+	// 缓存被新内容整体替换：旧标记/快照不再适用
+	m_dirtyCacheSessions.remove(sessionId);
+	m_cacheMeta.remove(sessionId);
+
 	if (m_messageCache.contains(sessionId))
 		delete m_messageCache.take(sessionId);
 
@@ -26,7 +30,8 @@ void CacheManager::cacheSessionMessages(const QString& sessionId, MessageQuery* 
 
 MessageQuery* CacheManager::takeCachedMessages(const QString& sessionId)
 {
-	m_partialCacheSessions.remove(sessionId);
+	m_dirtyCacheSessions.remove(sessionId);
+	m_cacheMeta.remove(sessionId);
 	MessageQuery* messages = m_messageCache.take(sessionId);
 	if (messages) {
 		qInfo().noquote() << "[CacheManager] take cached messages sessionId=" << sessionId
@@ -38,17 +43,39 @@ MessageQuery* CacheManager::takeCachedMessages(const QString& sessionId)
 	return messages;
 }
 
-void CacheManager::markPartialCache(const QString& sessionId)
+void CacheManager::markDirtyCache(const QString& sessionId)
 {
-	if (!sessionId.isEmpty()) {
-		m_partialCacheSessions.insert(sessionId);
-		qInfo().noquote() << "[CacheManager] mark partial cache sessionId=" << sessionId;
+	// 后台会话每个事件都会进这里：只在该会话首次变脏时插集合+记日志，
+	// 避免每个事件刷一条日志。
+	if (!sessionId.isEmpty() && !m_dirtyCacheSessions.contains(sessionId)) {
+		m_dirtyCacheSessions.insert(sessionId);
+		qInfo().noquote() << "[CacheManager] mark dirty cache sessionId=" << sessionId;
 	}
 }
 
-bool CacheManager::isPartialCache(const QString& sessionId) const
+bool CacheManager::isDirtyCache(const QString& sessionId) const
 {
-	return m_partialCacheSessions.contains(sessionId);
+	return m_dirtyCacheSessions.contains(sessionId);
+}
+
+void CacheManager::storeCacheMeta(const QString& sessionId, int rawEventCount, bool hasMore)
+{
+	if (sessionId.isEmpty())
+		return;
+	m_cacheMeta.insert(sessionId, CacheMeta{ rawEventCount, hasMore });
+}
+
+bool CacheManager::takeCacheMeta(const QString& sessionId, int* rawEventCount, bool* hasMore)
+{
+	const auto it = m_cacheMeta.constFind(sessionId);
+	if (it == m_cacheMeta.constEnd())
+		return false;
+	if (rawEventCount)
+		*rawEventCount = it->rawEventCount;
+	if (hasMore)
+		*hasMore = it->hasMore;
+	m_cacheMeta.erase(it);
+	return true;
 }
 
 void CacheManager::cacheOrDiscardCurrentSession(const QString& sessionId,
@@ -111,5 +138,6 @@ void CacheManager::clearAll()
 	qDeleteAll(m_messageCache);
 	m_messageCache.clear();
 	m_prefetchedHistory.clear();
-	m_partialCacheSessions.clear();
+	m_dirtyCacheSessions.clear();
+	m_cacheMeta.clear();
 }

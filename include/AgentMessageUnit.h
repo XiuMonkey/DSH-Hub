@@ -73,9 +73,6 @@ public:
 	/** 追加一个可折叠的工具结果块。 */
 	void appendToolResult(const QString& resultHtml);
 
-	/** 清空已渲染内容以及内部记录的 segment/思考块，准备重新渲染整段内容。 */
-	void resetContent();
-
 	/** 追加一个流式片段。 */
 	void appendStreamChunk(StreamSegment::Type type, const QString& content,
 		const QString& toolName = QString());
@@ -88,6 +85,10 @@ public:
 
 	/** 对当前所有内容子部件做一次高度刷新（对外保持安全）。 */
 	void updateHeightToContent();
+
+	/** 批量渲染模式：append* 期间不逐次做高度拟合/排队 refit，
+	 *  整批结束后由构建方关闭该模式并统一 updateHeightToContent()。 */
+	void setBulkFit(bool bulk) { m_bulkFit = bulk; }
 
 	/** 是否已渲染任何内容（正文/代码/思考/工具任意），供 MessageQuery 判断上一气泡是否为空。 */
 	bool hasContent() const;
@@ -144,23 +145,30 @@ private:
 	QSet<int> m_expandedToolIndices; // 流式重建时保留工具块展开状态
 
 	bool m_rebuilding = false;
+	bool m_bulkFit = false; // 批量渲染期间跳过逐次高度拟合（见 setBulkFit）
 
 	// 流式去重：最近一次已渲染的流式内容指纹（无变化时跳过整段重建）
 	QString m_lastFlushedFingerprint;
 	// 计算 m_streamSegments 的内容指纹（类型 + 内容哈希）
 	QString streamFingerprint() const;
 
-	// —— 流式增量渲染：只重画“正在增长的最后一段回复”，不再整条清空重建 ——
-	// 思考/工具/已封闭的回复段由既有 append* 一次性插入；下面状态只跟踪
-	// “最后一个 Reply 段”的实时区域，文本增长时仅替换该区域。
+	// —— 流式增量渲染：只重画“正在增长的最后一段”，不再整条清空重建 ——
+	// 思考/工具/已封闭的回复段由既有 append* 一次性插入；下面状态跟踪
+	// “最后一个 Reply / Thinking 段”的实时区域，文本增长时仅更新该区域。
 	int m_streamSealedCount = 0; // 已渲染完的“封闭段”数量（不含 live 段）
 	int m_liveIndex = -1;        // live Reply 在 m_streamSegments 的下标；-1=无
 	int m_liveLayoutMark = -1;   // live 区域在 m_partsLayout 中的起始项下标
 	int m_liveSegmentEntry = -1; // live Reply 在 m_segments 里对应的 Markdown 段下标
 	QString m_liveRenderedText;  // 上次已渲染的 live Reply 全文（未变则跳过）
+	int m_liveThinkingSegment = -1; // live Thinking 在 m_streamSegments 的下标；-1=无
+	int m_liveThinkingBlock = -1;   // live Thinking 对应 m_thinkingBlocks 的下标；-1=未建卡
 
 	/** 重建 live 区域：删掉上一次该区域的部件，按最新全文重新渲染。 */
 	void renderLiveReply(const QString& markdown);
+	/** 思考段随 token 流式增长：更新同一张思考卡（首次建卡，之后原地刷新）。 */
+	void updateLiveThinking(const QString& content);
+	/** 封闭 live 思考段（不再是尾部思考段时调用）：保留卡片、标记已封存避免重复追加。 */
+	void sealLiveThinking();
 	/** 结束 live 区域（内容已完整渲染，仅清标记；不删除部件）。 */
 	void closeLiveReply();
 	/** 重置流式增量渲染的簿记（resetContent / clearStreamSegments 时调用）。 */
