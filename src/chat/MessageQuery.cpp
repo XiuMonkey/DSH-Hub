@@ -5,18 +5,31 @@
 #include "CacheHistoryManager.h"
 
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QGuiApplication>
+#include <QCoreApplication>
 #include <QJsonArray>
+#include <QCoreApplication>
 #include <QJsonDocument>
+#include <QCoreApplication>
 #include <QList>
+#include <QCoreApplication>
 #include <QPointer>
+#include <QCoreApplication>
 #include <QScrollArea>
+#include <QCoreApplication>
 #include <QScrollBar>
+#include <QCoreApplication>
 #include <QTimer>
+#include <QCoreApplication>
 #include <QObject>
+#include <QCoreApplication>
 #include <QPushButton>
+#include <QCoreApplication>
 #include <QVBoxLayout>
+#include <QCoreApplication>
 #include <QWidget>
+#include <QCoreApplication>
 
 namespace
 {
@@ -51,7 +64,7 @@ namespace
 	QPushButton* makeCopyButton(QWidget* widget)
 	{
 		auto* button = new QPushButton(QString(QChar(0x29C9))); // ⧉ 复制图标
-		button->setToolTip(QStringLiteral("复制"));
+		button->setToolTip(QCoreApplication::translate("MessageQuery", "复制"));
 		button->setFixedSize(28, 24);
 		button->setCursor(Qt::PointingHandCursor);
 		button->setObjectName(QStringLiteral("msgCopyButton")); // 外观规则见 resources/styles/chat.qss（#chatScrollContent QPushButton#msgCopyButton）

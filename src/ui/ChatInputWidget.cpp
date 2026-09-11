@@ -1,8 +1,9 @@
 #include "ChatInputWidget.h"
 
-#include "ThinkingDepthSelector.h"
+#include "ModelSelector.h"
 
 #include <QAbstractTextDocumentLayout>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -55,7 +56,6 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 	m_editor->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
 	m_editor->setFixedHeight(kEditorMinHeight);
 	m_editor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-	m_editor->setPlaceholderText(QStringLiteral("输入消息，Enter 发送，Shift+Enter 换行"));
 
 	buildControlRow();
 
@@ -74,6 +74,26 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 		});
 
 	QTimer::singleShot(0, this, [this]() { adjustHeight(); });
+
+	retranslateUi();
+}
+
+void ChatInputWidget::retranslateUi()
+{
+	if (m_editor)
+		m_editor->setPlaceholderText(tr("输入消息，Enter 发送，Shift+Enter 换行"));
+
+	// 发送键的提示跟输出状态绑定：交给同一个入口按当前状态重设
+	if (m_sendButton)
+		m_sendButton->setToolTip(m_streaming ? tr("中止输出") : tr("发送"));
+}
+
+void ChatInputWidget::changeEvent(QEvent* event)
+{
+	QWidget::changeEvent(event);
+
+	if (event->type() == QEvent::LanguageChange)
+		retranslateUi();
 }
 
 void ChatInputWidget::buildControlRow()
@@ -90,11 +110,13 @@ void ChatInputWidget::buildControlRow()
 	m_toolsLayout->setContentsMargins(0, 0, 0, 0);
 	m_toolsLayout->setSpacing(16);
 
-	// 思考深度：无会话 / 模型未公布档位时自隐藏
-	m_thinkingDepth = new ThinkingDepthSelector(m_controlRow);
-	connect(m_thinkingDepth, &ThinkingDepthSelector::levelChanged,
+	// 模型 / 思考档位：同一个控件（无会话 / 目录为空时自隐藏）
+	m_modelSelector = new ModelSelector(m_controlRow);
+	connect(m_modelSelector, &ModelSelector::modelChanged,
+		this, &ChatInputWidget::modelChanged);
+	connect(m_modelSelector, &ModelSelector::levelChanged,
 		this, &ChatInputWidget::thinkingDepthChanged);
-	m_toolsLayout->addWidget(m_thinkingDepth, 0, Qt::AlignVCenter);
+	m_toolsLayout->addWidget(m_modelSelector, 0, Qt::AlignVCenter);
 
 	// 右侧控制组（原生 trailing：gap 12px，发送键也在其中）
 	m_trailingLayout = new QHBoxLayout;
@@ -107,7 +129,7 @@ void ChatInputWidget::buildControlRow()
 	m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/EnterBtn.png")));
 	m_sendButton->setIconSize(QSize(32, 32));
 	m_sendButton->setCursor(Qt::PointingHandCursor);
-	m_sendButton->setToolTip(QStringLiteral("发送"));
+	m_sendButton->setToolTip(tr("发送"));
 	m_sendButton->setFixedSize(32, 32);
 
 	// 真正的“蒙版”是盖在图标上方的子控件；QSS background 会被图标遮住
@@ -127,10 +149,16 @@ void ChatInputWidget::buildControlRow()
 	connect(m_sendButton, &QPushButton::clicked, this, &ChatInputWidget::handleSendClicked);
 }
 
-void ChatInputWidget::setThinkingSession(DshApiClient* api, const QString& sessionId)
+void ChatInputWidget::setModelSession(DshApiClient* api, const QString& sessionId)
 {
-	if (m_thinkingDepth)
-		m_thinkingDepth->setSession(api, sessionId);
+	if (m_modelSelector)
+		m_modelSelector->setSession(api, sessionId);
+}
+
+void ChatInputWidget::refreshModelCatalog()
+{
+	if (m_modelSelector)
+		m_modelSelector->refresh();
 }
 
 QString ChatInputWidget::text() const
@@ -159,11 +187,11 @@ void ChatInputWidget::setStreaming(bool streaming)
 
 	if (m_streaming) {
 		m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/StopBtn.png")));
-		m_sendButton->setToolTip(QStringLiteral("中止输出"));
+		m_sendButton->setToolTip(tr("中止输出"));
 	}
 	else {
 		m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/EnterBtn.png")));
-		m_sendButton->setToolTip(QStringLiteral("发送"));
+		m_sendButton->setToolTip(tr("发送"));
 	}
 }
 

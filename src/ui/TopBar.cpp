@@ -1,5 +1,6 @@
 #include "TopBar.h"
 
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 
@@ -16,14 +17,30 @@ TopBar::TopBar(QWidget* parent)
 	layout->setContentsMargins(16, 0, 16, 0);
 	layout->setSpacing(0);
 
-	m_titleLabel = new QLabel(QStringLiteral("未命名会话"), this);
+	m_titleLabel = new QLabel(this);
 	m_titleLabel->setObjectName(QStringLiteral("topBarTitle"));
 	layout->addWidget(m_titleLabel);
 	layout->addStretch();
+
+	setTitle(QString());
 }
 
 void TopBar::setTitle(const QString& title)
 {
+	m_title = title;
+	retranslateUi();
+}
+
+void TopBar::retranslateUi()
+{
 	if (m_titleLabel)
-		m_titleLabel->setText(title.isEmpty() ? QStringLiteral("未命名会话") : title);
+		m_titleLabel->setText(m_title.isEmpty() ? tr("未命名会话") : m_title);
+}
+
+void TopBar::changeEvent(QEvent* event)
+{
+	QWidget::changeEvent(event);
+
+	if (event->type() == QEvent::LanguageChange)
+		retranslateUi();
 }

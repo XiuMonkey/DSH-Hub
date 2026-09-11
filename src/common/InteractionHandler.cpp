@@ -3,18 +3,31 @@
 #include "DshApiClient.h"
 
 #include <QAbstractButton>
+#include <QCoreApplication>
 #include <QButtonGroup>
+#include <QCoreApplication>
 #include <QCheckBox>
+#include <QCoreApplication>
 #include <QFrame>
+#include <QCoreApplication>
 #include <QHBoxLayout>
+#include <QCoreApplication>
 #include <QJsonArray>
+#include <QCoreApplication>
 #include <QLabel>
+#include <QCoreApplication>
 #include <QLineEdit>
+#include <QCoreApplication>
 #include <QObject>
+#include <QCoreApplication>
 #include <QPushButton>
+#include <QCoreApplication>
 #include <QRadioButton>
+#include <QCoreApplication>
 #include <QVBoxLayout>
+#include <QCoreApplication>
 #include <QWidget>
+#include <QCoreApplication>
 
 namespace
 {
@@ -80,7 +93,7 @@ QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClie
 	QWidget* panel = createInteractionPanel(layout);
 	auto* panelLayout = static_cast<QVBoxLayout*>(panel->layout());
 
-	auto* hint = new QLabel(QStringLiteral("需要你确认以下问题"), panel);
+	auto* hint = new QLabel(QCoreApplication::translate("InteractionHandler", "需要你确认以下问题"), panel);
 	hint->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
 	panelLayout->addWidget(hint);
 
@@ -144,14 +157,14 @@ QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClie
 		}
 		else {
 			ui.customEdit = new QLineEdit(card);
-			ui.customEdit->setPlaceholderText(QStringLiteral("请输入你的回答"));
+			ui.customEdit->setPlaceholderText(QCoreApplication::translate("InteractionHandler", "请输入你的回答"));
 			cardLayout->addWidget(ui.customEdit);
 		}
 
 		uiQuestions.append(ui);
 	}
 
-	auto* submitButton = new QPushButton(QStringLiteral("提交答案"), panel);
+	auto* submitButton = new QPushButton(QCoreApplication::translate("InteractionHandler", "提交答案"), panel);
 	panelLayout->addWidget(submitButton, 0, Qt::AlignRight);
 
 	QObject::connect(submitButton, &QPushButton::clicked, panel, [panel, api, rpcId, sessionId, uiQuestions]() {
@@ -208,18 +221,18 @@ QWidget* InteractionHandler::handleApproval(const QJsonObject& frame, DshApiClie
 	QWidget* panel = createInteractionPanel(layout);
 	auto* panelLayout = static_cast<QVBoxLayout*>(panel->layout());
 
-	auto* title = new QLabel(QStringLiteral("工具调用请求审批"), panel);
+	auto* title = new QLabel(QCoreApplication::translate("InteractionHandler", "工具调用请求审批"), panel);
 	title->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
 	panelLayout->addWidget(title);
 
 	auto* toolLabel = new QLabel(
-		QStringLiteral("工具：%1").arg(toolName.toHtmlEscaped()), panel);
+		QCoreApplication::translate("InteractionHandler", "工具：%1").arg(toolName.toHtmlEscaped()), panel);
 	toolLabel->setWordWrap(true);
 	panelLayout->addWidget(toolLabel);
 
 	if (!reason.isEmpty()) {
 		auto* reasonLabel = new QLabel(
-			QStringLiteral("原因：%1").arg(reason.toHtmlEscaped()), panel);
+			QCoreApplication::translate("InteractionHandler", "原因：%1").arg(reason.toHtmlEscaped()), panel);
 		reasonLabel->setWordWrap(true);
 		panelLayout->addWidget(reasonLabel);
 	}
@@ -227,9 +240,9 @@ QWidget* InteractionHandler::handleApproval(const QJsonObject& frame, DshApiClie
 	auto* buttonRow = new QHBoxLayout;
 	buttonRow->setSpacing(8);
 
-	auto* rejectButton = new QPushButton(QStringLiteral("拒绝"), panel);
+	auto* rejectButton = new QPushButton(QCoreApplication::translate("InteractionHandler", "拒绝"), panel);
 	rejectButton->setObjectName(QStringLiteral("approvalRejectButton"));
-	auto* allowButton = new QPushButton(QStringLiteral("允许一次"), panel);
+	auto* allowButton = new QPushButton(QCoreApplication::translate("InteractionHandler", "允许一次"), panel);
 
 	buttonRow->addStretch();
 	buttonRow->addWidget(rejectButton);

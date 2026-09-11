@@ -2,8 +2,11 @@
 #include "ThemeManager.h"
 #include "WindowFrame.h"
 #include "DshApiClient.h"
+#include "ModelListPanel.h"
 #include "SettingsStore.h"
+#include "TranslationManager.h"
 
+#include <QComboBox>
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QFrame>
@@ -12,7 +15,6 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
-#include <QTimer>
 #include <QVBoxLayout>
 
 SettingsButton::SettingsButton(const QString& text, QWidget* parent)
@@ -21,17 +23,18 @@ SettingsButton::SettingsButton(const QString& text, QWidget* parent)
 	setObjectName(QStringLiteral("settingsNavButton"));
 	setCursor(Qt::PointingHandCursor);
 	setFixedWidth(120);
-	setFixedHeight(36);
+	// 只给下限，不锁死高度：中文在两行高的字体度量下会顶到 36px 的上下边，
+	// 固定高度就会把字裁掉。让按钮按自身 sizeHint（字高 + QSS padding）决定高度。
+	setMinimumHeight(36);
 	setCheckable(true);
 }
 
-Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
+Settings::Settings(DshApiClient* api, QWidget* host)
 	: PopupWindow(host)
-	, m_credentials(dshHome)
 	, m_api(api)
 	, m_host(host)
 {
-	setTitle(QStringLiteral("设置"));
+	setTitle(tr("设置"));
 
 	auto* content = new QWidget(this);
 	auto* layout = new QHBoxLayout(content);
@@ -42,10 +45,10 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	navLayout->setContentsMargins(0, 0, 0, 0);
 	navLayout->setSpacing(4);
 
-	auto* modelButton = new SettingsButton(QStringLiteral("模型设置"), content);
-	auto* agentButton = new SettingsButton(QStringLiteral("Agent预设"), content);
-	auto* serverButton = new SettingsButton(QStringLiteral("Server设置"), content);
-	auto* appearanceButton = new SettingsButton(QStringLiteral("外观设置"), content);
+	auto* modelButton = new SettingsButton(tr("模型列表"), content);
+	auto* agentButton = new SettingsButton(tr("Agent预设"), content);
+	auto* serverButton = new SettingsButton(tr("Server设置"), content);
+	auto* appearanceButton = new SettingsButton(tr("外观设置"), content);
 
 	navLayout->addWidget(modelButton);
 	navLayout->addWidget(agentButton);
@@ -55,24 +58,23 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 
 	layout->addLayout(navLayout);
 
-	// ---------------- 模型设置 ----------------
+	// ---------------- 模型列表 ----------------
+	// 模型信息与凭据的事实来源都在服务端：目录由适配器公布（llm.models），
+	// 新增的条目写进 settings 文档，API Key 按该路由 profile 的 apiKeyEnv 引用
+	// 经 credentials.set 写入。面板自己不存任何清单，打开即重新拉取。
 	auto* modelPanel = new QWidget(content);
 	auto* modelLayout = new QVBoxLayout(modelPanel);
 	modelLayout->setContentsMargins(0, 0, 0, 0);
 	modelLayout->setSpacing(6);
 
-	auto* apiLabel = new QLabel(QStringLiteral("API Key:"), modelPanel);
-	apiLabel->setObjectName(QStringLiteral("settingsApiLabel"));
+	m_modelList = new ModelListPanel(m_api, modelPanel);
+	// 新增模型后通知宿主（宿主要刷新输入框底的模型选择器）
+	connect(m_modelList, &ModelListPanel::modelAdded, this,
+		[this](const QString& provider, const QString& modelId) {
+			emit modelAdded(provider, modelId);
+		});
 
-	m_apiKeyEdit = new QLineEdit(modelPanel);
-	m_apiKeyEdit->setObjectName(QStringLiteral("modelSettingsEdit"));
-	m_apiKeyEdit->setPlaceholderText(QStringLiteral("输入模型设置"));
-	// 初始文本：openSettings() 每次打开时经 refreshOnOpen() 同步。
-	// 避免常驻对象在服务端未就绪时就读取凭据。
-
-	modelLayout->addWidget(apiLabel);
-	modelLayout->addWidget(m_apiKeyEdit);
-	modelLayout->addStretch(1);
+	modelLayout->addWidget(m_modelList, 1);
 
 	// ---------------- Agent 预设 ----------------
 	auto* agentPanel = new QWidget(content);
@@ -80,7 +82,7 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	agentLayout->setContentsMargins(0, 0, 0, 0);
 	agentLayout->setSpacing(6);
 
-	auto* agentLabel = new QLabel(QStringLiteral("默认 Agent 预设"), agentPanel);
+	auto* agentLabel = new QLabel(tr("默认 Agent 预设"), agentPanel);
 	agentLabel->setObjectName(QStringLiteral("settingsAgentLabel"));
 
 	m_agentPresetButton = new QPushButton(agentPanel);
@@ -108,7 +110,7 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	Theme::repolishScrollArea(m_agentPresetList);
 	popupLayout->addWidget(m_agentPresetList);
 
-	auto* agentHint = new QLabel(QStringLiteral("新会话将使用该预设；修改后对当前会话也会立即生效。"), agentPanel);
+	auto* agentHint = new QLabel(tr("新会话将使用该预设；修改后对当前会话也会立即生效。"), agentPanel);
 	agentHint->setWordWrap(true);
 	agentHint->setObjectName(QStringLiteral("settingsAgentHint"));
 
@@ -154,7 +156,7 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	serverLayout->setContentsMargins(0, 0, 0, 0);
 	serverLayout->setSpacing(6);
 
-	auto* serverLabel = new QLabel(QStringLiteral("服务器地址"), serverPanel);
+	auto* serverLabel = new QLabel(tr("服务器地址"), serverPanel);
 	serverLabel->setObjectName(QStringLiteral("settingsServerLabel"));
 
 	m_serverUrlEdit = new QLineEdit(serverPanel);
@@ -162,11 +164,11 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	m_serverUrlEdit->setPlaceholderText(QStringLiteral("http://127.0.0.1:3080"));
 	// 初始文本：openSettings() 每次打开时经 refreshOnOpen() 同步
 
-	auto* serverHint = new QLabel(QStringLiteral("留空表示使用内置 DSH 服务；保存后需要重启服务生效。"), serverPanel);
+	auto* serverHint = new QLabel(tr("留空表示使用内置 DSH 服务；保存后需要重启服务生效。"), serverPanel);
 	serverHint->setWordWrap(true);
 	serverHint->setObjectName(QStringLiteral("settingsServerHint"));
 
-	auto* serverSaveButton = new QPushButton(QStringLiteral("保存并重启服务"), serverPanel);
+	auto* serverSaveButton = new QPushButton(tr("保存并重启服务"), serverPanel);
 	serverSaveButton->setCursor(Qt::PointingHandCursor);
 	serverSaveButton->setObjectName(QStringLiteral("settingsServerSaveButton"));
 
@@ -188,13 +190,13 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	appearanceLayout->setSpacing(6);
 
 	auto* appearanceHint = new QLabel(
-		QStringLiteral("主题颜色与界面样式来自程序目录 styles/ 下的模板"
+		tr("主题颜色与界面样式来自程序目录 styles/ 下的模板"
 			"（theme-*.json 色板与各 *.qss 规则）。手动改坏后可用下面的按钮恢复默认。"),
 		appearancePanel);
 	appearanceHint->setWordWrap(true);
 	appearanceHint->setObjectName(QStringLiteral("settingsAppearanceHint"));
 
-	auto* stylesResetButton = new QPushButton(QStringLiteral("重置样式为默认"), appearancePanel);
+	auto* stylesResetButton = new QPushButton(tr("重置样式为默认"), appearancePanel);
 	stylesResetButton->setCursor(Qt::PointingHandCursor);
 	stylesResetButton->setObjectName(QStringLiteral("settingsStylesResetButton"));
 
@@ -207,12 +209,67 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 		Theme::resetStyles();
 		if (appearanceFeedback) {
 			appearanceFeedback->setText(
-				QStringLiteral("已恢复默认样式：styles/ 模板已重新生成，界面已刷新。"));
+				tr("已恢复默认样式：styles/ 模板已重新生成，界面已刷新。"));
 			appearanceFeedback->show();
 		}
 		});
 
+	// ---------------- 界面语言 ----------------
+	// 切换立即生效（免重启）：Translation::apply() 换掉 QTranslator 后 Qt 会给
+	// 所有控件发 LanguageChange，各界面在自己的 changeEvent 里重设文案。
+	auto* languageLabel = new QLabel(tr("界面语言："), appearancePanel);
+	languageLabel->setObjectName(QStringLiteral("settingsAppearanceLabel"));
+
+	auto* languageCombo = new QComboBox(appearancePanel);
+	languageCombo->setObjectName(QStringLiteral("settingsLanguageCombo"));
+	languageCombo->setCursor(Qt::PointingHandCursor);
+
+	// 第 0 项固定是“跟随系统”（数据为空串）
+	languageCombo->addItem(tr("跟随系统"), QString());
+	for (const LanguageInfo& language : Translation::availableLanguages()) {
+		languageCombo->addItem(language.name, language.code);
+	}
+
+	// 选中当前生效的语言：保存的代码为空 = 跟随系统
+	const QString savedCode = Translation::savedLanguageCode();
+	{
+		const int index = savedCode.isEmpty()
+			? 0
+			: languageCombo->findData(savedCode);
+		languageCombo->setCurrentIndex(index >= 0 ? index : 0);
+	}
+
+	auto* languageFeedback = new QLabel(appearancePanel);
+	languageFeedback->setWordWrap(true);
+	languageFeedback->setObjectName(QStringLiteral("settingsAppearanceFeedback"));
+	languageFeedback->hide();
+
+	connect(languageCombo, &QComboBox::currentIndexChanged, this,
+		[this, languageCombo, languageFeedback](int) {
+			const QString code = languageCombo->currentData().toString();
+			Translation::setSavedLanguageCode(code);
+
+			if (Translation::apply(code)) {
+				if (languageFeedback) {
+					languageFeedback->setText(tr("界面语言已切换。"));
+					languageFeedback->show();
+				}
+				return;
+			}
+
+			// 对应语言包缺失：退回原文，并把原因说清楚（不是错误，只是没装语言包）
+			if (languageFeedback) {
+				languageFeedback->setText(tr("没有找到 %1 的语言包，已回到中文原文。"
+					"把 dshhub_%1.qm 放进程序目录的 translations/ 即可启用。")
+					.arg(code.isEmpty() ? tr("系统语言") : code));
+				languageFeedback->show();
+			}
+		});
+
 	appearanceLayout->addWidget(appearanceHint);
+	appearanceLayout->addWidget(languageLabel);
+	appearanceLayout->addWidget(languageCombo);
+	appearanceLayout->addWidget(languageFeedback);
 	appearanceLayout->addWidget(stylesResetButton);
 	appearanceLayout->addWidget(appearanceFeedback);
 	appearanceLayout->addStretch(1);
@@ -245,20 +302,6 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 			});
 	}
 
-	// API Key 输入停止后，通过 DSH credentials.set 热更新凭据，避免重启
-	m_apiKeyTimer = new QTimer(this);
-	m_apiKeyTimer->setSingleShot(true);
-	m_apiKeyTimer->setInterval(500);
-	connect(m_apiKeyTimer, &QTimer::timeout, this, &Settings::saveApiKeyToServer);
-
-	connect(m_apiKeyEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
-		m_pendingApiKey = text;
-		if (m_apiKeyTimer)
-			m_apiKeyTimer->start();
-		});
-
-	// 常驻设置系统：窗口被关闭（右上角 ✕ / ESC）后自动清理遮罩并隐藏，
-	// 对象本身不销毁，供下次 openSettings() 复用。
 	connect(this, &PopupWindow::closed, this, &Settings::closeSettings);
 
 	setContent(content);
@@ -319,10 +362,6 @@ void Settings::syncOverlayToHost()
 
 void Settings::refreshOnOpen()
 {
-	// API Key：每次打开时从凭据文件重新读取（可能与上次保存不同步）
-	if (m_apiKeyEdit)
-		m_apiKeyEdit->setText(m_credentials.readApiKey());
-
 	// Server 地址：跟随当前实际连接的 DSH 服务
 	m_serverUrlText = m_api ? m_api->baseUrl().toString() : QString();
 	if (m_serverUrlEdit)
@@ -330,15 +369,10 @@ void Settings::refreshOnOpen()
 
 	// Agent 预设列表（异步加载，服务端未就绪时按钮显示“加载失败”）
 	loadAgentPresets();
-}
 
-void Settings::saveApiKeyToServer()
-{
-	// 服务端热更新优先，失败由 CredentialsService 回退写文件并回调告知
-	m_credentials.saveApiKey(m_api, m_pendingApiKey, [this](bool usedFileFallback) {
-		if (usedFileFallback)
-			emit apiKeyChanged();
-		});
+	// 模型列表：每次打开都重新向服务端要目录（可能刚在别处改过 settings）
+	if (m_modelList)
+		m_modelList->refresh();
 }
 
 void Settings::loadAgentPresets()
@@ -347,7 +381,7 @@ void Settings::loadAgentPresets()
 		return;
 
 	m_agentPresetList->clear();
-	m_agentPresetButton->setText(QStringLiteral("加载中..."));
+	m_agentPresetButton->setText(tr("加载中..."));
 
 	AgentPresetService::fetch(m_api,
 		[this](const QVector<AgentPreset>& presets) {
@@ -355,7 +389,7 @@ void Settings::loadAgentPresets()
 		},
 		[this](const DshApiClient::RpcError& error) {
 			m_agentPresetList->clear();
-			m_agentPresetButton->setText(QStringLiteral("加载失败：%1 %2").arg(error.code, error.message));
+			m_agentPresetButton->setText(tr("加载失败：%1 %2").arg(error.code, error.message));
 		});
 }
 
@@ -371,7 +405,7 @@ void Settings::populateAgentPresets(const QVector<AgentPreset>& presets)
 	}
 
 	if (m_agentPresetList->count() == 0) {
-		m_agentPresetButton->setText(QStringLiteral("（无可用预设）"));
+		m_agentPresetButton->setText(tr("（无可用预设）"));
 		return;
 	}
 

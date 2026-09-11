@@ -429,7 +429,7 @@ void AgentMessageUnit::appendThinking(const QString& thinking)
 void AgentMessageUnit::appendToolCall(const QString& name, const QString& argumentsHtml)
 {
 	const int index = m_toolBlocks.size();
-	const QString title = QStringLiteral("工具调用：%1").arg(name);
+	const QString title = tr("工具调用：%1").arg(name);
 	m_toolBlocks.append({ title, argumentsHtml, m_expandedToolIndices.contains(index) });
 
 	Segment segment;
@@ -445,7 +445,7 @@ void AgentMessageUnit::appendToolCall(const QString& name, const QString& argume
 void AgentMessageUnit::appendToolResult(const QString& resultHtml)
 {
 	const int index = m_toolBlocks.size();
-	m_toolBlocks.append({ QStringLiteral("工具结果"), resultHtml, m_expandedToolIndices.contains(index) });
+	m_toolBlocks.append({ tr("工具结果"), resultHtml, m_expandedToolIndices.contains(index) });
 
 	Segment segment;
 	segment.type = Segment::Tool;
@@ -556,7 +556,7 @@ void AgentMessageUnit::flushStream()
 				appendMarkdownWithCodeShadow(seg.content);
 				break;
 			case StreamSegment::ToolCall:
-				appendToolCall(seg.toolName.isEmpty() ? QStringLiteral("工具") : seg.toolName,
+				appendToolCall(seg.toolName.isEmpty() ? tr("工具") : seg.toolName,
 					seg.content);
 				break;
 			case StreamSegment::ToolResult:
@@ -598,7 +598,7 @@ void AgentMessageUnit::updateLiveThinking(const QString& content)
 			const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 			const QString anchor = QStringLiteral(
 				"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
-				+ QStringLiteral("; text-decoration:none;\">%2 思考：%3</a>");
+				+ QStringLiteral("; text-decoration:none;\">") + tr("%2 思考：%3") + QStringLiteral("</a>");
 			header->setText(anchor.arg(m_liveThinkingBlock)
 				.arg(arrow, thinkingPreview(content).toHtmlEscaped()));
 		}
@@ -776,7 +776,7 @@ void AgentMessageUnit::addThinkingCard(int index)
 
 	const QString anchor = QStringLiteral(
 		"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
-		+ QStringLiteral("; text-decoration:none;\">%2 思考：%3</a>");
+		+ QStringLiteral("; text-decoration:none;\">") + tr("%2 思考：%3") + QStringLiteral("</a>");
 	header->setText(anchor.arg(index).arg(arrow, thinkingPreview(block.content).toHtmlEscaped()));
 	layout->addWidget(header);
 
@@ -804,7 +804,7 @@ void AgentMessageUnit::updateThinkingCard(int index)
 	if (header) {
 		const QString anchor = QStringLiteral(
 			"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
-			+ QStringLiteral("; text-decoration:none;\">%2 思考：%3</a>");
+			+ QStringLiteral("; text-decoration:none;\">") + tr("%2 思考：%3") + QStringLiteral("</a>");
 		header->setText(anchor.arg(index).arg(arrow, thinkingPreview(block.content).toHtmlEscaped()));
 	}
 

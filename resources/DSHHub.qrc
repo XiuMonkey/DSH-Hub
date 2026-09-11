@@ -18,5 +18,9 @@
         <file alias="styles/panels.qss">styles/panels.qss</file>
         <file alias="styles/settings.qss">styles/settings.qss</file>
         <file alias="styles/plugins.qss">styles/plugins.qss</file>
+        <!-- 默认语言包（源语言=中文）：随程序内置，启动时从资源加载。
+             由 tools\release-translations.ps1 从 translations\dshhub_zh_CN.ts 生成，
+             外部 translations\ 里同名文件可覆盖（见 TranslationManager.cpp）。 -->
+        <file alias="translations/dshhub_zh_CN.qm">translations/dshhub_zh_CN.qm</file>
     </qresource>
 </RCC>

@@ -15,7 +15,7 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 	: StatusPopupWindow(parent)
 	, m_registry(serverProfilePath)
 {
-	setTitle(QStringLiteral("扩展管理"));
+	setTitle(tr("扩展管理"));
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] popup created");
 
 	auto* content = new QWidget(this);
@@ -27,11 +27,11 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 	auto* toolbar = new QHBoxLayout;
 	toolbar->setSpacing(8);
 
-	m_installButton = new QPushButton(QStringLiteral("安装扩展"), content);
+	m_installButton = new QPushButton(tr("安装扩展"), content);
 	m_installButton->setObjectName(QStringLiteral("extPopupInstallButton"));
-	m_removeButton = new QPushButton(QStringLiteral("移除选中"), content);
+	m_removeButton = new QPushButton(tr("移除选中"), content);
 	m_removeButton->setObjectName(QStringLiteral("extPopupRemoveButton"));
-	m_refreshButton = new QPushButton(QStringLiteral("刷新"), content);
+	m_refreshButton = new QPushButton(tr("刷新"), content);
 	m_refreshButton->setObjectName(QStringLiteral("extPopupRefreshButton"));
 
 	for (QPushButton* button : { m_installButton, m_removeButton, m_refreshButton }) {
@@ -90,10 +90,10 @@ void ExtensionManagerPopup::populateList()
 		m_listWidget->addItem(name);
 
 	if (names.isEmpty()) {
-		setStatus(QStringLiteral("暂无已安装扩展，点击“安装扩展”选择 .ext 文件。"));
+		setStatus(tr("暂无已安装扩展，点击“安装扩展”选择 .ext 文件。"));
 	}
 	else {
-		setStatus(QStringLiteral("已安装 %1 个扩展。").arg(names.size()));
+		setStatus(tr("已安装 %1 个扩展。").arg(names.size()));
 	}
 
 	m_removeButton->setEnabled(false);
@@ -106,7 +106,7 @@ void ExtensionManagerPopup::installExtension()
 
 	const QString extPath = QFileDialog::getOpenFileName(
 		this,
-		QStringLiteral("选择 DSH 扩展"),
+		tr("选择 DSH 扩展"),
 		QString(),
 		QStringLiteral("DSH Extension (*.ext)"));
 
@@ -116,7 +116,7 @@ void ExtensionManagerPopup::installExtension()
 
 	if (m_installButton)
 		m_installButton->setEnabled(false);
-	setStatus(QStringLiteral("正在安装扩展..."));
+	setStatus(tr("正在安装扩展..."));
 
 	if (!m_installTask.start(extPath, m_registry.serverProfilePath())) {
 		if (m_installButton)
@@ -141,7 +141,7 @@ void ExtensionManagerPopup::pollInstall()
 		m_installButton->setEnabled(true);
 
 	if (!m_installTask.succeeded()) {
-		setStatus(QStringLiteral("扩展安装失败: %1").arg(m_installTask.errorString()));
+		setStatus(tr("扩展安装失败: %1").arg(m_installTask.errorString()));
 		return;
 	}
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] loadAndInstall returned ok=true");
@@ -151,7 +151,7 @@ void ExtensionManagerPopup::pollInstall()
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] installed registry updated");
 
 	populateList();
-	setStatus(QStringLiteral("扩展安装成功: %1").arg(ext.pluginName));
+	setStatus(tr("扩展安装成功: %1").arg(ext.pluginName));
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] list populated, emitting extensionInstalled");
 
 	// 使用持久化到扩展目录的 regulation.json5 / main.dll，
@@ -176,8 +176,8 @@ void ExtensionManagerPopup::removeSelected()
 
 	if (QMessageBox::question(
 		this,
-		QStringLiteral("确认移除"),
-		QStringLiteral("确定要移除扩展“%1”吗？").arg(name),
+		tr("确认移除"),
+		tr("确定要移除扩展“%1”吗？").arg(name),
 		QMessageBox::Yes | QMessageBox::No,
 		QMessageBox::No) != QMessageBox::Yes) {
 		return;
@@ -195,15 +195,15 @@ void ExtensionManagerPopup::removeSelected()
 	populateList();
 
 	if (dirRemoved && patchRemoved) {
-		setStatus(QStringLiteral("已移除扩展: %1").arg(name));
+		setStatus(tr("已移除扩展: %1").arg(name));
 	}
 	else if (!dirRemoved) {
 		setStatus(
-			QStringLiteral("已清理扩展配置，但部分文件删除失败: %1").arg(dirError));
+			tr("已清理扩展配置，但部分文件删除失败: %1").arg(dirError));
 	}
 	else {
 		setStatus(
-			QStringLiteral("扩展目录已删除，但更新 cordis.patch.yml 失败: %1").arg(name));
+			tr("扩展目录已删除，但更新 cordis.patch.yml 失败: %1").arg(name));
 	}
 
 	emit serverRestartRequested();
@@ -215,14 +215,14 @@ void ExtensionManagerPopup::cleanupResiduals()
 
 	const ExtensionRegistry::CleanupResult result = m_registry.cleanupResiduals();
 	if (!result.patchReadable) {
-		setStatus(QStringLiteral("无法读取 cordis.patch.yml"));
+		setStatus(tr("无法读取 cordis.patch.yml"));
 		return;
 	}
 
 	populateList();
 	setStatus(result.removed.isEmpty()
-		? QStringLiteral("未发现残留扩展配置")
-		: QStringLiteral("已清理残留扩展: %1").arg(result.removed.join(QLatin1String(", "))));
+		? tr("未发现残留扩展配置")
+		: tr("已清理残留扩展: %1").arg(result.removed.join(QLatin1String(", "))));
 
 	if (!result.removed.isEmpty())
 		emit serverRestartRequested();

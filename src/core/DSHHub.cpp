@@ -82,7 +82,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	connect(m_serverManager, &ServerManager::errorLine, this, [this](const QString& line) {
 		if (m_messages) {
 			m_messages->addSystemMessage(
-				QStringLiteral("DSH 服务端: %1").arg(line),
+				tr("DSH 服务端: %1").arg(line),
 				m_messagesLayout);
 		}
 		// 移除扩展后服务端启动失败时，自动清理 cordis.patch.yml 残留
@@ -117,7 +117,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		if (m_api && !m_api->isConnected()) {
 			if (m_messages) {
 				m_messages->addSystemMessage(
-					QStringLiteral("DSH 服务端已退出，代码: %1").arg(exitCode),
+					tr("DSH 服务端已退出，代码: %1").arg(exitCode),
 					m_messagesLayout);
 			}
 			if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
@@ -243,9 +243,14 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	// 信号槽
 	connect(m_chatInput, &ChatInputWidget::sendRequested, this, &DSHHub::onSendClicked);
 	connect(m_chatInput, &ChatInputWidget::stopRequested, this, &DSHHub::onStopRequested);
+	connect(m_chatInput, &ChatInputWidget::modelChanged, this,
+		[](const QString& provider, const QString& model) {
+			qInfo().noquote() << QStringLiteral("[DSH Hub] model ->")
+				<< QStringLiteral("%1/%2").arg(provider, model);
+		});
 	connect(m_chatInput, &ChatInputWidget::thinkingDepthChanged, this, [](const QString& levelId) {
 		qInfo().noquote() << QStringLiteral("[DSH Hub] thinking depth ->")
-			<< (levelId.isEmpty() ? QStringLiteral("(默认)") : levelId);
+			<< (levelId.isEmpty() ? tr("(默认)") : levelId);
 		});
 
 	connect(m_sidebar, &Sidebar::newWorkspaceRequested,
@@ -307,13 +312,9 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	// 常驻“设置系统”：随主窗口存在，自管设置窗口的开关/遮罩/居中。
 	// 放在 start() 之后创建，因为 Settings 构造需要 dshHome
 	// （由 ServerManager::start 填充）。这里只做一次业务信号接线：
-	// apiKey/Server 保存失败重启服务端、预设变更同步给当前会话。
+	// 预设变更同步给当前会话、新增模型后刷新选择器。
 	// ------------------------------------------------------------------
-	m_settings = new Settings(m_serverManager->dshHome(), m_api, this);
-	connect(m_settings, &Settings::apiKeyChanged, this, [this]() {
-		if (m_serverManager)
-			m_serverManager->restart();
-		});
+	m_settings = new Settings(m_api, this);
 	connect(m_settings, &Settings::agentPresetChanged, this, [this](const QString& presetId) {
 		m_defaultAgentPreset = presetId;
 		if (!m_sessionId.isEmpty() && m_api) {
@@ -324,6 +325,14 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	connect(m_settings, &Settings::serverSettingsSaved, this, [this]() {
 		if (m_serverManager)
 			m_serverManager->restart();
+		});
+	// 设置里新增了模型：服务端 settings 已热生效，输入框底的模型选择器
+	// 需要重新拉一次会话目录才能看到新模型。
+	connect(m_settings, &Settings::modelAdded, this, [this](const QString& provider, const QString& modelId) {
+		qInfo().noquote() << QStringLiteral("[DSH Hub] model added ->")
+			<< QStringLiteral("%1/%2").arg(provider, modelId);
+		if (m_chatInput)
+			m_chatInput->refreshModelCatalog();
 		});
 
 	// ------------------------------------------------------------------
@@ -503,7 +512,7 @@ void DSHHub::onSendClicked()
 		return;
 
 	if (m_sessionId.isEmpty()) {
-		m_messages->addSystemMessage(QStringLiteral("还没有可用会话，正在自动创建..."),
+		m_messages->addSystemMessage(tr("还没有可用会话，正在自动创建..."),
 			m_messagesLayout);
 		createSessionAndSend(text);
 		return;
@@ -545,7 +554,7 @@ void DSHHub::onStopRequested()
 			updateStreamingUi();
 			if (m_messages) {
 				m_messages->addSystemMessage(
-					QStringLiteral("中止失败: %1 %2").arg(error.code, error.message),
+					tr("中止失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 			}
 		});
@@ -559,10 +568,10 @@ void DSHHub::updateStreamingUi()
 
 void DSHHub::syncComposerSession()
 {
-	// 输入区底部的“思考深度”控件按当前会话的模型目录刷新；
+	// 输入区底部的“模型 / 思考深度”控件按当前会话的模型目录刷新；
 	// 会话为空（尚未创建/已被删除）时控件自行隐藏
 	if (m_chatInput)
-		m_chatInput->setThinkingSession(m_api, m_sessionId);
+		m_chatInput->setModelSession(m_api, m_sessionId);
 }
 
 void DSHHub::clearInteractionPanels()
@@ -583,7 +592,7 @@ void DSHHub::onNewWorkspaceClicked()
 {
 	const QString path = QFileDialog::getExistingDirectory(
 		this,
-		QStringLiteral("选择要加入工作区的目录"));
+		tr("选择要加入工作区的目录"));
 
 	if (path.isEmpty())
 		return;
@@ -598,7 +607,7 @@ void DSHHub::onNewWorkspaceClicked()
 		[this](const DshApiClient::RpcError& error) {
 			if (m_messages) {
 				m_messages->addSystemMessage(
-					QStringLiteral("新建工作区失败: %1 %2").arg(error.code, error.message),
+					tr("新建工作区失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 			}
 		});
@@ -614,16 +623,16 @@ void DSHHub::onCreateSessionInWorkspace(const QString& workspaceId)
 			if (newSessionId.isEmpty())
 				return;
 
-			switchToFreshSession(newSessionId, QStringLiteral("未命名会话"), /*loadHistory=*/true);
+			switchToFreshSession(newSessionId, tr("未命名会话"), /*loadHistory=*/true);
 			if (m_sidebar) {
-				m_sidebar->workspaceList()->addSessionToWorkspace(newSessionId, QStringLiteral("未命名会话"), workspaceId);
+				m_sidebar->workspaceList()->addSessionToWorkspace(newSessionId, tr("未命名会话"), workspaceId);
 				m_sidebar->workspaceList()->setCurrentSession(newSessionId);
 			}
 		},
 		[this](const DshApiClient::RpcError& error) {
 			if (m_messages) {
 				m_messages->addSystemMessage(
-					QStringLiteral("新建会话失败: %1 %2").arg(error.code, error.message),
+					tr("新建会话失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 			}
 		});
@@ -648,7 +657,7 @@ void DSHHub::sendPrompt(const QString& text)
 		[this](const DshApiClient::RpcError& error) {
 			if (m_messages) {
 				m_messages->addSystemMessage(
-					QStringLiteral("发送失败: %1 %2").arg(error.code, error.message),
+					tr("发送失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 			}
 		});
@@ -671,9 +680,9 @@ void DSHHub::createSessionAndSend(const QString& text)
 
 			// 不 load 历史：等首条 prompt 的 mux 事件即可；adoptSession 让
 			// loader 绑定新会话，之后"加载更多"不会误用旧会话 id。
-			switchToFreshSession(sid, QStringLiteral("未命名会话"), /*loadHistory=*/false);
+			switchToFreshSession(sid, tr("未命名会话"), /*loadHistory=*/false);
 			if (m_sidebar) {
-				m_sidebar->workspaceList()->addSession(sid, QStringLiteral("未命名会话"));
+				m_sidebar->workspaceList()->addSession(sid, tr("未命名会话"));
 				m_sidebar->workspaceList()->setCurrentSession(sid);
 			}
 
@@ -682,7 +691,7 @@ void DSHHub::createSessionAndSend(const QString& text)
 		[this](const DshApiClient::RpcError& error) {
 			if (m_messages) {
 				m_messages->addSystemMessage(
-					QStringLiteral("创建会话失败: %1 %2").arg(error.code, error.message),
+					tr("创建会话失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 			}
 		});
@@ -1062,8 +1071,8 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 
 	const auto ret = QMessageBox::question(
 		this,
-		QStringLiteral("删除会话"),
-		QStringLiteral("确定要删除这个会话吗？此操作无法撤销。"),
+		tr("删除会话"),
+		tr("确定要删除这个会话吗？此操作无法撤销。"),
 		QMessageBox::Yes | QMessageBox::No,
 		QMessageBox::No);
 	if (ret != QMessageBox::Yes)
@@ -1126,7 +1135,7 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 				<< error.code << error.message;
 			if (m_messages) {
 				m_messages->addSystemMessage(
-					QStringLiteral("删除会话失败: %1 %2").arg(error.code, error.message),
+					tr("删除会话失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 			}
 		});
@@ -1167,9 +1176,9 @@ void DSHHub::callSessionCreate()
 			if (sid.isEmpty())
 				return;
 
-			switchToFreshSession(sid, QStringLiteral("未命名会话"), /*loadHistory=*/true);
+			switchToFreshSession(sid, tr("未命名会话"), /*loadHistory=*/true);
 			if (m_sidebar) {
-				m_sidebar->workspaceList()->addSession(sid, QStringLiteral("未命名会话"));
+				m_sidebar->workspaceList()->addSession(sid, tr("未命名会话"));
 				m_sidebar->workspaceList()->setCurrentSession(sid);
 			}
 		},
@@ -1177,7 +1186,7 @@ void DSHHub::callSessionCreate()
 			finishInitialization();
 			if (m_messages)
 				m_messages->addSystemMessage(
-					QStringLiteral("创建会话失败: %1 %2").arg(error.code, error.message),
+					tr("创建会话失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 		});
 }
@@ -1199,7 +1208,7 @@ void DSHHub::onInitialSessionReady(const QString& sessionId, const QString& titl
 void DSHHub::onSessionCreated(const QString& sessionId, const QString& workspaceId)
 {
 	// 统一入口：取消旧构建/停流式/缓存当前会话/换空列表/绑定并加载新会话
-	switchToFreshSession(sessionId, QStringLiteral("未命名会话"), /*loadHistory=*/true);
+	switchToFreshSession(sessionId, tr("未命名会话"), /*loadHistory=*/true);
 	if (!m_defaultAgentPreset.isEmpty() && m_api) {
 		m_api->callMethod(QStringLiteral("agentPreset.select"),
 			SessionCommands::agentPresetSelect(sessionId, m_defaultAgentPreset), {}, {});
@@ -1243,8 +1252,8 @@ void DSHHub::onHistoryLoadMoreButtonVisibleChanged(bool visible)
 	if (visible || hasContent) {
 		m_loadMoreButton->show();
 		m_loadMoreButton->setEnabled(true);
-		if (m_loadMoreButton->text() != QStringLiteral("加载更多"))
-			m_loadMoreButton->setText(QStringLiteral("加载更多"));
+		if (m_loadMoreButton->text() != tr("加载更多"))
+			m_loadMoreButton->setText(tr("加载更多"));
 	}
 	else {
 		m_loadMoreButton->hide();
@@ -1379,7 +1388,7 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 				});
 		}
 		else if (m_messages) {
-			m_messages->addSystemMessage(QStringLiteral("收到提问请求，但无法创建内联面板。"), m_messagesLayout);
+			m_messages->addSystemMessage(tr("收到提问请求，但无法创建内联面板。"), m_messagesLayout);
 		}
 	}
 	else if (type == QStringLiteral("approval/requested")) {
@@ -1392,7 +1401,7 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 				});
 		}
 		else if (m_messages) {
-			m_messages->addSystemMessage(QStringLiteral("收到审批请求，但无法创建内联面板。"), m_messagesLayout);
+			m_messages->addSystemMessage(tr("收到审批请求，但无法创建内联面板。"), m_messagesLayout);
 		}
 	}
 }
@@ -1404,7 +1413,7 @@ void DSHHub::handleTransportError(const QString& context, const QString& message
 		return;
 
 	m_messages->addSystemMessage(
-		QStringLiteral("传输错误 [%1]: %2").arg(context, message),
+		tr("传输错误 [%1]: %2").arg(context, message),
 		m_messagesLayout);
 }
 
@@ -1417,7 +1426,7 @@ void DSHHub::showNoMoreToast()
 	if (!parent)
 		parent = this;
 
-	m_toastLabel->setText(QStringLiteral("啊哦，没有更多了"));
+	m_toastLabel->setText(tr("啊哦，没有更多了"));
 	m_toastLabel->adjustSize();
 	m_toastLabel->setGeometry(
 		(parent->width() - m_toastLabel->width() - 32) / 2,

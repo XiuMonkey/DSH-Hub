@@ -2,6 +2,7 @@
 #include "ThemeManager.h"
 
 #include <QCloseEvent>
+#include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayoutItem>
@@ -33,7 +34,7 @@ PopupWindow::PopupWindow(QWidget* parent)
 	headerLayout->setSpacing(8);
 	headerLayout->setContentsMargins(0, -4, -4, 0); // 关闭按钮向上、向右各靠近 4px
 
-	m_titleLabel = new QLabel(QStringLiteral("弹窗"), body);
+	m_titleLabel = new QLabel(body);
 	m_titleLabel->setObjectName(QStringLiteral("popupTitle"));
 
 	m_closeButton = new QPushButton(QStringLiteral("✕"), body);
@@ -55,12 +56,32 @@ PopupWindow::PopupWindow(QWidget* parent)
 
 	// 窗口级样式：本弹窗与后续 setContent 加入的内容统一应用当前主题样式表
 	Theme::applyToWindow(this);
+
+	// 标题留空 -> 显示可翻译的默认名（子类可用 setTitle 覆盖）
+	retranslateUi();
 }
 
 void PopupWindow::setTitle(const QString& title)
 {
+	m_title = title;
+	retranslateUi();
+}
+
+void PopupWindow::retranslateUi()
+{
+	// 标题栏左侧文案 + 关闭按钮的无障碍名/提示都随语言走
 	if (m_titleLabel)
-		m_titleLabel->setText(title);
+		m_titleLabel->setText(m_title.isEmpty() ? tr("弹窗") : m_title);
+	if (m_closeButton)
+		m_closeButton->setToolTip(tr("关闭"));
+}
+
+void PopupWindow::changeEvent(QEvent* event)
+{
+	QWidget::changeEvent(event);
+
+	if (event->type() == QEvent::LanguageChange)
+		retranslateUi();
 }
 
 void PopupWindow::setContent(QWidget* content)

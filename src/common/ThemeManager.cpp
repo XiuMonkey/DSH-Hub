@@ -75,6 +75,11 @@ namespace Theme
 			}
 
 			// 释放默认模板：stylesDir 里缺失的文件从 qrc 拷出；已存在不覆盖
+			// （用户定制优先）。
+			//
+			// 代价是：程序发布的新版模板会被旧的同名外部文件盖住——界面看不出报错，
+			// 只是新控件的样式一直不生效。这里对“已存在但与内置模板不同”的文件打一条
+			// 提示（不覆盖，也不删用户的东西），把这种沉默的失效变成可查的日志。
 			void ensureDefaults()
 			{
 				QDir dir(stylesDir);
@@ -87,10 +92,6 @@ namespace Theme
 					<< QStringLiteral("theme-light.json")
 					<< QStringLiteral("theme-dark.json");
 				for (const QString& file : files) {
-					const QString target = dir.filePath(file);
-					if (QFile::exists(target))
-						continue; // 已存在 -> 不覆盖（用户定制优先）
-
 					QFile res(resourcePath(file));
 					if (!res.open(QIODevice::ReadOnly)) {
 						qWarning().noquote() << "[Theme] missing default template in qrc:" << file;
@@ -98,6 +99,26 @@ namespace Theme
 					}
 					const QByteArray data = res.readAll();
 					res.close();
+
+					const QString target = dir.filePath(file);
+					if (QFile::exists(target)) {
+						QFile existing(target);
+						const bool readable = existing.open(QIODevice::ReadOnly);
+						const QByteArray current = readable ? existing.readAll() : QByteArray();
+						if (readable)
+							existing.close();
+
+						// 与内置模板不一致时，这份外部文件会在 loadText() 里胜出。
+						// 只提示，不动它：它可能是用户自己改的。
+						if (current != data) {
+							qInfo().noquote()
+								<< "[Theme] external style differs from the shipped default:"
+								<< target
+								<< "-> 这份外部样式优先于程序内置模板；"
+								   "若刚更新过程序、看不到新样式，请在“设置 - 外观设置”里重置样式为默认";
+						}
+						continue;
+					}
 
 					QFile out(target);
 					if (out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -428,7 +449,7 @@ namespace Theme
 		spinner->start();
 		layout->addWidget(spinner, 0, Qt::AlignHCenter);
 
-		auto* label = new QLabel(QStringLiteral("正在切换主题..."), body);
+		auto* label = new QLabel(QCoreApplication::translate("Theme", "正在切换主题..."), body);
 		label->setObjectName(QStringLiteral("themeSwitchLabel"));
 		label->setAlignment(Qt::AlignCenter);
 		layout->addWidget(label);

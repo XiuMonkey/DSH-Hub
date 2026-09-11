@@ -178,9 +178,6 @@
         <ClCompile Include="src\common\SettingsStore.cpp">
           <Filter>Source Files\Common</Filter>
         </ClCompile>
-        <ClCompile Include="src\common\CredentialsService.cpp">
-          <Filter>Source Files\Common</Filter>
-        </ClCompile>
         <ClCompile Include="src\common\AgentPresetService.cpp">
           <Filter>Source Files\Common</Filter>
         </ClCompile>
@@ -200,6 +197,21 @@
           <Filter>Source Files\Common</Filter>
         </ClCompile>
         <ClCompile Include="src\ui\StatusPopupWindow.cpp">
+          <Filter>Source Files\UI</Filter>
+        </ClCompile>
+        <ClCompile Include="src\ui\ModelSelector.cpp">
+          <Filter>Source Files\UI</Filter>
+        </ClCompile>
+        <ClCompile Include="src\ui\ModelListPanel.cpp">
+          <Filter>Source Files\UI</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\ModelSelectionService.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\TranslationManager.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\ui\TranslationUi.cpp">
           <Filter>Source Files\UI</Filter>
         </ClCompile>
   </ItemGroup>
@@ -264,6 +276,12 @@
     <QtMoc Include="include\PluginMarketInstaller.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="include\ModelSelector.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="include\ModelListPanel.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\DshEventParser.h">
@@ -302,9 +320,6 @@
         <ClInclude Include="include\SettingsStore.h">
           <Filter>Header Files</Filter>
         </ClInclude>
-        <ClInclude Include="include\CredentialsService.h">
-          <Filter>Header Files</Filter>
-        </ClInclude>
         <ClInclude Include="include\AgentPresetService.h">
           <Filter>Header Files</Filter>
         </ClInclude>
@@ -317,6 +332,12 @@
         <ClInclude Include="include\ExtensionInstallTask.h">
           <Filter>Header Files</Filter>
         </ClInclude>
+        <QtMoc Include="include\TranslationManager.h">
+          <Filter>Header Files</Filter>
+        </QtMoc>
+        <QtTranslation Include="translations\dshhub_en.ts">
+          <Filter>Translation Files</Filter>
+        </QtTranslation>
 
   </ItemGroup>
 </Project>

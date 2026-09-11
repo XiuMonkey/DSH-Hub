@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "ThemeManager.h"
 #include "TimingLogger.h"
+#include "TranslationManager.h"
 
 #include <QCoreApplication>
 #include <QFont>
@@ -14,6 +15,11 @@ int main(int argc, char* argv[])
 
 	Logger::init();
 	TimingLogger::mark(QStringLiteral("Logger init (baseline)"));
+
+	// 界面语言：按保存的设置 -> 系统语言 -> 源码语言（中文）的顺序装 QTranslator。
+	// 必须在创建任何窗口之前：窗口构造时的 tr() 就要按目标语言取文案。
+	Translation::init();
+	TimingLogger::mark(QStringLiteral("translation init"));
 
 	// 根据系统颜色模式自动切换亮色/暗色主题
 	const bool dark = app.styleHints()->colorScheme() == Qt::ColorScheme::Dark;
