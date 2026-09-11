@@ -13,9 +13,12 @@
 class DshApiClient;
 class DshNamedPipeBridge;
 class DllCaller;
+class QByteArray;
+class QEvent;
 class QLabel;
 class QLocalSocket;
 class QMoveEvent;
+class QShowEvent;
 class QThreadPool;
 class QUrl;
 class QResizeEvent;
@@ -24,6 +27,7 @@ class SessionPrefetcher;
 class ChatInputWidget;
 class Sidebar;
 class TopBar;
+class TitleBar;
 class Settings;
 class PluginsManager;
 class ExtensionManagerPopup;
@@ -83,6 +87,14 @@ private:
 	void finishInitialization();
 	void resizeEvent(QResizeEvent* event) override;
 	void moveEvent(QMoveEvent* event) override;
+	void showEvent(QShowEvent* event) override;
+	void changeEvent(QEvent* event) override;
+	// 无边框窗口的原生消息全部转交给 common/WindowFrame 判定
+	// （WM_NCCALCSIZE 让客户区铺满窗口、WM_NCHITTEST 判缩放热区与标题栏拖动区）
+	bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
+	// 窗口状态变化后的界面收尾：切圆角描边、补偿系统多给的一圈、刷新标题栏按钮图标
+	void syncWindowFrameStyle();
+
 	// 把当前打开的弹窗重新居中于宿主窗口（拖动/缩放宿主时保持跟随）
 	void keepOpenPopupsCentered();
 
@@ -148,6 +160,7 @@ private:
 	QLabel* m_toastLabel = nullptr;
 	MessageQuery* m_messages = nullptr;
 	TopBar* m_topBar = nullptr;
+	TitleBar* m_titleBar = nullptr;           // 自绘标题栏（替代系统标题栏）
 
 	HistoryLoader* m_historyLoader = nullptr;
 

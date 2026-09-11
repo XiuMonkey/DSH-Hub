@@ -1,5 +1,6 @@
 #include "Settings.h"
 #include "ThemeManager.h"
+#include "WindowFrame.h"
 #include "DshApiClient.h"
 #include "SettingsStore.h"
 
@@ -66,7 +67,7 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	m_apiKeyEdit = new QLineEdit(modelPanel);
 	m_apiKeyEdit->setObjectName(QStringLiteral("modelSettingsEdit"));
 	m_apiKeyEdit->setPlaceholderText(QStringLiteral("输入模型设置"));
-	// 初始文本由 openSettings() 每次打开时经 refreshOnOpen() 同步，
+	// 初始文本：openSettings() 每次打开时经 refreshOnOpen() 同步。
 	// 避免常驻对象在服务端未就绪时就读取凭据。
 
 	modelLayout->addWidget(apiLabel);
@@ -87,7 +88,7 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	m_agentPresetButton->setMinimumWidth(280);
 	m_agentPresetButton->setCursor(Qt::PointingHandCursor);
 
-	// 用普通 QFrame 做下拉面板，直接像按钮/气泡一样用 QSS border-radius。
+	// 用普通 QFrame 做下拉面板，直接像按钮气泡一样用 QSS border-radius。
 	// 因为它是 Settings 窗口的子控件，父窗口背景会填满圆角外部，不会出现独立 Popup 的直角矩形背景。
 	m_agentPresetPopup = new QFrame(this);
 	m_agentPresetPopup->setObjectName(QStringLiteral("agentPresetPopup"));
@@ -156,7 +157,7 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	m_serverUrlEdit = new QLineEdit(serverPanel);
 	m_serverUrlEdit->setObjectName(QStringLiteral("serverUrlEdit"));
 	m_serverUrlEdit->setPlaceholderText(QStringLiteral("http://127.0.0.1:3080"));
-	// 初始文本由 openSettings() 每次打开时经 refreshOnOpen() 同步
+	// 初始文本：openSettings() 每次打开时经 refreshOnOpen() 同步
 
 	auto* serverHint = new QLabel(QStringLiteral("留空表示使用内置 DSH 服务；保存后需要重启服务生效。"), serverPanel);
 	serverHint->setWordWrap(true);
@@ -260,7 +261,7 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	setContent(content);
 
 	resize(680, 480);
-	// 预设列表在每次打开时经 refreshOnOpen() 加载，这里不再预载
+	// 预设列表在每次打开时经 refreshOnOpen() 加载，这里不再预取。
 	hide();
 }
 
@@ -276,13 +277,14 @@ void Settings::openSettings()
 	if (isVisible())
 		return;
 
-	// 遮罩：宿主主窗口的子控件，铺满并盖住主界面
+	// 遮罩：宿主主窗口的子控件，铺满内容区并盖住主界面
+	// （不含自绘标题栏，否则窗口按钮会被一起盖住点不动）
 	if (!m_overlay) {
 		m_overlay = new QWidget(m_host);
 		m_overlay->setObjectName(QStringLiteral("settingsOverlay"));
 		m_overlay->setAttribute(Qt::WA_StyledBackground, true);
 	}
-	m_overlay->setGeometry(m_host->rect());
+	m_overlay->setGeometry(WindowFrame::overlayRect(m_host));
 	m_overlay->raise();
 	m_overlay->show();
 	// 强制先让遮罩画出来（否则与下方弹窗同一帧才呈现，观感像弹窗先出、遮罩延迟）
@@ -309,7 +311,7 @@ void Settings::closeSettings()
 void Settings::syncOverlayToHost()
 {
 	if (m_overlay && m_host)
-		m_overlay->setGeometry(m_host->rect());
+		m_overlay->setGeometry(WindowFrame::overlayRect(m_host));
 }
 
 void Settings::refreshOnOpen()
@@ -370,7 +372,7 @@ void Settings::populateAgentPresets(const QVector<AgentPreset>& presets)
 		return;
 	}
 
-	// 本地记住的选择优先，其次服务端默认，最后退回第一项
+	// 本地记住的选择优先，其次服务端默认，最后退回第一个。
 	const QString selectedId = AgentPresetService::resolveSelectedId(
 		presets, SettingsStore::defaultAgentPresetId());
 

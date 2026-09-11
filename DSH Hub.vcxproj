@@ -149,6 +149,8 @@
     <ClCompile Include="src\ui\SpinnerWidget.cpp" />
     <ClCompile Include="src\network\SessionPrefetcher.cpp" />
     <ClCompile Include="src\ui\TopBar.cpp" />
+    <ClCompile Include="src\ui\TitleBar.cpp" />
+    <ClCompile Include="src\common\WindowFrame.cpp" />
     <ClCompile Include="src\chat\CacheHistoryManager.cpp" />
     <ClCompile Include="src\ui\PopupWindow.cpp" />
     <ClCompile Include="src\ui\Settings.cpp" />
@@ -165,6 +167,7 @@
     <None Include="resources\registry-snapshot.json" />
     <None Include="resources\DSH-Hub-Logo-Tiny@2x.png" />
     <None Include="resources\DSH-Hub-Logo-Tiny-Dark@2x.png" />
+    <None Include="resources\DSH-Hub-Icon.png" />
     <None Include="resources\DSH Hub.ico" />
     <ResourceCompile Include="resources\DSH Hub.rc" />
   </ItemGroup>
@@ -177,6 +180,7 @@
     <QtMoc Include="include\MessageQuery.h" />
     <QtMoc Include="include\SpinnerWidget.h" />
     <QtMoc Include="include\TopBar.h" />
+    <QtMoc Include="include\TitleBar.h" />
     <QtMoc Include="include\PopupWindow.h" />
     <QtMoc Include="include\Settings.h" />
     <QtMoc Include="include\PluginsManager.h" />
@@ -200,6 +204,7 @@
     <ClInclude Include="include\InteractionHandler.h" />
     <ClInclude Include="include\CacheHistoryManager.h" />
     <ClInclude Include="include\ThemeManager.h" />
+    <ClInclude Include="include\WindowFrame.h" />
     <ClInclude Include="include\Logger.h" />
     <ClInclude Include="include\SessionCatalog.h" />
     <ClInclude Include="include\SessionService.h" />

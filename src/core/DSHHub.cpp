@@ -11,6 +11,8 @@
 #include "SessionPrefetcher.h"
 #include "CodeHighlighter.h"
 #include "TopBar.h"
+#include "TitleBar.h"
+#include "WindowFrame.h"
 #include "Settings.h"
 #include "PluginsManager.h"
 #include "DshNamedPipeBridge.h"
@@ -25,6 +27,7 @@
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QMoveEvent>
+#include <QShowEvent>
 
 #include <QDebug>
 #include <QDir>
@@ -46,6 +49,7 @@
 #include <QScrollArea>
 
 #include <QProcess>
+
 
 #include <QTimer>
 #include <QUrl>
@@ -131,6 +135,14 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	// DllCaller 内部按 DLL 串行、跨 DLL 并行。
 	m_toolPool = new QThreadPool(this);
 	m_toolPool->setMaxThreadCount(4);
+
+	// 无边框窗口：系统标题栏与边框全部由自绘替代 —— 标题栏见 TitleBar，
+	// 圆角 + 1px 描边由 #dshhubCentral 的 QSS 画（见 base.qss），
+	// 窗口本体透明，圆角之外什么都不画。
+	// 必须在原生窗口创建之前设置，否则会触发窗口重建。
+	setObjectName(QStringLiteral("dshHubWindow"));
+	setWindowFlag(Qt::FramelessWindowHint, true);
+	setAttribute(Qt::WA_TranslucentBackground, true);
 
 	// 样式表按窗口安装（替代全局 qApp 表）：本窗口与后续加入的子控件统一应用当前主题
 	Theme::applyToWindow(this);
@@ -330,6 +342,9 @@ void DSHHub::resizeEvent(QResizeEvent* event)
 {
 	QMainWindow::resizeEvent(event);
 
+	// 窗口尺寸变了就重算一次边框状态（含跨显示器/DPI 变化时的工作区补偿）
+	syncWindowFrameStyle();
+
 	if (m_initOverlay)
 		m_initOverlay->setGeometry(rect());
 
@@ -339,7 +354,7 @@ void DSHHub::resizeEvent(QResizeEvent* event)
 	if (m_pluginsManager)
 		m_pluginsManager->syncOverlayToHost();
 	if (m_extensionOverlay)
-		m_extensionOverlay->setGeometry(rect());
+		m_extensionOverlay->setGeometry(WindowFrame::overlayRect(this));
 
 	// 宿主缩放后把打开的弹窗重新居中
 	keepOpenPopupsCentered();
@@ -350,6 +365,55 @@ void DSHHub::moveEvent(QMoveEvent* event)
 	QMainWindow::moveEvent(event);
 	// 弹窗是宿主“拥有的”独立窗口（Windows 上不随宿主拖动），这里手动跟随
 	keepOpenPopupsCentered();
+}
+
+// ------------------------------------------------------------------
+// 无边框窗口（自绘圆角边框 + 自绘标题栏）
+// ------------------------------------------------------------------
+
+void DSHHub::showEvent(QShowEvent* event)
+{
+	QMainWindow::showEvent(event);
+	// 原生窗口到这一刻才真正存在，补样式位只能在这里做（逻辑见 common/WindowFrame）
+	WindowFrame::applyNativeStyle(this);
+	syncWindowFrameStyle();
+}
+
+void DSHHub::changeEvent(QEvent* event)
+{
+	QMainWindow::changeEvent(event);
+	if (event->type() == QEvent::WindowStateChange)
+		syncWindowFrameStyle();
+}
+
+// ------------------------------------------------------------------
+// 边框的“界面收尾”：三步都在 common/WindowFrame 里判定，这里只负责按顺序调用。
+// 画的部分见 resources/styles/base.qss 的 #dshhubCentral。
+// ------------------------------------------------------------------
+void DSHHub::syncWindowFrameStyle()
+{
+	QWidget* surface = centralWidget();
+	if (!surface)
+		return;
+
+	const bool edgeToEdge = WindowFrame::isEdgeToEdge(this);
+	// 贴屏幕边缘时切掉圆角与描边（QSS 的 [maximized="true"] 规则）
+	WindowFrame::applyBorderState(surface, edgeToEdge);
+	// 最大化时系统给的矩形比工作区大一圈，补进内容边距
+	WindowFrame::applyMaximizedContentInset(this, surface->layout());
+	// 标题栏中间的按钮在“最大化/还原”之间换图标
+	if (m_titleBar)
+		m_titleBar->setMaximizedState(edgeToEdge);
+}
+
+bool DSHHub::nativeEvent(const QByteArray& eventType, void* message, qintptr* result)
+{
+	// 无边框窗口的原生消息判定全在 common/WindowFrame（含 WM_NCCALCSIZE 让客户区
+	// 铺满窗口、WM_NCHITTEST 判缩放热区与标题栏拖动区）；这里只是转交。
+	if (WindowFrame::handleNativeMessage(this, m_titleBar, eventType, message, result))
+		return true;
+
+	return QMainWindow::nativeEvent(eventType, message, result);
 }
 
 void DSHHub::keepOpenPopupsCentered()
@@ -1213,7 +1277,7 @@ void DSHHub::openExtensions()
 		m_extensionOverlay->setObjectName(QStringLiteral("extensionOverlay"));
 		m_extensionOverlay->setAttribute(Qt::WA_StyledBackground, true);
 	}
-	m_extensionOverlay->setGeometry(rect());
+	m_extensionOverlay->setGeometry(WindowFrame::overlayRect(this));
 	m_extensionOverlay->raise();
 	m_extensionOverlay->show();
 	// 强制先让遮罩画出来（否则与下方弹窗同一帧才呈现，观感像弹窗先出、遮罩延迟）

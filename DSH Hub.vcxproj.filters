@@ -65,6 +65,9 @@
       <None Include="resources\DSH-Hub-Logo-Tiny@2x.png">
         <Filter>Resource Files</Filter>
       </None>
+      <None Include="resources\DSH-Hub-Icon.png">
+        <Filter>Resource Files</Filter>
+      </None>
         <None Include="resources\DSH-Hub-Logo-Tiny-Dark@2x.png">
           <Filter>Resource Files</Filter>
         </None>
@@ -111,6 +114,12 @@
       </ClCompile>
       <ClCompile Include="src\ui\TopBar.cpp">
         <Filter>Source Files\UI</Filter>
+      </ClCompile>
+      <ClCompile Include="src\ui\TitleBar.cpp">
+        <Filter>Source Files\UI</Filter>
+      </ClCompile>
+      <ClCompile Include="src\common\WindowFrame.cpp">
+        <Filter>Source Files\Common</Filter>
       </ClCompile>
       <ClCompile Include="src\chat\CacheHistoryManager.cpp">
         <Filter>Source Files\Chat</Filter>
@@ -216,6 +225,12 @@
       <QtMoc Include="include\TopBar.h">
         <Filter>Header Files</Filter>
       </QtMoc>
+      <ClInclude Include="include\TitleBar.h">
+        <Filter>Header Files</Filter>
+      </ClInclude>
+      <ClInclude Include="include\WindowFrame.h">
+        <Filter>Header Files</Filter>
+      </ClInclude>
       <QtMoc Include="include\PopupWindow.h">
         <Filter>Header Files</Filter>
       </QtMoc>
