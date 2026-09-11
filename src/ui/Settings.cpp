@@ -103,6 +103,9 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	m_agentPresetList->setObjectName(QStringLiteral("agentPresetList"));
 	m_agentPresetList->setFrameShape(QFrame::NoFrame);
 	m_agentPresetList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	// 滚动条早于 objectName 存在（基类构造时创建），设完名字重新解析一次，
+	// 否则 #agentPresetList QScrollBar 规则匹配不上、滚动条按原生样式画
+	Theme::repolishScrollArea(m_agentPresetList);
 	popupLayout->addWidget(m_agentPresetList);
 
 	auto* agentHint = new QLabel(QStringLiteral("新会话将使用该预设；修改后对当前会话也会立即生效。"), agentPanel);

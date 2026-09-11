@@ -57,6 +57,15 @@ namespace Theme
 	inline QString inputBg() { return color(QStringLiteral("inputBg")); }
 	inline QString accent() { return color(QStringLiteral("accent")); }
 
+	// 让某个控件（QAbstractScrollArea 时含它的横/纵两个滚动条）重新匹配当前样式表。
+	//
+	// 为什么需要：QAbstractScrollArea 的滚动条是在**基类构造**里创建并首次解析规则的，
+	// 那时子类构造函数体里的 setObjectName("...") 还没执行，QStyleSheetStyle 就把
+	// “匹配不到 #objectName QScrollBar” 缓存了下来；之后再设 objectName 不会触发重新
+	// 匹配，滚动条就一直按基础（原生/老式）样式绘制。凡是“先建控件、后设 objectName”
+	// 的滚动区都要在设完名字后调一次本函数。
+	void repolishScrollArea(QWidget* widget);
+
 	// 切换主题：显示过渡弹窗，后台创建新主窗口，完成后自动切换
 	void switchTheme(QWidget* currentWindow);
 }

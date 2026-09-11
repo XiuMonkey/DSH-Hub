@@ -3,6 +3,7 @@
 #include "DSHHub.h"
 #include "SpinnerWidget.h"
 
+#include <QAbstractScrollArea>
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -18,6 +19,8 @@
 #include <QRegularExpression>
 #include <QResource>
 #include <QScreen>
+#include <QScrollBar>
+#include <QStyle>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -371,6 +374,33 @@ namespace Theme
 	QString styleSheet()
 	{
 		return impl().qss;
+	}
+
+	// 见头文件注释：滚动条是基类构造时建好的，那时子类的 objectName 还没设，
+	// QStyleSheetStyle 会把"匹配不到 #objectName QScrollBar"缓存下来，
+	// 这里在设完名字后强制重新解析一次（控件本体 + 两个滚动条）。
+	void repolishScrollArea(QWidget* widget)
+	{
+		if (!widget)
+			return;
+
+		if (QStyle* style = widget->style()) {
+			style->unpolish(widget);
+			style->polish(widget);
+		}
+
+		auto* area = qobject_cast<QAbstractScrollArea*>(widget);
+		if (!area)
+			return;
+
+		for (QScrollBar* bar : { area->horizontalScrollBar(), area->verticalScrollBar() }) {
+			if (!bar)
+				continue;
+			if (QStyle* style = bar->style()) {
+				style->unpolish(bar);
+				style->polish(bar);
+			}
+		}
 	}
 
 	void switchTheme(QWidget* currentWindow)

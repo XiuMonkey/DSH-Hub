@@ -105,6 +105,10 @@ QTextBrowser* AgentMessageUnit::createRichPart(const QString& objectName)
 	auto* view = new QTextBrowser(this);
 	view->setObjectName(objectName); // 透明/无边框外观见 chat.qss（#agentProse 等）
 
+	// 滚动条是 QAbstractScrollArea 基类构造时建好的，那时 objectName 还没设，
+	// 规则会被缓存成"匹配不到"；设完名字后重新解析一次（#agentProse QScrollBar）
+	Theme::repolishScrollArea(view);
+
 	view->setReadOnly(true);
 
 	// 关闭内部滚动：高度交给 fitProseView()；水平滚动条按需，防止极端 HTML 撑宽
