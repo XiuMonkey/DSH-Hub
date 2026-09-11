@@ -6,25 +6,27 @@
 // 扩展管理弹窗：
 //   - 不直接弹出文件选择框，而是先打开管理窗口
 //   - 窗口中可以安装 .ext 扩展、查看已安装扩展、移除扩展
-//   - 继承 PopupWindow，样式与插件弹窗保持一致
+//   - 继承 StatusPopupWindow，样式与插件弹窗保持一致
+//
+// 与界面无关的逻辑都在 common：
+//   - extensions.json / 扩展目录 / cordis.patch.yml -> ExtensionRegistry
+//   - 后台解压与安装任务                          -> ExtensionInstallTask
 // ------------------------------------------------------------------
 
-#include "PopupWindow.h"
-#include "ExtensionLoader.h"
+#include "StatusPopupWindow.h"
 
-#include <future>
+#include "ExtensionInstallTask.h"
+#include "ExtensionRegistry.h"
 
 #include <QString>
-#include <QStringList>
 
 class QLabel;
 class QTimer;
 class QListWidget;
 class QPushButton;
 class QVBoxLayout;
-class QEvent;
 
-class ExtensionManagerPopup : public PopupWindow
+class ExtensionManagerPopup : public StatusPopupWindow
 {
 	Q_OBJECT
 
@@ -46,34 +48,17 @@ private slots:
 	void removeSelected();
 	void refresh();
 
-protected:
-	bool eventFilter(QObject* watched, QEvent* event) override;
-
 private:
-	QString serverProfilePath() const;
-	QString nodeModulesPath() const;
-	QString registryPath() const;
-
-	QStringList loadInstalledExtensions() const;
-	void saveInstalledExtensions(const QStringList& names);
-
+	// 把 ExtensionRegistry 里的已安装清单画到列表控件
 	void populateList();
-	// 更新状态栏：按“当前真实宽度”重排版（首次/宽度变化后）
-	void setStatus(const QString& text);
-	void updateStatusDisplay();
 
-	bool removeExtensionDirectory(const QString& name, QString* error);
+	ExtensionRegistry m_registry;
+	ExtensionInstallTask m_installTask;
 
-	QString m_serverProfilePath;
 	QListWidget* m_listWidget = nullptr;
 	QLabel* m_statusLabel = nullptr;
 	QPushButton* m_installButton = nullptr;
 	QPushButton* m_removeButton = nullptr;
 	QPushButton* m_refreshButton = nullptr;
-	QString m_lastStatusText; // 最近一次完整状态文本（供宽度变化后重排）
-	std::future<bool> m_installFuture;
-	ExtensionLoader::LoadedExtension m_pendingExt;
-	QString m_pendingError;
-	bool m_installing = false;
 	QTimer* m_installTimer = nullptr;
 };

@@ -10,7 +10,6 @@
 #include "DshApiClient.h"
 #include "SessionPrefetcher.h"
 #include "CodeHighlighter.h"
-#include "SpinnerWidget.h"
 #include "TopBar.h"
 #include "Settings.h"
 #include "PluginsManager.h"
@@ -19,7 +18,6 @@
 #include "ExtensionManagerPopup.h"
 #include "InteractionHandler.h"
 
-#include "DshEventParser.h"
 #include "AgentMessageUnit.h"
 #include "MessageQuery.h"
 #include "LoadMoreButton.h"
@@ -33,15 +31,11 @@
 #include <QFileInfo>
 #include <QFile>
 #include <QFileDialog>
-#include <QFrame>
-
-#include <QHBoxLayout>
 
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QLabel>
+#include <QLayout>
 #include <QMessageBox>
-#include <QPixmap>
 
 #include <QGraphicsOpacityEffect>
 #include <QPropertyAnimation>
@@ -52,18 +46,13 @@
 #include <QScrollArea>
 
 #include <QProcess>
-#include <QProcessEnvironment>
-#include <QRegularExpression>
-#include <QSettings>
 
 #include <QTimer>
 #include <QUrl>
-#include <QTcpSocket>
 #include <QLocalSocket>
-#include <QVBoxLayout>
-#include <QPointer>
-#include <QRunnable>
 #include <QThreadPool>
+
+#include "SettingsStore.h"
 
 DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialServerProcess)
 	: QMainWindow(parent)
@@ -148,8 +137,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	setWindowTitle(QStringLiteral("DSH Hub"));
 	setAttribute(Qt::WA_DeleteOnClose);
 
-	QSettings settings;
-	m_defaultAgentPreset = settings.value(QStringLiteral("agent/defaultPreset")).toString();
+	m_defaultAgentPreset = SettingsStore::defaultAgentPresetId();
 
 	// 启动命名管道桥接服务，供 Node/DSh server 调用 DLL 工具
 	m_pipeBridge = new DshNamedPipeBridge(this);
@@ -238,21 +226,15 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	m_streamTimer = new QTimer(this);
 	m_streamTimer->setInterval(50);
 	m_streamTimer->setSingleShot(true);
-	connect(m_streamTimer, &QTimer::timeout, this, [this]() {
-		AgentMessageUnit* target = m_messages ? m_messages->lastAgentUnitIfLast() : nullptr;
-		if (!target)
-			return;
-		target->flushStream();
-		if (m_scrollArea && m_scrollArea->verticalScrollBar()) {
-			QScrollBar* bar = m_scrollArea->verticalScrollBar();
-			if (bar->value() >= bar->maximum() - 80)
-				scrollToBottomNow();
-		}
-		});
+	connect(m_streamTimer, &QTimer::timeout, this, &DSHHub::flushStreamingFrame);
 
 	// 信号槽
 	connect(m_chatInput, &ChatInputWidget::sendRequested, this, &DSHHub::onSendClicked);
 	connect(m_chatInput, &ChatInputWidget::stopRequested, this, &DSHHub::onStopRequested);
+	connect(m_chatInput, &ChatInputWidget::thinkingDepthChanged, this, [](const QString& levelId) {
+		qInfo().noquote() << QStringLiteral("[DSH Hub] thinking depth ->")
+			<< (levelId.isEmpty() ? QStringLiteral("(默认)") : levelId);
+		});
 
 	connect(m_sidebar, &Sidebar::newWorkspaceRequested,
 		this, &DSHHub::onNewWorkspaceClicked);
@@ -376,7 +358,7 @@ void DSHHub::keepOpenPopupsCentered()
 	const auto recenter = [center](QWidget* popup) {
 		if (popup && popup->isVisible())
 			popup->move(center - popup->rect().center());
-	};
+		};
 	recenter(m_settings);
 	recenter(m_pluginsManager);
 	recenter(m_extensionPopup);
@@ -466,7 +448,7 @@ void DSHHub::onSendClicked()
 	sendPrompt(text);
 }
 
-void DSHHub::onStopRequested()  
+void DSHHub::onStopRequested()
 {
 	if (!m_streaming)
 		return;
@@ -503,13 +485,20 @@ void DSHHub::onStopRequested()
 					m_messagesLayout);
 			}
 		});
-
 }
 
 void DSHHub::updateStreamingUi()
 {
 	if (m_chatInput)
 		m_chatInput->setStreaming(m_streaming);
+}
+
+void DSHHub::syncComposerSession()
+{
+	// 输入区底部的“思考深度”控件按当前会话的模型目录刷新；
+	// 会话为空（尚未创建/已被删除）时控件自行隐藏
+	if (m_chatInput)
+		m_chatInput->setThinkingSession(m_api, m_sessionId);
 }
 
 void DSHHub::clearInteractionPanels()
@@ -549,7 +538,6 @@ void DSHHub::onNewWorkspaceClicked()
 					m_messagesLayout);
 			}
 		});
-
 }
 
 void DSHHub::onCreateSessionInWorkspace(const QString& workspaceId)
@@ -575,7 +563,6 @@ void DSHHub::onCreateSessionInWorkspace(const QString& workspaceId)
 					m_messagesLayout);
 			}
 		});
-
 }
 
 void DSHHub::sendPrompt(const QString& text)
@@ -635,7 +622,6 @@ void DSHHub::createSessionAndSend(const QString& text)
 					m_messagesLayout);
 			}
 		});
-
 }
 
 void DSHHub::cacheCurrentMessages()
@@ -667,6 +653,7 @@ void DSHHub::switchToFreshSession(const QString& sessionId, const QString& title
 	cacheCurrentMessages();
 	m_messages = new MessageQuery;
 	m_sessionId = sessionId;
+	syncComposerSession();
 
 	if (m_topBar)
 		m_topBar->setTitle(title);
@@ -744,7 +731,6 @@ bool DSHHub::tryRestoreCachedMessages(const QString& sessionId)
 	}
 
 	return true;
-
 }
 
 void DSHHub::swapToMessageQuery(MessageQuery* query)
@@ -788,22 +774,14 @@ void DSHHub::scrollToBottomNow()
 	// 避免先看到顶部再闪到底部。
 	m_scrollArea->setUpdatesEnabled(false);
 
-	// 强制触发一次布局，让 scrollbar maximum 尽快有效
-	if (m_scrollArea->widget()->layout())
-		m_scrollArea->widget()->layout()->activate();
+	fitContentThenLayout();
 
 	// 等 Qt 完成本轮布局/事件处理后，再真正滚动并恢复刷新
 	QTimer::singleShot(0, this, [this]() {
 		if (!m_scrollArea)
 			return;
 
-		// 再次强制布局/调整尺寸，确保 scrollbar maximum 已经更新
-		QWidget* content = m_scrollArea->widget();
-		if (content) {
-			if (content->layout())
-				content->layout()->activate();
-			content->adjustSize();
-		}
+		fitContentThenLayout();
 
 		if (m_scrollArea->verticalScrollBar())
 			m_scrollArea->verticalScrollBar()->setValue(
@@ -813,7 +791,84 @@ void DSHHub::scrollToBottomNow()
 		m_scrollArea->setUpdatesEnabled(true);
 		m_scrollArea->viewport()->update();
 		});
+}
 
+// 流式渲染的一帧：本帧先暂停重绘，等拟合/布局落定后再一次性画出来。
+//
+// flushStream() 每帧都会重建 live 区域：新视图刚创建时宽度/高度还是 Qt 默认值，
+// 布局也还没铺完，这些中间态一旦被画到屏幕上，看起来就是气泡上下抖动。
+// 以前的代码只在“贴近底部自动跟随”时才走 scrollToBottomNow()（它顺带做了暂停
+// 重绘 + 落定后刷新），所以用户上拉离开底部后就没有这层保护，抖动也就随之出现。
+void DSHHub::flushStreamingFrame()
+{
+	AgentMessageUnit* target = m_messages ? m_messages->lastAgentUnitIfLast() : nullptr;
+	if (!target) {
+		// 没有可渲染的气泡时别把刷新窗口挂着不放
+		if (m_scrollArea)
+			m_scrollArea->setUpdatesEnabled(true);
+		return;
+	}
+
+	if (m_scrollArea)
+		m_scrollArea->setUpdatesEnabled(false);
+
+	target->flushStream();
+
+	bool followBottom = false;
+	if (m_scrollArea && m_scrollArea->verticalScrollBar()) {
+		QScrollBar* bar = m_scrollArea->verticalScrollBar();
+		followBottom = bar->value() >= bar->maximum() - 80;
+	}
+
+	if (followBottom) {
+		// 跟随底部：scrollToBottomNow() 自己会恢复刷新并滚到最新底部
+		scrollToBottomNow();
+	}
+	else {
+		// 不跟随（用户正在读旧内容）：只把布局落定 + 恢复刷新，绝不改滚动位置
+		settleStreamingFrame();
+	}
+}
+
+// 消息列（滚动区里的内容控件）必须“先长够高度，再铺布局”：
+// 直接 layout()->activate() 会在内容控件仍是上一帧的旧高度时给子部件分配几何，
+// 于是刚刚变高的气泡被就地挤扁（子部件从 2000+ px 压到几十 px），表现为流式输出
+// 时后半段内容被吞掉、滚动条范围也随之缩水、拉不到底；下一轮布局再撑开，如此反复
+// 就成了闪烁。这里先按布局需要的尺寸把内容控件撑够，再执行布局。
+void DSHHub::fitContentThenLayout()
+{
+	if (!m_scrollArea)
+		return;
+
+	QWidget* content = m_scrollArea->widget();
+	if (!content)
+		return;
+
+	QLayout* contentLayout = content->layout();
+	if (!contentLayout)
+		return;
+
+	contentLayout->invalidate();
+	const int wanted = qMax(m_scrollArea->viewport()->height(), content->sizeHint().height());
+	if (content->height() < wanted)
+		content->resize(content->width(), wanted);
+
+	contentLayout->activate();
+}
+
+// 流式渲染的“落定”收尾（不跟随底部时使用）：等本帧排队的二次拟合、布局都跑完，
+// 再把这一帧一次性画出来，并且**不动滚动位置**（用户正在读旧内容）。
+void DSHHub::settleStreamingFrame()
+{
+	QTimer::singleShot(0, this, [this]() {
+		if (!m_scrollArea)
+			return;
+
+		fitContentThenLayout();
+
+		m_scrollArea->setUpdatesEnabled(true);
+		m_scrollArea->viewport()->update();
+		});
 }
 
 void DSHHub::onHistoryPrefetched(const QString& sessionId, const QJsonArray& events)
@@ -846,7 +901,6 @@ void DSHHub::onHistoryPrefetched(const QString& sessionId, const QJsonArray& eve
 	if (!m_prebuildQueue.contains(sessionId))
 		m_prebuildQueue.append(sessionId);
 	processPrebuildQueue();
-
 }
 
 void DSHHub::processPrebuildQueue()
@@ -878,7 +932,6 @@ void DSHHub::processPrebuildQueue()
 
 	if (!m_prebuildQueue.isEmpty())
 		QTimer::singleShot(0, this, &DSHHub::processPrebuildQueue);
-
 }
 
 void DSHHub::onSessionSelected(const QString& sessionId)
@@ -900,6 +953,7 @@ void DSHHub::onSessionSelected(const QString& sessionId)
 	cacheCurrentMessages();
 
 	m_sessionId = sessionId;
+	syncComposerSession();
 
 	if (m_sidebar)
 		m_sidebar->workspaceList()->setCurrentSession(sessionId);
@@ -935,7 +989,6 @@ void DSHHub::onSessionSelected(const QString& sessionId)
 		m_historyLoader->setUsingPrefetched(m_usingPrefetched);
 		m_historyLoader->load(sessionId);
 	}
-
 }
 
 void DSHHub::onDeleteSessionRequested(const QString& sessionId)
@@ -993,6 +1046,7 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 				m_cacheManager.cacheOrDiscardCurrentSession(QString(), m_messages, m_messagesLayout);
 				m_messages = new MessageQuery;
 				m_sessionId.clear();
+				syncComposerSession();
 				m_history.reset();
 				if (m_loadMoreButton)
 					m_loadMoreButton->hide();
@@ -1012,7 +1066,6 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 					m_messagesLayout);
 			}
 		});
-
 }
 
 void DSHHub::onClearConversationClicked()
@@ -1025,6 +1078,7 @@ void DSHHub::onClearConversationClicked()
 				m_messages->clear();
 			m_cacheManager.clearAll();
 			m_sessionId.clear();
+			syncComposerSession();
 
 			if (m_messages) {
 				if (AgentMessageUnit* agent = m_messages->lastAgentUnit())
@@ -1034,7 +1088,6 @@ void DSHHub::onClearConversationClicked()
 		[this]() {
 			callSessionCreate();
 		});
-
 }
 
 void DSHHub::callSessionCreate()
@@ -1063,7 +1116,6 @@ void DSHHub::callSessionCreate()
 					QStringLiteral("创建会话失败: %1 %2").arg(error.code, error.message),
 					m_messagesLayout);
 		});
-
 }
 
 void DSHHub::handleConnected()
@@ -1099,7 +1151,6 @@ void DSHHub::onNoSessionAvailable()
 {
 	if (m_sidebar && m_api)
 		m_sidebar->createSession(m_api);
-
 }
 
 void DSHHub::onSessionListError(const QString& code, const QString& message)
@@ -1107,7 +1158,6 @@ void DSHHub::onSessionListError(const QString& code, const QString& message)
 	if (m_messages)
 		m_messages->addSystemMessage(QStringLiteral("Session list error: %1 %2").arg(code, message), m_messagesLayout);
 	finishInitialization();
-
 }
 
 void DSHHub::onSessionCreateError(const QString& code, const QString& message)
@@ -1115,7 +1165,6 @@ void DSHHub::onSessionCreateError(const QString& code, const QString& message)
 	if (m_messages)
 		m_messages->addSystemMessage(QStringLiteral("Session create error: %1 %2").arg(code, message), m_messagesLayout);
 	finishInitialization();
-
 }
 
 void DSHHub::onHistoryLoadMoreButtonVisibleChanged(bool visible)
@@ -1142,7 +1191,6 @@ void DSHHub::onHistoryError(const QString& code, const QString& message)
 {
 	if (m_messages)
 		m_messages->addSystemMessage(QStringLiteral("History error: %1 %2").arg(code, message), m_messagesLayout);
-
 }
 
 void DSHHub::onIncrementalBuildReady(MessageQuery* query)
@@ -1283,7 +1331,6 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 			m_messages->addSystemMessage(QStringLiteral("收到审批请求，但无法创建内联面板。"), m_messagesLayout);
 		}
 	}
-
 }
 
 void DSHHub::handleTransportError(const QString& context, const QString& message)
@@ -1295,7 +1342,6 @@ void DSHHub::handleTransportError(const QString& context, const QString& message
 	m_messages->addSystemMessage(
 		QStringLiteral("传输错误 [%1]: %2").arg(context, message),
 		m_messagesLayout);
-
 }
 
 void DSHHub::showNoMoreToast()

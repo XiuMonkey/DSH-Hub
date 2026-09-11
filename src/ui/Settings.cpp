@@ -1,26 +1,18 @@
 #include "Settings.h"
 #include "ThemeManager.h"
 #include "DshApiClient.h"
+#include "SettingsStore.h"
 
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QFrame>
-#include <QDir>
-#include <QFile>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
-#include <QRegularExpression>
-#include <QSaveFile>
-#include <QSettings>
-#include <QStringList>
-#include <QVBoxLayout>
 #include <QTimer>
-#include <QCoreApplication>
-#include <QEventLoop>
-#include <QDebug>
+#include <QVBoxLayout>
 
 SettingsButton::SettingsButton(const QString& text, QWidget* parent)
 	: QPushButton(text, parent)
@@ -34,8 +26,7 @@ SettingsButton::SettingsButton(const QString& text, QWidget* parent)
 
 Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 	: PopupWindow(host)
-	, m_dshHome(dshHome)
-	, m_credentialsFile(dshHome.isEmpty() ? QString() : dshHome + QStringLiteral("/.credentials.yaml"))
+	, m_credentials(dshHome)
 	, m_api(api)
 	, m_host(host)
 {
@@ -150,8 +141,7 @@ Settings::Settings(const QString& dshHome, DshApiClient* api, QWidget* host)
 		if (m_agentPresetPopup)
 			m_agentPresetPopup->hide();
 
-		QSettings settings;
-		settings.setValue(QStringLiteral("agent/defaultPreset"), presetId);
+		SettingsStore::setDefaultAgentPresetId(presetId);
 		emit agentPresetChanged(presetId);
 		});
 	// ---------------- Server 设置 ----------------
@@ -326,7 +316,7 @@ void Settings::refreshOnOpen()
 {
 	// API Key：每次打开时从凭据文件重新读取（可能与上次保存不同步）
 	if (m_apiKeyEdit)
-		m_apiKeyEdit->setText(readApiKeyFromCredentialsFile());
+		m_apiKeyEdit->setText(m_credentials.readApiKey());
 
 	// Server 地址：跟随当前实际连接的 DSH 服务
 	m_serverUrlText = m_api ? m_api->baseUrl().toString() : QString();
@@ -337,98 +327,13 @@ void Settings::refreshOnOpen()
 	loadAgentPresets();
 }
 
-QString Settings::readApiKeyFromCredentialsFile() const
-{
-	QFile file(m_credentialsFile);
-	if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-		return QString();
-
-	QRegularExpression re(QStringLiteral("^\\s*DEEPSEEK_API_KEY\\s*:\\s*(.*)$"));
-	while (!file.atEnd()) {
-		const QString line = QString::fromUtf8(file.readLine()).trimmed();
-		const auto match = re.match(line);
-		if (match.hasMatch()) {
-			QString value = match.captured(1).trimmed();
-			if ((value.startsWith(QLatin1Char('"')) && value.endsWith(QLatin1Char('"')))
-				|| (value.startsWith(QLatin1Char('\'')) && value.endsWith(QLatin1Char('\'')))) {
-				value = value.mid(1, value.size() - 2);
-			}
-			return value;
-		}
-	}
-
-	return QString();
-}
-
-void Settings::writeApiKeyToCredentialsFile(const QString& apiKey)
-{
-	if (m_credentialsFile.isEmpty())
-		return;
-
-	QDir().mkpath(m_dshHome);
-
-	QStringList lines;
-	QFile file(m_credentialsFile);
-	if (file.exists()) {
-		if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-			while (!file.atEnd())
-				lines.append(QString::fromUtf8(file.readLine()));
-			file.close();
-		}
-	}
-
-	QRegularExpression re(QStringLiteral("^\\s*DEEPSEEK_API_KEY\\s*:.*$"));
-	bool replaced = false;
-	for (QString& line : lines) {
-		if (re.match(line).hasMatch()) {
-			line = QStringLiteral("DEEPSEEK_API_KEY: %1\n").arg(apiKey);
-			replaced = true;
-			break;
-		}
-	}
-	if (!replaced)
-		lines.append(QStringLiteral("DEEPSEEK_API_KEY: %1\n").arg(apiKey));
-
-	QSaveFile out(m_credentialsFile);
-	if (!out.open(QIODevice::WriteOnly | QIODevice::Text))
-		return;
-
-	for (const QString& line : lines)
-		out.write(line.toUtf8());
-
-	if (out.commit()) {
-		qInfo().noquote() << "[Settings] API key updated";
-	}
-	else {
-		qWarning().noquote() << "[Settings] failed to commit credentials file: " << m_credentialsFile;
-	}
-}
-
 void Settings::saveApiKeyToServer()
 {
-	if (m_api && !m_pendingApiKey.isEmpty()) {
-		QJsonObject payload;
-		payload.insert(QStringLiteral("ref"), QStringLiteral("DEEPSEEK_API_KEY"));
-		payload.insert(QStringLiteral("value"), m_pendingApiKey);
-
-		m_api->callMethod(
-			QStringLiteral("credentials.set"),
-			payload,
-			[this](const QJsonObject&) {
-				qInfo().noquote() << "[Settings] API key saved via credentials.set";
-			},
-			[this](const DshApiClient::RpcError& error) {
-				qWarning().noquote() << "[Settings] credentials.set failed:"
-					<< error.code << error.message;
-				// 走老逻辑：直接写文件，并通知 DSHHub 重启兜底
-				writeApiKeyToCredentialsFile(m_pendingApiKey);
-				emit apiKeyChanged();
-			});
-	}
-	else {
-		writeApiKeyToCredentialsFile(m_pendingApiKey);
-		emit apiKeyChanged();
-	}
+	// 服务端热更新优先，失败由 CredentialsService 回退写文件并回调告知
+	m_credentials.saveApiKey(m_api, m_pendingApiKey, [this](bool usedFileFallback) {
+		if (usedFileFallback)
+			emit apiKeyChanged();
+		});
 }
 
 void Settings::loadAgentPresets()
@@ -439,78 +344,63 @@ void Settings::loadAgentPresets()
 	m_agentPresetList->clear();
 	m_agentPresetButton->setText(QStringLiteral("加载中..."));
 
-	m_api->callMethod(
-		QStringLiteral("agentPreset.list"),
-		{},
-		[this](const QJsonObject& value) {
-			const QJsonArray presets = value.value(QStringLiteral("presets")).toArray();
-			QString defaultId;
-
-			QSettings settings;
-			const QString savedPreset = settings.value(QStringLiteral("agent/defaultPreset")).toString();
-
-			m_agentPresetList->clear();
-			for (const auto& value : presets) {
-				const QJsonObject preset = value.toObject();
-				const QString id = preset.value(QStringLiteral("id")).toString();
-				if (id.isEmpty())
-					continue;
-
-				QString name = preset.value(QStringLiteral("name")).toString();
-				if (name.isEmpty())
-					name = id;
-				if (preset.value(QStringLiteral("isDefault")).toBool())
-					defaultId = id;
-
-				auto* item = new QListWidgetItem(name, m_agentPresetList);
-				item->setData(Qt::UserRole, id);
-			}
-
-			if (m_agentPresetList->count() == 0) {
-				m_agentPresetButton->setText(QStringLiteral("（无可用预设）"));
-				return;
-			}
-
-			const QString selectedId = savedPreset.isEmpty() ? defaultId : savedPreset;
-			QString selectedName;
-			for (int i = 0; i < m_agentPresetList->count(); ++i) {
-				QListWidgetItem* item = m_agentPresetList->item(i);
-				if (item->data(Qt::UserRole).toString() == selectedId) {
-					item->setSelected(true);
-					selectedName = item->text();
-					break;
-				}
-			}
-
-			if (selectedName.isEmpty()) {
-				selectedName = m_agentPresetList->item(0)->text();
-				m_agentPresetList->item(0)->setSelected(true);
-			}
-
-			m_agentPresetButton->setText(selectedName);
-
-			// 根据预设数量调整下拉面板高度
-			const int itemHeight = 38;
-			const int maxHeight = 320;
-			const int height = qMin(maxHeight, m_agentPresetList->count() * itemHeight + 12);
-			if (m_agentPresetPopup)
-				m_agentPresetPopup->setFixedHeight(height);
+	AgentPresetService::fetch(m_api,
+		[this](const QVector<AgentPreset>& presets) {
+			populateAgentPresets(presets);
 		},
 		[this](const DshApiClient::RpcError& error) {
 			m_agentPresetList->clear();
 			m_agentPresetButton->setText(QStringLiteral("加载失败：%1 %2").arg(error.code, error.message));
 		});
 }
-void Settings::saveServerSettings()
+
+void Settings::populateAgentPresets(const QVector<AgentPreset>& presets)
 {
-	QSettings settings;
-	const QString url = m_serverUrlText.trimmed();
-	if (url.isEmpty()) {
-		settings.remove(QStringLiteral("server/url"));
-	}
-	else {
-		settings.setValue(QStringLiteral("server/url"), url);
+	if (!m_agentPresetList || !m_agentPresetButton)
+		return;
+
+	m_agentPresetList->clear();
+	for (const AgentPreset& preset : presets) {
+		auto* item = new QListWidgetItem(preset.name, m_agentPresetList);
+		item->setData(Qt::UserRole, preset.id);
 	}
 
+	if (m_agentPresetList->count() == 0) {
+		m_agentPresetButton->setText(QStringLiteral("（无可用预设）"));
+		return;
+	}
+
+	// 本地记住的选择优先，其次服务端默认，最后退回第一项
+	const QString selectedId = AgentPresetService::resolveSelectedId(
+		presets, SettingsStore::defaultAgentPresetId());
+
+	QString selectedName;
+	for (int i = 0; i < m_agentPresetList->count(); ++i) {
+		QListWidgetItem* item = m_agentPresetList->item(i);
+		if (item->data(Qt::UserRole).toString() == selectedId) {
+			item->setSelected(true);
+			selectedName = item->text();
+			break;
+		}
+	}
+
+	if (selectedName.isEmpty()) {
+		m_agentPresetList->item(0)->setSelected(true);
+		selectedName = m_agentPresetList->item(0)->text();
+	}
+
+	m_agentPresetButton->setText(selectedName);
+
+	// 根据预设数量调整下拉面板高度
+	const int itemHeight = 38;
+	const int maxHeight = 320;
+	const int height = qMin(maxHeight, m_agentPresetList->count() * itemHeight + 12);
+	if (m_agentPresetPopup)
+		m_agentPresetPopup->setFixedHeight(height);
+}
+
+void Settings::saveServerSettings()
+{
+	SettingsStore::setServerUrl(m_serverUrlText);
 	emit serverSettingsSaved();
 }

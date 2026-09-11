@@ -262,7 +262,7 @@ namespace Theme
 						pal.setColor(static_cast<QPalette::ColorGroup>(i), role, color);
 					}
 				}
-			};
+				};
 			apply(QPalette::Window, window);
 			apply(QPalette::WindowText, text);
 			apply(QPalette::Base, panel);

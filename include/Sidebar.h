@@ -9,15 +9,17 @@
 //   - ClearSessionButton：清空会话按钮
 //   - SidebarSettingsButton：设置按钮
 //   - WorkspaceButton：工作区按钮
-//   - WorkspaceList：工作区列表，按工作区管理会话，并对外提供会话聚合操作
+//   - WorkspaceList：工作区列表视图，把 SessionCatalog 的数据画成会话按钮
 //   - Sidebar：左侧边栏，统筹管理 Logo、按钮和 WorkspaceList，并转发会话相关信号
+//
+// 会话/工作区的数据与 RPC 逻辑在 common（SessionCatalog / SessionService），
+// 本文件只保留控件与绘制。
 // ------------------------------------------------------------------
 
-#include <QHash>
-#include <QJsonArray>
+#include "SessionCatalog.h"
+
 #include <QLabel>
 #include <QPushButton>
-#include <QSet>
 #include <QString>
 #include <QWidget>
 
@@ -162,7 +164,8 @@ private:
 	bool m_plusHovered = false;
 };
 
-// 工作区列表：负责按工作区管理会话，并对外提供会话相关的聚合操作
+// 工作区列表：按工作区分组渲染会话按钮。
+// 数据（分组/标题/归档状态）来自 SessionCatalog（common），本类只负责画。
 class WorkspaceList : public QWidget
 {
 	Q_OBJECT
@@ -170,8 +173,13 @@ class WorkspaceList : public QWidget
 public:
 	explicit WorkspaceList(QWidget* parent = nullptr);
 
-	void setWorkspaces(const QJsonArray& items);
-	void setArchivedSessionIds(const QSet<QString>& ids);
+	// 数据源：由 SessionService 在刷新时写入
+	SessionCatalog& catalog();
+	const SessionCatalog& catalog() const;
+
+	// 按 catalog 的当前内容整体重建（清空后重新创建分组与按钮）
+	void rebuildFromCatalog();
+
 	void addSession(const QString& sessionId, const QString& title);
 	void addSessionToWorkspace(const QString& sessionId, const QString& title, const QString& workspaceId);
 	void clearSessions();
@@ -198,13 +206,15 @@ private:
 
 	WorkspaceGroup* createWorkspaceGroup(const QString& workspaceId, const QString& title);
 	WorkspaceGroup* defaultGroup();
+	WorkspaceGroup* groupFor(const QString& workspaceId);
+	// 在对应工作区分组下创建（或更新）一个会话按钮
+	void addSessionButton(const QString& sessionId, const QString& title);
 	void clearWorkspaceGroups();
 
 	QVBoxLayout* m_layout = nullptr;
 	std::vector<SessionButton*> m_buttons;
 	std::vector<WorkspaceGroup*> m_workspaceGroups;
-	QHash<QString, QString> m_sessionWorkspace;
-	QSet<QString> m_archivedSessionIds;
+	SessionCatalog m_catalog;
 	WorkspaceGroup* m_defaultGroup = nullptr;
 };
 
@@ -218,18 +228,16 @@ public:
 
 	// 让外部可以直接操作真正的会话管理者
 	WorkspaceList* workspaceList() const;
-	// 由 DSHHub 调用：设置工作区列表
-	void setWorkspaces(const QJsonArray& items);
-	// 由 DSHHub 调用：把 session.list 的 items 解析并填充到工作区/会话列表
-	void setSessions(const QJsonArray& items);
 	// 新建会话成功后，在侧边栏添加并选中该会话
 	void addCreatedSession(const QString& sessionId, const QString& workspaceId = QString());
 
-	// refresh workspaces/sessions
+	// 刷新工作区/会话列表：数据解析由 SessionService 负责，本类只把
+	// 结果映射成界面状态并转发信号
 	void refreshSessions(DshApiClient* api, SessionPrefetcher* prefetcher);
 	void createSession(DshApiClient* api, const QString& workspaceId = QString());
 
-	// 清空全部会话：文件处理由 Sidebar 自己负责，会话列表清理由 WorkspaceList 负责
+	// 清空全部会话：文件与目录清理由 SessionService 负责，
+	// 会话列表的清理由 WorkspaceList（catalog）负责
 	void clearAllSessions(
 		const QString& dshHome,
 		const std::function<void()>& onCleared,

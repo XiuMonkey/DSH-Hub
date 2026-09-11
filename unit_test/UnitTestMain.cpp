@@ -11,6 +11,9 @@
 #include "TestCodeHighlighter.h"
 #include "TestHistoryManager.h"
 #include "TestMarkdownPreprocess.h"
+#include "TestModelSelection.h"
+#include "TestPluginMarketModel.h"
+#include "TestSessionCatalog.h"
 #include "TestThunk.h"
 
 int main(int argc, char* argv[])
@@ -41,6 +44,21 @@ int main(int argc, char* argv[])
 
 	{
 		TestThunk test;
+		status |= QTest::qExec(&test, argc, argv);
+	}
+
+	{
+		TestSessionCatalog test;
+		status |= QTest::qExec(&test, argc, argv);
+	}
+
+	{
+		TestPluginMarketModel test;
+		status |= QTest::qExec(&test, argc, argv);
+	}
+
+	{
+		TestModelSelection test;
 		status |= QTest::qExec(&test, argc, argv);
 	}
 

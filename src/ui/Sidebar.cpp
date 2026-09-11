@@ -1,22 +1,15 @@
 #include "Sidebar.h"
 #include "ThemeManager.h"
-#include "TimingLogger.h"
 
 #include "DshApiClient.h"
-#include "SessionPrefetcher.h"
-
-#include <memory>
+#include "SessionService.h"
 
 #include <QContextMenuEvent>
 #include <QDialog>
-#include <QDir>
 #include <QEvent>
-#include <QFile>
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QIcon>
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
@@ -340,32 +333,26 @@ WorkspaceList::WorkspaceList(QWidget* parent)
 	m_layout->addStretch(1);
 }
 
-void WorkspaceList::setWorkspaces(const QJsonArray& items)
+SessionCatalog& WorkspaceList::catalog()
 {
-	clearWorkspaceGroups();
-	m_buttons.clear();
-
-	for (const auto& item : items) {
-		const QJsonObject obj = item.toObject();
-		const QString workspaceId = obj.value(QStringLiteral("workspaceId")).toString();
-		const QString title = obj.value(QStringLiteral("title")).toString();
-		if (workspaceId.isEmpty())
-			continue;
-
-		createWorkspaceGroup(workspaceId, title.isEmpty() ? workspaceId : title);
-
-		const QJsonArray sessionIds = obj.value(QStringLiteral("sessionIds")).toArray();
-		for (const auto& sidValue : sessionIds) {
-			const QString sid = sidValue.toString();
-			if (!sid.isEmpty())
-				m_sessionWorkspace.insert(sid, workspaceId);
-		}
-	}
+	return m_catalog;
 }
 
-void WorkspaceList::setArchivedSessionIds(const QSet<QString>& ids)
+const SessionCatalog& WorkspaceList::catalog() const
 {
-	m_archivedSessionIds = ids;
+	return m_catalog;
+}
+
+void WorkspaceList::rebuildFromCatalog()
+{
+	clearWorkspaceGroups();
+
+	// 先建工作区分组（标题为空时退回用 id 显示），再往里面挂会话按钮
+	for (const WorkspaceRecord& workspace : m_catalog.workspaces())
+		createWorkspaceGroup(workspace.workspaceId, workspace.title);
+
+	for (const SessionRecord& session : m_catalog.visibleSessions())
+		addSessionButton(session.sessionId, session.title);
 }
 
 WorkspaceList::WorkspaceGroup* WorkspaceList::createWorkspaceGroup(const QString& workspaceId, const QString& title)
@@ -407,6 +394,16 @@ WorkspaceList::WorkspaceGroup* WorkspaceList::defaultGroup()
 	return m_defaultGroup;
 }
 
+WorkspaceList::WorkspaceGroup* WorkspaceList::groupFor(const QString& workspaceId)
+{
+	for (WorkspaceGroup* group : m_workspaceGroups) {
+		if (group->workspaceId == workspaceId)
+			return group;
+	}
+	// 找不到归属工作区（含未分组）时统一落到“未分组”
+	return defaultGroup();
+}
+
 void WorkspaceList::clearWorkspaceGroups()
 {
 	for (WorkspaceGroup* group : m_workspaceGroups) {
@@ -415,16 +412,12 @@ void WorkspaceList::clearWorkspaceGroups()
 		delete group;
 	}
 	m_workspaceGroups.clear();
-	m_sessionWorkspace.clear();
+	m_buttons.clear();
 	m_defaultGroup = nullptr;
 }
 
-void WorkspaceList::addSession(const QString& sessionId, const QString& title)
+void WorkspaceList::addSessionButton(const QString& sessionId, const QString& title)
 {
-	// 已归档/已删除的会话不再显示在侧边栏
-	if (m_archivedSessionIds.contains(sessionId))
-		return;
-
 	// 防止同一个会话被重复添加，避免 setCurrentSession 选中多个同 sessionId 的按钮
 	for (SessionButton* button : m_buttons) {
 		if (button->sessionId() == sessionId) {
@@ -433,17 +426,7 @@ void WorkspaceList::addSession(const QString& sessionId, const QString& title)
 		}
 	}
 
-	const QString workspaceId = m_sessionWorkspace.value(sessionId);
-	WorkspaceGroup* group = nullptr;
-
-	for (WorkspaceGroup* g : m_workspaceGroups) {
-		if (g->workspaceId == workspaceId) {
-			group = g;
-			break;
-		}
-	}
-	if (!group)
-		group = defaultGroup();
+	WorkspaceGroup* group = groupFor(m_catalog.workspaceFor(sessionId));
 
 	auto* button = new SessionButton(sessionId, title, group->container);
 	connect(button, &SessionButton::sessionClicked, this, [this, sessionId]() {
@@ -462,16 +445,27 @@ void WorkspaceList::addSession(const QString& sessionId, const QString& title)
 		button->setVisible(false);
 }
 
+void WorkspaceList::addSession(const QString& sessionId, const QString& title)
+{
+	// 已归档/已删除的会话由 catalog 过滤，不再显示在侧边栏
+	if (!m_catalog.addSession(sessionId, title))
+		return;
+
+	addSessionButton(sessionId, title);
+}
+
 void WorkspaceList::addSessionToWorkspace(const QString& sessionId, const QString& title, const QString& workspaceId)
 {
-	m_sessionWorkspace.insert(sessionId, workspaceId);
-	addSession(sessionId, title);
+	if (!m_catalog.addSession(sessionId, title, workspaceId))
+		return;
+
+	addSessionButton(sessionId, title);
 }
 
 void WorkspaceList::clearSessions()
 {
+	m_catalog.clear();
 	clearWorkspaceGroups();
-	m_buttons.clear();
 }
 
 void WorkspaceList::setCurrentSession(const QString& sessionId)
@@ -485,6 +479,9 @@ void WorkspaceList::setCurrentSession(const QString& sessionId)
 
 void WorkspaceList::updateSessionTitle(const QString& sessionId, const QString& title)
 {
+	if (!m_catalog.updateTitle(sessionId, title))
+		return;
+
 	for (SessionButton* button : m_buttons) {
 		if (button->sessionId() == sessionId) {
 			button->setSessionTitle(title);
@@ -495,43 +492,14 @@ void WorkspaceList::updateSessionTitle(const QString& sessionId, const QString& 
 
 QString WorkspaceList::titleForSession(const QString& sessionId) const
 {
-	for (const SessionButton* button : m_buttons) {
-		if (button->sessionId() == sessionId)
-			return button->fullTitle();
-	}
-	return QString();
+	return m_catalog.titleFor(sessionId);
 }
 
 void WorkspaceList::refreshTitles(DshApiClient* api)
 {
-	if (!api)
-		return;
-
-	api->callMethod(
-		QStringLiteral("session.list"),
-		{},
-		[this](const QJsonObject& value) {
-			const QJsonArray items = value.value(QStringLiteral("items")).toArray();
-			for (const auto& item : items) {
-				const QJsonObject session = item.toObject();
-				const QString sid = session.value(QStringLiteral("sessionId")).toString();
-				if (sid.isEmpty())
-					continue;
-
-				const QJsonObject projections = session.value(QStringLiteral("projections")).toObject();
-				const QJsonObject values = projections.value(QStringLiteral("values")).toObject();
-				QString label = values.value(QStringLiteral("title")).toString();
-				if (label.isEmpty())
-					label = values.value(QStringLiteral("sessionTitle")).toString();
-				if (label.isEmpty())
-					label = values.value(QStringLiteral("session.title")).toString();
-				if (label.isEmpty())
-					continue;
-
-				updateSessionTitle(sid, label);
-			}
-		},
-		[](const DshApiClient::RpcError&) {});
+	SessionService::refreshTitles(api, [this](const QString& sessionId, const QString& title) {
+		updateSessionTitle(sessionId, title);
+		});
 }
 
 // ------------------------------------------------------------------
@@ -599,44 +567,6 @@ WorkspaceList* Sidebar::workspaceList() const
 	return m_workspaceList;
 }
 
-void Sidebar::setWorkspaces(const QJsonArray& items)
-{
-	if (m_workspaceList)
-		m_workspaceList->setWorkspaces(items);
-}
-
-void Sidebar::setSessions(const QJsonArray& items)
-{
-	if (!m_workspaceList)
-		return;
-
-	for (const auto& item : items) {
-		const QJsonObject session = item.toObject();
-		const QString origin = session.value(QStringLiteral("origin")).toString();
-		const bool isSubagent = origin == QStringLiteral("subagent")
-			|| session.contains(QStringLiteral("parentSessionId"));
-		if (isSubagent)
-			continue;
-
-		const QString sid = session.value(QStringLiteral("sessionId")).toString();
-		if (sid.isEmpty())
-			continue;
-
-		// 标题优先从 session.projections.values 中读取
-		const QJsonObject projections = session.value(QStringLiteral("projections")).toObject();
-		const QJsonObject projectionValues = projections.value(QStringLiteral("values")).toObject();
-		QString label = projectionValues.value(QStringLiteral("title")).toString();
-		if (label.isEmpty())
-			label = projectionValues.value(QStringLiteral("sessionTitle")).toString();
-		if (label.isEmpty())
-			label = projectionValues.value(QStringLiteral("session.title")).toString();
-		if (label.isEmpty())
-			label = QStringLiteral("未命名会话");
-
-		m_workspaceList->addSession(sid, label);
-	}
-}
-
 void Sidebar::addCreatedSession(const QString& sessionId, const QString& workspaceId)
 {
 	if (sessionId.isEmpty() || !m_workspaceList)
@@ -652,142 +582,32 @@ void Sidebar::addCreatedSession(const QString& sessionId, const QString& workspa
 
 void Sidebar::refreshSessions(DshApiClient* api, SessionPrefetcher* prefetcher)
 {
-	if (!api)
+	if (!m_workspaceList)
 		return;
 
-	// workspace.list 与 session.list 互不依赖：并行发出，两个都返回后再统一
-	// 应用（保证 archived/workspace 状态先就位，再处理会话列表与自动选中），
-	// 省掉原先一次串行 RPC 往返。
-	struct ListState
-	{
-		bool workspaceDone = false;
-		bool workspaceOk = false;
-		QJsonArray workspaces;
-		QSet<QString> archivedIds;
-		bool sessionsDone = false;
-		bool sessionsOk = false;
-		QJsonArray sessions;
-		QString errorCode;
-		QString errorMessage;
-	};
-	auto state = std::make_shared<ListState>();
+	SessionService::refreshSessions(api, prefetcher, &m_workspaceList->catalog(),
+		[this](const QString& autoSelectSessionId) {
+			// 数据已写入 catalog，这里只重建视图并转发结果
+			m_workspaceList->rebuildFromCatalog();
 
-	auto applyWhenBothDone = [this, api, prefetcher, state]() {
-		if (!state->workspaceDone || !state->sessionsDone)
-			return;
-
-		if (state->workspaceOk && m_workspaceList)
-			m_workspaceList->setArchivedSessionIds(state->archivedIds);
-		setWorkspaces(state->workspaceOk ? state->workspaces : QJsonArray());
-
-		if (!state->sessionsOk) {
-			emit sessionListError(state->errorCode, state->errorMessage);
-			return;
-		}
-
-		const QJsonArray items = state->sessions;
-		setSessions(items);
-
-		// 先确定会被自动选中的会话（第一个非 running 会话）：
-		// 它马上要由 HistoryLoader 拉全量历史，预取同一份历史只会
-		// 让服务端多建一次视图、客户端多一次重复渲染，直接跳过。
-		QString autoSid;
-		for (const auto& item : items) {
-			const QJsonObject session = item.toObject();
-			const QString origin = session.value(QStringLiteral("origin")).toString();
-			if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
-				continue;
-			const bool running = session.value(QStringLiteral("running")).toBool();
-			const QString sid = session.value(QStringLiteral("sessionId")).toString();
-			if (sid.isEmpty() || running)
-				continue;
-			autoSid = sid;
-			break;
-		}
-
-		// prefetch recent history for each visible session (except the auto-selected one)
-		if (prefetcher) {
-			for (const auto& item : items) {
-				const QJsonObject session = item.toObject();
-				const QString origin = session.value(QStringLiteral("origin")).toString();
-				if (origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId")))
-					continue;
-				const QString sid = session.value(QStringLiteral("sessionId")).toString();
-				if (sid.isEmpty() || sid == autoSid)
-					continue;
-				prefetcher->prefetchHistory(api->baseUrl(), sid, 20);
-			}
-		}
-		TimingLogger::mark(QStringLiteral("session.list loaded (%1 items) + prefetch scheduled")
-			.arg(items.size()));
-
-		// auto select the first available non-running session
-		if (!autoSid.isEmpty()) {
-			const QString label = m_workspaceList ? m_workspaceList->titleForSession(autoSid) : QString();
-			emit initialSessionReady(autoSid, label);
-		}
-		else {
-			emit noSessionAvailable();
-		}
-	};
-
-	api->callMethod(
-		QStringLiteral("workspace.list"),
-		{},
-		[this, state, applyWhenBothDone](const QJsonObject& value) {
-			QSet<QString> archivedIds;
-			const QJsonArray archivedArray = value.value(QStringLiteral("archivedSessionIds")).toArray();
-			for (const auto& idValue : archivedArray) {
-				const QString id = idValue.toString();
-				if (!id.isEmpty())
-					archivedIds.insert(id);
-			}
-			state->workspaceOk = true;
-			state->archivedIds = archivedIds;
-			state->workspaces = value.value(QStringLiteral("items")).toArray();
-			state->workspaceDone = true;
-			applyWhenBothDone();
+			// auto select the first available non-running session
+			if (!autoSelectSessionId.isEmpty())
+				emit initialSessionReady(autoSelectSessionId, m_workspaceList->titleForSession(autoSelectSessionId));
+			else
+				emit noSessionAvailable();
 		},
-		[state, applyWhenBothDone](const DshApiClient::RpcError&) {
-			state->workspaceDone = true;
-			applyWhenBothDone();
-		});
-
-	api->callMethod(
-		QStringLiteral("session.list"),
-		{},
-		[state, applyWhenBothDone](const QJsonObject& value) {
-			state->sessions = value.value(QStringLiteral("items")).toArray();
-			state->sessionsOk = true;
-			state->sessionsDone = true;
-			applyWhenBothDone();
-		},
-		[state, applyWhenBothDone](const DshApiClient::RpcError& error) {
-			state->sessionsDone = true;
-			state->errorCode = error.code;
-			state->errorMessage = error.message;
-			applyWhenBothDone();
+		[this](const DshApiClient::RpcError& error) {
+			m_workspaceList->rebuildFromCatalog();
+			emit sessionListError(error.code, error.message);
 		});
 }
 
 void Sidebar::createSession(DshApiClient* api, const QString& workspaceId)
 {
-	if (!api)
-		return;
-
-	QJsonObject payload;
-	if (!workspaceId.isEmpty())
-		payload.insert(QStringLiteral("workspaceId"), workspaceId);
-
-	api->callMethod(
-		QStringLiteral("session.create"),
-		payload,
-		[this, workspaceId](const QJsonObject& value) {
-			const QString sid = value.value(QStringLiteral("sessionId")).toString();
-			if (sid.isEmpty())
-				return;
-			addCreatedSession(sid, workspaceId);
-			emit sessionCreated(sid, workspaceId);
+	SessionService::createSession(api, workspaceId,
+		[this, workspaceId](const QString& sessionId) {
+			addCreatedSession(sessionId, workspaceId);
+			emit sessionCreated(sessionId, workspaceId);
 		},
 		[this](const DshApiClient::RpcError& error) {
 			emit sessionCreateError(error.code, error.message);
@@ -799,19 +619,10 @@ void Sidebar::clearAllSessions(
 	const std::function<void()>& onCleared,
 	const std::function<void()>& onCreateNew)
 {
-	// 文件处理由 Sidebar 自己负责
-	if (!dshHome.isEmpty()) {
-		QDir sessionsDir(dshHome + QStringLiteral("/sessions"));
-		if (sessionsDir.exists()) {
-			sessionsDir.removeRecursively();
-			sessionsDir.mkpath(QStringLiteral("."));
-		}
+	// 文件/目录清理由 common 层负责
+	SessionService::clearAllSessionData(dshHome);
 
-		// 工作区清单保存在 storage domain 中，不删除的话重启后会重新出现旧工作区
-		QFile::remove(dshHome + QStringLiteral("/storages/workspace.json"));
-	}
-
-	// 与当前加载的会话相关的清理由 WorkspaceList 负责
+	// 与当前加载的会话相关的清理由 WorkspaceList（catalog）负责
 	if (m_workspaceList)
 		m_workspaceList->clearSessions();
 

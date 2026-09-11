@@ -9,7 +9,8 @@ TopBar::TopBar(QWidget* parent)
 	setObjectName(QStringLiteral("topBar"));
 	setAttribute(Qt::WA_StyledBackground, true);
 	setFixedHeight(48);
-	setFixedWidth(890); // 留出 10px 左边距，与 Agent 消息左边缘对齐
+	// 宽度与消息内容一致（见 Main.cpp 的宽度约定：1152 - 左右各 16px 留白）
+	setFixedWidth(1120);
 
 	auto* layout = new QHBoxLayout(this);
 	layout->setContentsMargins(16, 0, 16, 0);

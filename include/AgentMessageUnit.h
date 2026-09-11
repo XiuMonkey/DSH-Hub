@@ -163,6 +163,9 @@ private:
 	int m_liveThinkingSegment = -1; // live Thinking 在 m_streamSegments 的下标；-1=无
 	int m_liveThinkingBlock = -1;   // live Thinking 对应 m_thinkingBlocks 的下标；-1=未建卡
 
+	/** 排版诊断（DSH_HUB_LAYOUT_TRACE=1）：打印本气泡及子部件的高度/宽度/尺寸提示。 */
+	void debugTraceLayout(const QString& stage) const;
+
 	/** 重建 live 区域：删掉上一次该区域的部件，按最新全文重新渲染。 */
 	void renderLiveReply(const QString& markdown);
 	/** 思考段随 token 流式增长：更新同一张思考卡（首次建卡，之后原地刷新）。 */

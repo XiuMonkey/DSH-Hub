@@ -133,6 +133,19 @@
     <ClCompile Include="src\common\CodeHighlighter.cpp" />
     <ClCompile Include="src\common\MarkdownPreprocess.cpp" />
     <ClCompile Include="src\common\InteractionHandler.cpp" />
+    <ClCompile Include="src\common\SessionCatalog.cpp" />
+    <ClCompile Include="src\common\SessionService.cpp" />
+    <ClCompile Include="src\common\SettingsStore.cpp" />
+    <ClCompile Include="src\common\CredentialsService.cpp" />
+    <ClCompile Include="src\common\AgentPresetService.cpp" />
+    <ClCompile Include="src\common\PluginMarketClient.cpp" />
+    <ClCompile Include="src\common\PluginMarketModel.cpp" />
+    <ClCompile Include="src\common\PluginMarketInstaller.cpp" />
+    <ClCompile Include="src\common\ExtensionRegistry.cpp" />
+    <ClCompile Include="src\common\ExtensionInstallTask.cpp" />
+    <ClCompile Include="src\common\ModelSelectionService.cpp" />
+    <ClCompile Include="src\ui\StatusPopupWindow.cpp" />
+    <ClCompile Include="src\ui\ThinkingDepthSelector.cpp" />
     <ClCompile Include="src\ui\SpinnerWidget.cpp" />
     <ClCompile Include="src\network\SessionPrefetcher.cpp" />
     <ClCompile Include="src\ui\TopBar.cpp" />
@@ -152,7 +165,6 @@
     <None Include="resources\registry-snapshot.json" />
     <None Include="resources\DSH-Hub-Logo-Tiny@2x.png" />
     <None Include="resources\DSH-Hub-Logo-Tiny-Dark@2x.png" />
-    <None Include="resources\DSH Hub Logo.svg" />
     <None Include="resources\DSH Hub.ico" />
     <ResourceCompile Include="resources\DSH Hub.rc" />
   </ItemGroup>
@@ -170,6 +182,10 @@
     <QtMoc Include="include\PluginsManager.h" />
     <QtMoc Include="include\ExtensionManagerPopup.h" />
     <QtMoc Include="include\ChatInputWidget.h" />
+    <QtMoc Include="include\StatusPopupWindow.h" />
+    <QtMoc Include="include\PluginMarketClient.h" />
+    <QtMoc Include="include\PluginMarketInstaller.h" />
+    <QtMoc Include="include\ThinkingDepthSelector.h" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="include\UserMessageUnit.h" />
@@ -185,6 +201,15 @@
     <ClInclude Include="include\CacheHistoryManager.h" />
     <ClInclude Include="include\ThemeManager.h" />
     <ClInclude Include="include\Logger.h" />
+    <ClInclude Include="include\SessionCatalog.h" />
+    <ClInclude Include="include\SessionService.h" />
+    <ClInclude Include="include\SettingsStore.h" />
+    <ClInclude Include="include\CredentialsService.h" />
+    <ClInclude Include="include\AgentPresetService.h" />
+    <ClInclude Include="include\PluginMarketModel.h" />
+    <ClInclude Include="include\ExtensionRegistry.h" />
+    <ClInclude Include="include\ExtensionInstallTask.h" />
+    <ClInclude Include="include\ModelSelectionService.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

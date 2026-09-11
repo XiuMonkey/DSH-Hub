@@ -101,6 +101,14 @@ private:
 	void callSessionCreate();
 	void sendPrompt(const QString& text);
 	void updateStreamingUi();
+	// 把当前会话同步给输入区（底部“思考深度”控件按该会话的模型目录刷新）
+	void syncComposerSession();
+	// 流式渲染的一帧：暂停重绘 → flush → 落定后刷新（见实现处注释）
+	void flushStreamingFrame();
+	// 消息列先撑够高度再铺布局，避免流式期间气泡被挤扁（见实现处注释）
+	void fitContentThenLayout();
+	// 流式帧落定：布局跑完后再恢复重绘（不跟随底部时用，不动滚动位置）
+	void settleStreamingFrame();
 	void clearInteractionPanels();
 	void createSessionAndSend(const QString& text);
 	void onHistoryPrefetched(const QString& sessionId, const QJsonArray& events);

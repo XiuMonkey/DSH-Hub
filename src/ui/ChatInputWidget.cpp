@@ -1,5 +1,7 @@
 #include "ChatInputWidget.h"
 
+#include "ThinkingDepthSelector.h"
+
 #include <QAbstractTextDocumentLayout>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -13,6 +15,27 @@
 #include <QSizePolicy>
 #include <QTextOption>
 #include <QTimer>
+#include <QVBoxLayout>
+
+namespace
+{
+	// 卡片顶部留白（原生 composer 的 padding-top: 10px）
+	constexpr int kCardTopPadding = 10;
+	// 输入框与控制行之间的间距（原生 card gap: 12px）
+	constexpr int kCardGap = 12;
+	// 控制行内边距（原生 row padding: 2px 8px 6px）
+	constexpr int kRowTopPadding = 2;
+	constexpr int kRowSidePadding = 8;
+	constexpr int kRowBottomPadding = 6;
+
+	// 输入框在 QSS 里的上下 padding 之和（chat.qss: padding: 4px 12px 0 16px），
+	// adjustHeight() 用它把文档高度换算成控件高度
+	constexpr int kEditorVerticalPadding = 4;
+
+	constexpr int kEditorMinHeight = 40;
+	// 原生 --dsh-composer-text-max-height: 336px
+	constexpr int kEditorMaxHeight = 336;
+}
 
 ChatInputWidget::ChatInputWidget(QWidget* parent)
 	: QWidget(parent)
@@ -20,7 +43,7 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 	setObjectName(QStringLiteral("inputCapsule"));
 	// 让 QWidget 子类真正绘制样式表里的背景和边框
 	setAttribute(Qt::WA_StyledBackground, true);
-	// 外观规则见 resources/styles/chat.qss（#inputCapsule / #inputCapsule QPlainTextEdit / #inputCapsule QPushButton#sendButton）
+	// 外观规则见 resources/styles/chat.qss（#inputCapsule / #inputCapsule QPlainTextEdit / #inputControlRow）
 
 	m_editor = new QPlainTextEdit(this);
 	m_editor->setFrameShape(QFrame::NoFrame);
@@ -30,11 +53,55 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 	// 必须显式开启 WidgetWidth 换行，再配合 wordWrapMode 控制断行方式。
 	m_editor->setLineWrapMode(QPlainTextEdit::WidgetWidth);
 	m_editor->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-	m_editor->setFixedHeight(36);
+	m_editor->setFixedHeight(kEditorMinHeight);
 	m_editor->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 	m_editor->setPlaceholderText(QStringLiteral("输入消息，Enter 发送，Shift+Enter 换行"));
 
-	m_sendButton = new QPushButton(this);
+	buildControlRow();
+
+	// 卡片：输入框在上，控制行在下（间距走布局 spacing，与原生 gap:12px 一致）
+	auto* layout = new QVBoxLayout(this);
+	layout->setContentsMargins(0, kCardTopPadding, 0, 0);
+	layout->setSpacing(kCardGap);
+	layout->addWidget(m_editor);
+	layout->addWidget(m_controlRow);
+
+	m_editor->installEventFilter(this);
+
+	connect(m_editor->document(), &QTextDocument::contentsChanged, this, [this]() {
+		// 放到事件循环里再算，确保 QPlainTextEdit 已经用当前 viewport 宽度完成内部布局
+		QTimer::singleShot(0, this, [this]() { adjustHeight(); });
+		});
+
+	QTimer::singleShot(0, this, [this]() { adjustHeight(); });
+}
+
+void ChatInputWidget::buildControlRow()
+{
+	m_controlRow = new QWidget(this);
+	m_controlRow->setObjectName(QStringLiteral("inputControlRow"));
+
+	auto* rowLayout = new QHBoxLayout(m_controlRow);
+	rowLayout->setContentsMargins(kRowSidePadding, kRowTopPadding, kRowSidePadding, kRowBottomPadding);
+	rowLayout->setSpacing(12);
+
+	// 左侧控制组（原生 tools：gap 16px）——后续新增控制按键挂这里
+	m_toolsLayout = new QHBoxLayout;
+	m_toolsLayout->setContentsMargins(0, 0, 0, 0);
+	m_toolsLayout->setSpacing(16);
+
+	// 思考深度：无会话 / 模型未公布档位时自隐藏
+	m_thinkingDepth = new ThinkingDepthSelector(m_controlRow);
+	connect(m_thinkingDepth, &ThinkingDepthSelector::levelChanged,
+		this, &ChatInputWidget::thinkingDepthChanged);
+	m_toolsLayout->addWidget(m_thinkingDepth, 0, Qt::AlignVCenter);
+
+	// 右侧控制组（原生 trailing：gap 12px，发送键也在其中）
+	m_trailingLayout = new QHBoxLayout;
+	m_trailingLayout->setContentsMargins(0, 0, 0, 0);
+	m_trailingLayout->setSpacing(12);
+
+	m_sendButton = new QPushButton(m_controlRow);
 	m_sendButton->setObjectName(QStringLiteral("sendButton"));
 	// 使用内置到 exe 的 EnterBtn.png 作为发送按钮图标
 	m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/EnterBtn.png")));
@@ -51,21 +118,19 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 	m_sendOverlay->hide();
 	m_sendButton->installEventFilter(this);
 
-	auto* layout = new QHBoxLayout(this);
-	layout->setContentsMargins(4, 4, 4, 4);
-	layout->setSpacing(4);
-	layout->addWidget(m_editor, 1);
-	layout->addWidget(m_sendButton);
+	m_trailingLayout->addWidget(m_sendButton, 0, Qt::AlignVCenter);
 
-	m_editor->installEventFilter(this);
+	rowLayout->addLayout(m_toolsLayout);
+	rowLayout->addStretch(1);
+	rowLayout->addLayout(m_trailingLayout);
 
 	connect(m_sendButton, &QPushButton::clicked, this, &ChatInputWidget::handleSendClicked);
-	connect(m_editor->document(), &QTextDocument::contentsChanged, this, [this]() {
-		// 放到事件循环里再算，确保 QPlainTextEdit 已经用当前 viewport 宽度完成内部布局
-		QTimer::singleShot(0, this, [this]() { adjustHeight(); });
-		});
+}
 
-	QTimer::singleShot(0, this, [this]() { adjustHeight(); });
+void ChatInputWidget::setThinkingSession(DshApiClient* api, const QString& sessionId)
+{
+	if (m_thinkingDepth)
+		m_thinkingDepth->setSession(api, sessionId);
 }
 
 QString ChatInputWidget::text() const
@@ -202,9 +267,9 @@ void ChatInputWidget::adjustHeight()
 	const qreal docHeight = m_editor->document()->documentLayout()->documentSize().height();
 	// QPlainTextEdit 的 QPlainTextDocumentLayout 高度单位是“行数”，不是像素。
 	const qreal lineHeight = m_editor->fontMetrics().lineSpacing();
-	// +16 对应 QSS 中 QPlainTextEdit 的上下 padding（8px + 8px）
-	const int contentHeight = static_cast<int>(docHeight * lineHeight + 0.5) + 16;
-	const int newHeight = qBound(36, contentHeight, 120);
+	// 再加上 QSS 中 QPlainTextEdit 的上下 padding
+	const int contentHeight = static_cast<int>(docHeight * lineHeight + 0.5) + kEditorVerticalPadding;
+	const int newHeight = qBound(kEditorMinHeight, contentHeight, kEditorMaxHeight);
 
 	if (m_editor->height() != newHeight) {
 		m_editor->setFixedHeight(newHeight);

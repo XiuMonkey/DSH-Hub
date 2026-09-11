@@ -1,5 +1,7 @@
 #pragma once
 
+#include "AgentPresetService.h"
+#include "CredentialsService.h"
 #include "PopupWindow.h"
 
 #include <QPushButton>
@@ -23,8 +25,13 @@ class DshApiClient;
 // Settings —— “设置系统”整体类（不是一次性的窗口实例）
 // ------------------------------------------------------------------
 // Settings 是随主窗口（DSHHub）创建后一直存在的常驻对象，负责：
-//   1) 设置功能的执行（API Key、Agent 预设、Server 地址的保存）；
+//   1) 设置界面的搭建与交互（API Key、Agent 预设、Server 地址、外观）；
 //   2) 设置窗口本身的开关管理：灰色遮罩、居中、判重、关闭清理。
+//
+// 与设置相关的“功能逻辑”不在这里：
+//   - 凭据文件/credentials.set      -> CredentialsService   (common)
+//   - Agent 预设拉取/解析/选中决策  -> AgentPresetService   (common)
+//   - QSettings 键的读写            -> SettingsStore        (common)
 //
 // 打开/关闭窗口统一走 openSettings() / closeSettings()：
 //   - 主窗口只保留少量调用（例如把侧边栏的 settingsRequested
@@ -64,17 +71,16 @@ signals:
 	void serverSettingsSaved();
 
 private:
-	QString readApiKeyFromCredentialsFile() const;
-	void writeApiKeyToCredentialsFile(const QString& apiKey);
-	void saveApiKeyToServer();
+	// 把拉取到的预设填进下拉列表，并把选中项显示到按钮上
+	void populateAgentPresets(const QVector<AgentPreset>& presets);
 	void loadAgentPresets();
+	void saveApiKeyToServer();
 	void saveServerSettings();
 
 	// 打开前刷新需要每次同步的数据（API Key、Server 地址、预设列表）
 	void refreshOnOpen();
 
-	QString m_dshHome;
-	QString m_credentialsFile;
+	CredentialsService m_credentials;
 	QString m_pendingApiKey;
 	DshApiClient* m_api = nullptr;
 	QWidget* m_host = nullptr;            // 宿主主窗口（遮罩/居中定位）

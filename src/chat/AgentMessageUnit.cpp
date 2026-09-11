@@ -45,6 +45,14 @@ namespace
 		if (renderTraceEnabled())
 			qInfo().noquote() << "[Render]" << where << ms << "ms";
 	}
+
+	// 排版诊断开关（DSH_HUB_LAYOUT_TRACE=1）：打印每帧提交的高度与子部件构成，
+	// 用于定位“气泡被瞬间撑高”这类排版问题。默认关闭，零开销。
+	bool layoutTraceEnabled()
+	{
+		static const bool on = qEnvironmentVariableIsSet("DSH_HUB_LAYOUT_TRACE");
+		return on;
+	}
 }
 
 namespace
@@ -145,14 +153,19 @@ QTextBrowser* AgentMessageUnit::proseHost()
 
 void AgentMessageUnit::fitProseView(QTextBrowser* view)
 {
-	int textWidth = view->viewport()->width();
-	// 布局尚未生效时 viewport 宽度会很小/为 0：此时按容器固定内容宽度估算
-	// （DefaultWidth - 16 = 720 减左右布局边距），否则会把文档按极窄宽度排版，
-	// 算出一个离谱的高度
-	if (textWidth < 300)
-		textWidth = DefaultWidth - 16;
+	// 内容宽度是确定的：容器定宽（DefaultWidth）减去布局左右边距，所以这里先把
+	// **视图自身宽度**校正到内容宽度，再按同一宽度排版文档。
+	//
+	// 关键：新建的视图在被布局之前宽度还是 Qt 的默认值（100px），而 QTextBrowser
+	// 会把文档宽度跟着自己的视口宽度走。若此时直接读 documentSize()，拿到的就是
+	// “按 100px 窄宽换行”的高度（实测长回复可达 7000+ px），一旦 setFixedHeight()
+	// 提交，气泡就会被瞬间撑得极高，等下一轮拟合再恢复——这正是流式输出时的抖动。
+	const QMargins margins = m_partsLayout->contentsMargins();
+	const int contentWidth = qMax(1, width() - margins.left() - margins.right());
+	if (view->width() != contentWidth)
+		view->setFixedWidth(contentWidth);
 
-	view->document()->setTextWidth(textWidth);
+	view->document()->setTextWidth(contentWidth);
 
 	const qreal docHeight = view->document()->documentLayout()->documentSize().height();
 	int height = static_cast<int>(docHeight + 0.9999);
@@ -175,16 +188,64 @@ void AgentMessageUnit::updateHeightToContent()
 	QElapsedTimer timer;
 	timer.start();
 
+	if (layoutTraceEnabled())
+		debugTraceLayout(QStringLiteral("before"));
+
 	refitParts();
+
+	if (layoutTraceEnabled())
+		debugTraceLayout(QStringLiteral("after-refit"));
 
 	// 子部件刚加入布局时几何可能还没生效（宽度仍很小），立即拟合会按错误宽度
 	// 算出过高的固定高度；延后到事件循环里布局真正跑完后，再按真实宽度重算一次。
 	QTimer::singleShot(0, this, [this]() {
-		if (!m_rebuilding)
-			refitParts();
-	});
+		if (m_rebuilding)
+			return;
+		refitParts();
+		if (layoutTraceEnabled())
+			debugTraceLayout(QStringLiteral("after-settle"));
+		});
 
 	traceRender("updateHeightToContent", timer.elapsed());
+}
+
+// 排版诊断：把“这一帧提交的高度”和子部件构成打出来，用于定位气泡被瞬间撑高
+// 的问题（DSH_HUB_LAYOUT_TRACE=1 时随 updateHeightToContent 输出）。
+void AgentMessageUnit::debugTraceLayout(const QString& stage) const
+{
+	QStringList parts;
+	parts << QStringLiteral("stage=%1 unit=%2x%3 hint=%4x%5")
+		.arg(stage)
+		.arg(width())
+		.arg(height())
+		.arg(sizeHint().width())
+		.arg(sizeHint().height());
+
+	for (int i = 0; i < m_partsLayout->count(); ++i) {
+		QLayoutItem* item = m_partsLayout->itemAt(i);
+		QWidget* widget = item ? item->widget() : nullptr;
+		if (!widget)
+			continue;
+		parts << QStringLiteral("[%1#%2 %3x%4 hintH=%5]")
+			.arg(QString::fromLatin1(widget->metaObject()->className()), widget->objectName())
+			.arg(widget->width())
+			.arg(widget->height())
+			.arg(widget->sizeHint().height());
+	}
+
+	// 换行 QLabel 的 heightForWidth 随宽度变化，是最可疑的一类子部件
+	for (QLabel* label : findChildren<QLabel*>()) {
+		if (!label->wordWrap())
+			continue;
+		parts << QStringLiteral("{QLabel#%1 w=%2 h=%3 hintH=%4 hfw=%5}")
+			.arg(label->objectName())
+			.arg(label->width())
+			.arg(label->height())
+			.arg(label->sizeHint().height())
+			.arg(label->heightForWidth(label->width()));
+	}
+
+	qInfo().noquote() << QStringLiteral("[LayoutTrace]") << parts.join(QLatin1Char(' '));
 }
 
 void AgentMessageUnit::resizeEvent(QResizeEvent* event)

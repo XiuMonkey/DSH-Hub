@@ -1,105 +1,19 @@
 #include "ExtensionManagerPopup.h"
-#include "ExtensionLoader.h"
 
-#include <QCoreApplication>
+#include <QAbstractItemView>
 #include <QDebug>
-#include <QDir>
-#include <QEvent>
-#include <QFile>
 #include <QFileDialog>
-#include <QFileInfo>
-#include <QFontMetrics>
 #include <QHBoxLayout>
-#include <QJsonArray>
-#include <QJsonDocument>
 #include <QLabel>
 #include <QListWidget>
-#include <QAbstractItemView>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QVBoxLayout>
 #include <QTimer>
-
-#include <chrono>
-namespace
-{
-	QString patchNameLine(const QString& name)
-	{
-		return QStringLiteral("      name: '%1'").arg(name);
-	}
-
-	QString patchIdLine(const QString& name)
-	{
-		return QStringLiteral("    - id: %1").arg(name);
-	}
-
-	bool removePatchEntryForExtension(const QString& profilePath, const QString& name)
-	{
-		const QString patchPath = profilePath + QStringLiteral("/cordis.patch.yml");
-		QFile file(patchPath);
-		if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-			return false;
-
-		QString text = QString::fromUtf8(file.readAll());
-		file.close();
-
-		const QStringList lines = text.split(QLatin1Char('\n'));
-		QStringList kept;
-		bool removed = false;
-
-		for (int i = 0; i < lines.size(); ++i) {
-			const QString line = lines.at(i);
-			const QString trimmed = line.trimmed();
-
-			// Remove the standard two-line entry added by ExtensionLoader:
-			//     - id: <name>
-			//       name: '<name>'
-			if (trimmed == patchIdLine(name).trimmed() && i + 1 < lines.size()
-				&& lines.at(i + 1).trimmed() == patchNameLine(name).trimmed()) {
-				++i; // skip the next line too
-				removed = true;
-				continue;
-			}
-
-			// Also remove a standalone name line if it somehow exists without the id pair.
-			if (trimmed == patchNameLine(name).trimmed()) {
-				removed = true;
-				continue;
-			}
-
-			kept.append(line);
-		}
-
-		if (!removed)
-			return true;
-
-		// Remove empty "- insert:" headers left behind after deleting the entry lines.
-		QStringList cleaned;
-		for (int i = 0; i < kept.size(); ++i) {
-			if (kept.at(i).trimmed() == QStringLiteral("- insert:")) {
-				int j = i + 1;
-				while (j < kept.size() && kept.at(j).trimmed().isEmpty())
-					++j;
-				if (j >= kept.size() || kept.at(j).trimmed().startsWith(QStringLiteral("- insert:"))) {
-					continue;
-				}
-			}
-			cleaned.append(kept.at(i));
-		}
-		const QString newText = cleaned.join(QLatin1Char('\n'));
-
-		if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate))
-			return false;
-
-		file.write(newText.toUtf8());
-		file.close();
-		return true;
-	}
-} // namespace
+#include <QVBoxLayout>
 
 ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, QWidget* parent)
-	: PopupWindow(parent)
-	, m_serverProfilePath(serverProfilePath)
+	: StatusPopupWindow(parent)
+	, m_registry(serverProfilePath)
 {
 	setTitle(QStringLiteral("扩展管理"));
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] popup created");
@@ -141,7 +55,7 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 	// 状态栏
 	m_statusLabel = new QLabel(content);
 	m_statusLabel->setObjectName(QStringLiteral("extPopupStatus"));
-	m_statusLabel->installEventFilter(this); // 宽度布局生效后重排状态文本
+	attachStatusLabel(m_statusLabel); // 宽度布局生效后重排状态文本
 
 	rootLayout->addWidget(m_statusLabel);
 
@@ -161,145 +75,17 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 
 	// 关闭弹窗时等待异步安装任务结束，避免任务继续写已销毁的 this
 	connect(this, &PopupWindow::closed, this, [this]() {
-		if (m_installFuture.valid())
-			m_installFuture.wait();
+		m_installTask.waitForFinished();
 		});
 
 	refresh();
-}
-
-QString ExtensionManagerPopup::serverProfilePath() const
-{
-	return m_serverProfilePath;
-}
-
-QString ExtensionManagerPopup::nodeModulesPath() const
-{
-	return m_serverProfilePath + QStringLiteral("/node_modules");
-}
-
-QString ExtensionManagerPopup::registryPath() const
-{
-	return m_serverProfilePath + QStringLiteral("/extensions.json");
-}
-
-QStringList ExtensionManagerPopup::loadInstalledExtensions() const
-{
-	QStringList names;
-
-	const QString path = registryPath();
-	if (!QFile::exists(path))
-		return names;
-
-	QFile file(path);
-	if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-		return names;
-
-	const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-	file.close();
-
-	if (doc.isArray()) {
-		const QJsonArray array = doc.array();
-		for (const auto& value : array) {
-			const QString name = value.toString();
-			if (!name.isEmpty())
-				names.append(name);
-		}
-	}
-
-	return names;
-}
-
-void ExtensionManagerPopup::saveInstalledExtensions(const QStringList& names)
-{
-	QJsonArray array;
-	for (const QString& name : names)
-		array.append(name);
-
-	QFile file(registryPath());
-	if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-		file.write(QJsonDocument(array).toJson(QJsonDocument::Indented));
-		file.close();
-	}
-}
-
-static QString statusTextTwoLines(const QString& text, int width, const QFontMetrics& fm)
-{
-	if (text.isEmpty() || fm.horizontalAdvance(text) <= width)
-		return text;
-
-	const int ellipsisWidth = fm.horizontalAdvance(QStringLiteral("…"));
-
-	const auto takeLine = [&fm](const QString& src, int start, int maxWidth) -> QString {
-		QString out;
-		int used = 0;
-		for (int i = start; i < src.size(); ++i) {
-			const int charWidth = fm.horizontalAdvance(src.at(i));
-			if (charWidth > 0 && used + charWidth > maxWidth)
-				break;
-			out += src.at(i);
-			if (charWidth > 0)
-				used += charWidth;
-		}
-		return out;
-	};
-
-	const QString first = takeLine(text, 0, width);
-	const QString rest = text.mid(first.size());
-	if (fm.horizontalAdvance(rest) <= width)
-		return first + QLatin1Char('\n') + rest;
-
-	const int secondMax = qMax(20, width - ellipsisWidth);
-	QString second = takeLine(rest, 0, secondMax);
-	if (rest.size() > second.size())
-		second += QStringLiteral("…");
-	return first + QLatin1Char('\n') + second;
-}
-
-void ExtensionManagerPopup::setStatus(const QString& text)
-{
-	if (!m_statusLabel)
-		return;
-	m_statusLabel->setToolTip(text);
-	m_lastStatusText = text;
-	updateStatusDisplay();
-}
-
-void ExtensionManagerPopup::updateStatusDisplay()
-{
-	if (!m_statusLabel)
-		return;
-
-	// 布局后按真实宽度排版；还没拿到真实宽度时先全量显示，
-	// 等 Resize 事件（布局真正生效）到来再按实际宽度决定是否省略。
-	int width = m_statusLabel->width();
-	if (width <= 10) {
-		const QWidget* win = m_statusLabel->window();
-		width = win && win->width() > 40 ? win->width() - 40 : 0;
-	}
-	if (width <= 10) {
-		m_statusLabel->setWordWrap(false);
-		m_statusLabel->setText(m_lastStatusText);
-		return;
-	}
-
-	m_statusLabel->setWordWrap(false);
-	m_statusLabel->setText(statusTextTwoLines(m_lastStatusText, width, m_statusLabel->fontMetrics()));
-}
-
-bool ExtensionManagerPopup::eventFilter(QObject* watched, QEvent* event)
-{
-	// 布局真正生效（标签宽度变化）时重算一次，避免早期按窄宽度错误截断
-	if (watched == m_statusLabel && event->type() == QEvent::Resize)
-		updateStatusDisplay();
-	return PopupWindow::eventFilter(watched, event);
 }
 
 void ExtensionManagerPopup::populateList()
 {
 	m_listWidget->clear();
 
-	const QStringList names = loadInstalledExtensions();
+	const QStringList names = m_registry.installedExtensions();
 	for (const QString& name : names)
 		m_listWidget->addItem(name);
 
@@ -312,9 +98,10 @@ void ExtensionManagerPopup::populateList()
 
 	m_removeButton->setEnabled(false);
 }
+
 void ExtensionManagerPopup::installExtension()
 {
-	if (m_installing)
+	if (m_installTask.isRunning())
 		return;
 
 	const QString extPath = QFileDialog::getOpenFileName(
@@ -327,18 +114,15 @@ void ExtensionManagerPopup::installExtension()
 		return;
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] installExtension start: %1").arg(extPath);
 
-	m_installing = true;
 	if (m_installButton)
 		m_installButton->setEnabled(false);
 	setStatus(QStringLiteral("正在安装扩展..."));
-	m_pendingError.clear();
-	m_pendingExt = ExtensionLoader::LoadedExtension();
 
-	const QString profilePath = m_serverProfilePath;
-	m_installFuture = std::async(std::launch::async, [this, extPath, profilePath]() {
-		ExtensionLoader loader;
-		return loader.loadAndInstall(extPath, profilePath, &m_pendingExt, &m_pendingError);
-		});
+	if (!m_installTask.start(extPath, m_registry.serverProfilePath())) {
+		if (m_installButton)
+			m_installButton->setEnabled(true);
+		return;
+	}
 
 	if (m_installTimer)
 		m_installTimer->start();
@@ -347,46 +131,37 @@ void ExtensionManagerPopup::installExtension()
 
 void ExtensionManagerPopup::pollInstall()
 {
-	if (!m_installFuture.valid() ||
-		m_installFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+	if (!m_installTask.tryFinish())
 		return;
-	}
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] pollInstall: future ready");
 
 	if (m_installTimer)
 		m_installTimer->stop();
-	m_installing = false;
 	if (m_installButton)
 		m_installButton->setEnabled(true);
 
-	const bool ok = m_installFuture.get();
-	if (!ok) {
-		setStatus(QStringLiteral("扩展安装失败: %1").arg(m_pendingError));
+	if (!m_installTask.succeeded()) {
+		setStatus(QStringLiteral("扩展安装失败: %1").arg(m_installTask.errorString()));
 		return;
 	}
-	qInfo().noquote() << QStringLiteral("[ExtensionManager] loadAndInstall returned ok=%1").arg(ok);
+	qInfo().noquote() << QStringLiteral("[ExtensionManager] loadAndInstall returned ok=true");
 
-	QStringList names = loadInstalledExtensions();
-	if (!names.contains(m_pendingExt.pluginName)) {
-		names.append(m_pendingExt.pluginName);
-		saveInstalledExtensions(names);
-	}
+	const ExtensionLoader::LoadedExtension& ext = m_installTask.extension();
+	m_registry.registerInstalled(ext.pluginName);
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] installed registry updated");
 
 	populateList();
-	setStatus(QStringLiteral("扩展安装成功: %1").arg(m_pendingExt.pluginName));
+	setStatus(QStringLiteral("扩展安装成功: %1").arg(ext.pluginName));
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] list populated, emitting extensionInstalled");
 
 	// 使用持久化到扩展目录的 regulation.json5 / main.dll，
 	// 避免依赖临时解压目录，重启后也能从同一位置加载。
-	if (!m_pendingExt.pluginName.isEmpty()) {
-		const QString extDir = m_serverProfilePath
-			+ QStringLiteral("/extensions/") + m_pendingExt.pluginName;
-		m_pendingExt.jsonPath = extDir + QStringLiteral("/regulation.json5");
-		m_pendingExt.dllPath = extDir + QStringLiteral("/main.dll");
-	}
+	if (ext.pluginName.isEmpty())
+		return;
 
-	emit extensionInstalled(m_pendingExt.jsonPath, m_pendingExt.dllPath);
+	emit extensionInstalled(
+		m_registry.extensionJsonPath(ext.pluginName),
+		m_registry.extensionDllPath(ext.pluginName));
 	qInfo().noquote() << QStringLiteral("[ExtensionManager] extensionInstalled emitted, emitting serverRestartRequested");
 	emit serverRestartRequested();
 }
@@ -413,12 +188,9 @@ void ExtensionManagerPopup::removeSelected()
 
 	// 无论目录是否删除成功，都要清理配置残留，避免 cordis.patch.yml 引用不存在的包
 	QString dirError;
-	const bool dirRemoved = removeExtensionDirectory(name, &dirError);
-	const bool patchRemoved = removePatchEntryForExtension(m_serverProfilePath, name);
-
-	QStringList names = loadInstalledExtensions();
-	names.removeAll(name);
-	saveInstalledExtensions(names);
+	const bool dirRemoved = m_registry.removeExtensionDirectory(name, &dirError);
+	const bool patchRemoved = ExtensionRegistry::removePatchEntry(m_registry.serverProfilePath(), name);
+	m_registry.unregisterInstalled(name);
 
 	populateList();
 
@@ -440,85 +212,23 @@ void ExtensionManagerPopup::removeSelected()
 void ExtensionManagerPopup::cleanupResiduals()
 {
 	qInfo().noquote() << "[ExtensionManager] cleanupResiduals called";
-	const QString patchPath = m_serverProfilePath + QStringLiteral("/cordis.patch.yml");
-	QFile patchFile(patchPath);
-	if (!patchFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+
+	const ExtensionRegistry::CleanupResult result = m_registry.cleanupResiduals();
+	if (!result.patchReadable) {
 		setStatus(QStringLiteral("无法读取 cordis.patch.yml"));
 		return;
 	}
 
-	const QStringList lines = QString::fromUtf8(patchFile.readAll()).split(QLatin1Char('\n'));
-	patchFile.close();
-
-	const QString profileNodeModulesPath = nodeModulesPath();
-	const QString serverNodeModulesPath = QDir::cleanPath(
-		m_serverProfilePath + QStringLiteral("/../../../node_modules"));
-
-	QStringList removed;
-	for (int i = 0; i + 1 < lines.size(); ++i) {
-		const QString trimmed = lines.at(i).trimmed();
-		if (!trimmed.startsWith(QStringLiteral("- id: ")))
-			continue;
-
-		const QString name = trimmed.mid(QStringLiteral("- id: ").length()).trimmed();
-		if (name.isEmpty())
-			continue;
-
-		const QString nameLine = lines.at(i + 1).trimmed();
-		if (nameLine != QStringLiteral("name: '%1'").arg(name))
-			continue;
-
-		// 内置插件存在于服务端根 node_modules；只有两边都不存在才视为残留
-		const bool existsInProfile = QFileInfo::exists(profileNodeModulesPath + QStringLiteral("/") + name);
-		const bool existsInServer = QFileInfo::exists(serverNodeModulesPath + QStringLiteral("/") + name);
-		qInfo().noquote() << "[ExtensionManager] cleanup check"
-			<< name
-			<< "profile=" << existsInProfile
-			<< "server=" << existsInServer;
-		if (existsInProfile || existsInServer)
-			continue;
-
-		if (removePatchEntryForExtension(m_serverProfilePath, name))
-			qInfo().noquote() << "[ExtensionManager] cleanup candidate:" << name;
-		removed.append(name);
-	}
-
-	if (!removed.isEmpty()) {
-		QStringList names = loadInstalledExtensions();
-		for (const QString& name : removed)
-			names.removeAll(name);
-		saveInstalledExtensions(names);
-	}
-
 	populateList();
-	setStatus(removed.isEmpty()
+	setStatus(result.removed.isEmpty()
 		? QStringLiteral("未发现残留扩展配置")
-		: QStringLiteral("已清理残留扩展: %1").arg(removed.join(QLatin1String(", "))));
+		: QStringLiteral("已清理残留扩展: %1").arg(result.removed.join(QLatin1String(", "))));
 
-	if (!removed.isEmpty())
+	if (!result.removed.isEmpty())
 		emit serverRestartRequested();
 }
 
 void ExtensionManagerPopup::refresh()
 {
 	populateList();
-}
-
-bool ExtensionManagerPopup::removeExtensionDirectory(const QString& name, QString* error)
-{
-	QDir dir(nodeModulesPath() + QStringLiteral("/") + name);
-	if (dir.exists() && !dir.removeRecursively()) {
-		if (error)
-			*error = QStringLiteral("无法删除扩展目录: %1").arg(dir.absolutePath());
-		return false;
-	}
-
-	QDir extDir(m_serverProfilePath + QStringLiteral("/extensions/") + name);
-	if (extDir.exists() && !extDir.removeRecursively()) {
-		if (error)
-			*error = QStringLiteral("无法删除扩展资源目录: %1").arg(extDir.absolutePath());
-		return false;
-	}
-
-	return true;
 }

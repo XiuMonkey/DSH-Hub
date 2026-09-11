@@ -1,4 +1,4 @@
-﻿# DSH Hub
+# DSH Hub
 
 DSH Hub 是 **DSH（DeepSeek Harness）** 的 Windows 桌面客户端，使用 **Qt 6 / C++** 构建。
 
@@ -37,11 +37,13 @@ DSH Hub/
 ├── include/                    # C++ 头文件
 ├── src/
 │   ├── core/                   # 主窗口、服务端管理、程序入口
-│   ├── ui/                     # 侧边栏、聊天输入框、弹窗、插件/扩展管理
+│   ├── ui/                     # 仅界面控制与绘制：侧边栏视图、聊天输入框、弹窗、插件/扩展管理窗口
 │   ├── chat/                   # 消息列表/单元、历史加载与缓存
 │   ├── network/                # HTTP/WebSocket 客户端、事件解析、会话预取
 │   ├── ExtensionSystem/        # 命名管道桥接、DLL JSON 调用器、Thunk 生成器、扩展加载器
-│   └── common/                 # 日志、主题、代码高亮、Markdown 预处理、交互弹窗
+│   └── common/                 # 功能逻辑：日志、主题、代码高亮、Markdown 预处理、交互弹窗，
+│                               # 以及会话目录/服务、凭据与设置存储、Agent 预设、
+│                               # 插件市场客户端与安装器、扩展注册表
 ├── resources/
 │   ├── 图标/图片与 QRC
 │   ├── highlight_rules.json    # 代码高亮规则
@@ -95,7 +97,13 @@ DSH Hub/
 - `CodeHighlighter` — 语法高亮与 HTML 转义
 - `HistoryManager` — 历史加载状态管理
 - `MarkdownPreprocess` — `<br>` 替换与表格渲染（针对 Qt 6 bug 的回归测试）
-- `Thunk` — x86-64 Thunk 生成器：调用约定、参数类型、签名 JSON、端到端 DLL 调用
+- `Thunk` — x86-64 Thunk 生成器：调用约定、参数类型（含 5–16 个参数的栈传递路径）、签名 JSON、端到端 DLL 调用
+- `SessionCatalog` — 侧边栏会话/工作区解析：子代理过滤、标题回退、归档过滤、工作区归属、自动选中与预取目标
+- `PluginMarketModel` / `AgentPresetService` — 插件市场条目解析、关键词过滤、分页切片，以及 Agent 预设的初始选中决策
+
+> `TestThunk::testMultiExtensionDllCaller` 依赖 `resources/server/launch-root/FFmpegExt/`
+> （随安装流程生成的 FFmpeg 示例扩展，该目录被 `.gitignore` 忽略）。未安装示例扩展时
+> 该用例会自动 **跳过** 而不是失败。
 
 ## 扩展格式
 

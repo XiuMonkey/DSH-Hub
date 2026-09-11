@@ -1,4 +1,4 @@
-﻿# DSH Hub
+# DSH Hub
 
 DSH Hub is a Windows desktop client for **DSH (DeepSeek Harness)**, built with **Qt 6 / C++**.
 
@@ -35,11 +35,13 @@ DSH Hub/
 ├── include/                    # C++ headers
 ├── src/
 │   ├── core/                   # Main window, server manager, entry point
-│   ├── ui/                     # Sidebar, chat input, popups, plugin/extension managers
+│   ├── ui/                     # UI control & drawing only: sidebar view, chat input, popups, plugin/extension windows
 │   ├── chat/                   # Message list/units, history loading and caching
 │   ├── network/                # HTTP/WebSocket client, event parser, session prefetcher
 │   ├── ExtensionSystem/        # Named pipe bridge, DLL JSON caller, thunk generator, extension loader
-│   └── common/                 # Logger, theme manager, code highlighter, markdown preprocessor, interaction dialogs
+│   └── common/                 # Functional logic: logger, theme, code highlighter, markdown preprocessor,
+│                               # interaction dialogs, session catalog/service, credentials & settings store,
+│                               # agent presets, plugin-market client/installer, extension registry
 ├── resources/
 │   ├── icons/ images and QRC
 │   ├── highlight_rules.json    # Syntax highlighting rules
@@ -93,7 +95,13 @@ The test project currently covers:
 - `CodeHighlighter` – syntax highlighting and HTML escaping
 - `HistoryManager` – history loading state management
 - `MarkdownPreprocess` – `<br>` replacement and table rendering (regression tests for Qt 6 bug)
-- `Thunk` – x86-64 thunk generator: calling conventions, argument types, signature JSON, end-to-end DLL calls
+- `Thunk` – x86-64 thunk generator: calling conventions, argument types (including the 5–16 argument stack-passing path), signature JSON, end-to-end DLL calls
+- `SessionCatalog` – sidebar session/workspace parsing: subagent filtering, title fallbacks, archived filtering, workspace assignment, auto-select and prefetch targets
+- `PluginMarketModel` / `AgentPresetService` – market entry parsing, keyword filtering, pagination slicing, and agent-preset selection resolution
+
+> `TestThunk::testMultiExtensionDllCaller` depends on `resources/server/launch-root/FFmpegExt/`
+> (the FFmpeg example extension produced by the install flow; that directory is gitignored).
+> Without it the case is reported as **skipped** instead of failing.
 
 ## Extension Format
 

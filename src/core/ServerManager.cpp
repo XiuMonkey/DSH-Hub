@@ -1,4 +1,5 @@
 #include "ServerManager.h"
+#include "SettingsStore.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -9,14 +10,13 @@
 #include <QJsonObject>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
-#include <QSettings>
 #include <QTcpSocket>
 
 namespace
 {
 	QUrl storedServerUrl()
 	{
-		// 优先级：环境变量 > QSettings
+		// 优先级：环境变量 > 本地持久化设置
 		const QString envUrl = qEnvironmentVariable("DSH_SERVER_URL").trimmed();
 		if (!envUrl.isEmpty()) {
 			const QUrl url(envUrl);
@@ -24,8 +24,7 @@ namespace
 				return url;
 		}
 
-		QSettings settings;
-		const QString savedUrl = settings.value(QStringLiteral("server/url")).toString().trimmed();
+		const QString savedUrl = SettingsStore::serverUrl();
 		if (!savedUrl.isEmpty()) {
 			const QUrl url(savedUrl);
 			if (url.isValid() && !url.host().isEmpty())

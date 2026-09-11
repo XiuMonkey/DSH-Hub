@@ -866,7 +866,7 @@ void HistoryLoader::applyPendingAnchor()
 		if (!scrollBar)
 			return;
 		scrollBar->setValue(qBound(0, anchor->geometry().top() - keep, scrollBar->maximum()));
-	};
+		};
 	QTimer::singleShot(0, this, fix);
 	QTimer::singleShot(40, this, fix);
 	QTimer::singleShot(120, this, fix);

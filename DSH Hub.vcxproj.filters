@@ -33,7 +33,7 @@
     <Filter Include="Source Files\Network">
       <UniqueIdentifier>{A1C0E001-0004-4000-8000-000000000004}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\Bridge">
+    <Filter Include="Source Files\ExtensionSystem">
       <UniqueIdentifier>{A1C0E001-0005-4000-8000-000000000005}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\Common">
@@ -68,9 +68,6 @@
         <None Include="resources\DSH-Hub-Logo-Tiny-Dark@2x.png">
           <Filter>Resource Files</Filter>
         </None>
-      <None Include="resources\DSH Hub Logo.svg">
-        <Filter>Resource Files</Filter>
-      </None>
     <None Include="resources\DSH Hub.ico">
       <Filter>Resource Files</Filter>
     </None>
@@ -136,15 +133,21 @@
         <ClCompile Include="src\common\Logger.cpp">
           <Filter>Source Files\Common</Filter>
         </ClCompile>
-<ClCompile Include="src\bridge\DshNamedPipeBridge.cpp">
-        <Filter>Source Files\Bridge</Filter>
-      </ClCompile>
-<ClCompile Include="src\bridge\DllCaller.cpp">
-        <Filter>Source Files\Bridge</Filter>
-      </ClCompile>
-<ClCompile Include="src\bridge\ExtensionLoader.cpp">
-        <Filter>Source Files\Bridge</Filter>
-      </ClCompile>
+        <ClCompile Include="src\ExtensionSystem\DshNamedPipeBridge.cpp">
+          <Filter>Source Files\ExtensionSystem</Filter>
+        </ClCompile>
+        <ClCompile Include="src\ExtensionSystem\DllCaller.cpp">
+          <Filter>Source Files\ExtensionSystem</Filter>
+        </ClCompile>
+        <ClCompile Include="src\ExtensionSystem\ComCaller.cpp">
+          <Filter>Source Files\ExtensionSystem</Filter>
+        </ClCompile>
+        <ClCompile Include="src\ExtensionSystem\Thunk.cpp">
+          <Filter>Source Files\ExtensionSystem</Filter>
+        </ClCompile>
+        <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp">
+          <Filter>Source Files\ExtensionSystem</Filter>
+        </ClCompile>
     <ClCompile Include="src\ui\LoadMoreButton.cpp">
       <Filter>Source Files\UI</Filter>
     </ClCompile>
@@ -156,6 +159,39 @@
       </ClCompile>
         <ClCompile Include="src\chat\SystemMessageUnit.cpp">
           <Filter>Source Files\Chat</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\SessionCatalog.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\SessionService.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\SettingsStore.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\CredentialsService.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\AgentPresetService.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\PluginMarketClient.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\PluginMarketModel.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\PluginMarketInstaller.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\ExtensionRegistry.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\common\ExtensionInstallTask.cpp">
+          <Filter>Source Files\Common</Filter>
+        </ClCompile>
+        <ClCompile Include="src\ui\StatusPopupWindow.cpp">
+          <Filter>Source Files\UI</Filter>
         </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -204,6 +240,15 @@
     <QtMoc Include="include\UserMessageUnit.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="include\StatusPopupWindow.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="include\PluginMarketClient.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="include\PluginMarketInstaller.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\DshEventParser.h">
@@ -231,6 +276,30 @@
           <Filter>Header Files</Filter>
         </ClInclude>
         <ClInclude Include="include\Logger.h">
+          <Filter>Header Files</Filter>
+        </ClInclude>
+        <ClInclude Include="include\SessionCatalog.h">
+          <Filter>Header Files</Filter>
+        </ClInclude>
+        <ClInclude Include="include\SessionService.h">
+          <Filter>Header Files</Filter>
+        </ClInclude>
+        <ClInclude Include="include\SettingsStore.h">
+          <Filter>Header Files</Filter>
+        </ClInclude>
+        <ClInclude Include="include\CredentialsService.h">
+          <Filter>Header Files</Filter>
+        </ClInclude>
+        <ClInclude Include="include\AgentPresetService.h">
+          <Filter>Header Files</Filter>
+        </ClInclude>
+        <ClInclude Include="include\PluginMarketModel.h">
+          <Filter>Header Files</Filter>
+        </ClInclude>
+        <ClInclude Include="include\ExtensionRegistry.h">
+          <Filter>Header Files</Filter>
+        </ClInclude>
+        <ClInclude Include="include\ExtensionInstallTask.h">
           <Filter>Header Files</Filter>
         </ClInclude>
 
