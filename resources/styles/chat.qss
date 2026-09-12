@@ -1,0 +1,363 @@
+/* ==========================================================================
+ * chat.qss — 聊天区（消息列表/气泡/流式块）
+ *
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位，加载时替换）。
+ * 第二批迁移目标：AgentMessageUnit / UserMessageUnit / SystemMessageUnit /
+ * MessageQuery / ChatInputWidget / LoadMoreButton。
+ * ========================================================================== */
+
+/* 消息滚动内容与右侧对话面板底色（第一批：迁自 DSHHub 内联样式） */
+#chatScrollContent {
+    background: {{windowBg}};
+}
+#chatPanel {
+    background: {{windowBg}};
+    border-radius: 12px;
+}
+
+/* ==========================================================================
+ * 第二批（聊天区组件“样式软编码”迁移）
+ * 来源控件：AgentMessageUnit / UserMessageUnit / SystemMessageUnit /
+ * MessageQuery / ChatInputWidget / LoadMoreButton。
+ * ========================================================================== */
+
+/* ===== AgentMessageUnit.cpp ===== */
+/* Agent 消息正文默认外观（独立使用、不在气泡容器内时生效）。
+   放进 #agentBubble 容器的实例会被 MessageQuery.cpp 一节里的覆盖规则改为透明。 */
+#agentUnit {
+    background-color: {{panelBg}};
+    color: {{textPrimary}};
+    border-radius: 12px;
+}
+
+/* ===== UserMessageUnit.cpp ===== */
+/* 用户消息气泡 */
+#userUnit {
+    background-color: {{userBubbleBg}};
+    border-radius: 12px;
+    color: {{userBubbleText}};
+}
+
+/* ===== SystemMessageUnit.cpp ===== */
+/* 系统消息：无边框、透明背景、斜体浅灰文字 */
+#systemUnit {
+    background: transparent;
+    border: none;
+    color: {{systemMessageText}};
+    font-style: italic;
+}
+
+/* ===== MessageQuery.cpp ===== */
+/* 消息复制按钮（makeCopyButton 每个消息动态创建，统一挂 #msgCopyButton；
+   前缀 #chatScrollContent 用于压过 base.qss 的通用 QPushButton 规则） */
+#chatScrollContent QPushButton#msgCopyButton {
+    border: none;
+    background: transparent;
+    color: {{iconButtonText}};
+    font-size: 14px;
+    border-radius: 4px;
+    padding: 0px;
+    margin: 0px;
+}
+#chatScrollContent QPushButton#msgCopyButton:hover {
+    background: {{iconButtonHoverBg}};
+    color: {{iconButtonTextHover}};
+}
+#chatScrollContent QPushButton#msgCopyButton:pressed {
+    background: {{iconButtonPressedBg}};
+}
+
+/* Agent 气泡容器（addAgentMessage 创建，共用一个 #agentBubble） */
+#agentBubble {
+    background: {{panelBg}};
+    border-radius: 12px;
+}
+
+/* 气泡内的 Agent 正文：圆角底色由外层容器提供，自身保持透明（原两处 unit 覆盖规则合并） */
+#agentBubble #agentUnit {
+    background: transparent;
+    border-radius: 0;
+}
+
+/* ===== AgentMessageUnit.cpp（路线2 第2步：气泡容器化） =====
+ * AgentMessageUnit 现在是 QWidget + 布局的“部件流”容器（objectName 仍为 #agentUnit，
+ * 上面的 #agentUnit / #agentBubble #agentUnit 规则继续作用于容器背景）；
+ * 内容被切成若干内层控件，内边距由容器代码里的布局边距提供。 */
+/* 普通文本段 ProseView：透明、无边框，文字颜色跟随主题主色 */
+#agentProse {
+    background: transparent;
+    border: none;
+    color: {{textPrimary}};
+}
+/* 代码围栏语言行：次要色小字标签，放在 CodeBlockView 上方 */
+#codeBlockLang {
+    background: transparent;
+    color: {{textSecondary}};
+    font-style: italic;
+    font-size: 12px;
+    font-family: "Consolas", "Menlo", monospace;
+    padding: 0 2px;
+}
+
+/* ===== AgentMessageUnit.cpp（Step4：思考/工具卡片化） =====
+ * 思考与工具块现在是独立卡片子部件：可点击标题 + 展开正文（内层富文本透明） */
+#agentThinkHeader,
+#agentToolHeader {
+    background: transparent;
+}
+#agentThinkBody,
+#agentToolBody {
+    background: transparent;
+    border: none;
+    color: {{textPrimary}};
+}
+
+/* ===== ChatInputWidget.cpp（仿原生 DSH composer：输入框 + 底部控制行）===== */
+/* 输入卡片本体（圆角 22px 与原生 .card 一致） */
+#inputCapsule {
+    background: {{panelBg}};
+    border: 1px solid {{composerBorder}};
+    border-radius: 22px;
+}
+/* 卡片内的多行输入框；上下 padding 之和与 ChatInputWidget.cpp 的
+   kEditorVerticalPadding 保持一致（4px 12px 0 16px -> 4） */
+#inputCapsule QPlainTextEdit {
+    border: none;
+    background: transparent;
+    padding: 4px 12px 0 16px;
+    font-size: 16px;
+    color: {{textPrimary}};
+}
+#inputCapsule QPlainTextEdit:focus {
+    border: none;
+}
+/* 底部控制行：本身透明，左右两组控件的间距由代码里的布局给出 */
+#inputControlRow {
+    background: transparent;
+}
+/* 发送按钮：透明底 + 固定 32x32，hover/按下效果由 ChatInputWidget 的动态蒙版实现 */
+#inputCapsule QPushButton#sendButton {
+    border: none;
+    background: transparent;
+    border-radius: 16px;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 32px;
+    max-height: 32px;
+    padding: 0;
+}
+
+/* ===== ModelSelector.cpp（模型 + 思考档位 chip 与上拉菜单）===== */
+/* chip：无边框、圆角 14px、高 28px（原生 .trigger）。
+   选择器带 #inputCapsule 前缀以压过 base.qss 的通用 QPushButton 规则 */
+#inputCapsule QPushButton#modelSelectorChip {
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+    padding: 0;
+    min-width: 0;
+    color: {{textSecondary}};
+}
+/* 只给悬停/按下底色；焦点态不留底色与描边，避免出现“一直灰着”的残留状态 */
+#inputCapsule QPushButton#modelSelectorChip:hover {
+    background: {{chipHoverBg}};
+}
+#inputCapsule QPushButton#modelSelectorChip:pressed {
+    background: {{activeBg}};
+}
+/* chip 左侧是当前模型名（主要信息，用正文色），右侧是当前档位（次要，用弱化色） */
+#modelSelectorChipLabel {
+    color: {{textPrimary}};
+    font-size: 13px;
+    font-weight: 500;
+}
+#modelSelectorChipValue {
+    color: {{textCaption}};
+    font-size: 13px;
+    font-weight: 500;
+}
+#modelSelectorChipChevron {
+    color: {{textCaption}};
+    font-size: 11px;
+}
+/* 上拉菜单：圆角 12px + 细边框（原生 .menu） */
+#modelSelectorMenu {
+    background: {{menuBg}};
+    border: 1px solid {{menuBorder}};
+    border-radius: 12px;
+}
+#modelSelectorMenuContent {
+    background: transparent;
+}
+/* 两节各自的容器：只负责给内部的行提供一个独立的 autoExclusive 单选组，
+   本身不画任何东西 */
+#modelSelectorMenuSection {
+    background: transparent;
+}
+/* 滚动区自身不画背景，圆角与边框都由 #modelSelectorMenu 承担 */
+#modelSelectorScroll {
+    background: transparent;
+    border: none;
+}
+#modelSelectorScroll QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 2px 0;
+}
+#modelSelectorScroll QScrollBar::handle:vertical {
+    background: {{scrollbar}};
+    border-radius: 4px;
+    min-height: 30px;
+}
+#modelSelectorScroll QScrollBar::handle:vertical:hover {
+    background: {{scrollbarHover}};
+}
+#modelSelectorScroll QScrollBar::add-line:vertical,
+#modelSelectorScroll QScrollBar::sub-line:vertical {
+    height: 0;
+}
+#modelSelectorScroll QScrollBar::add-page:vertical,
+#modelSelectorScroll QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+/* 小节标题（「模型」「思考深度」）与提供方分组标签 */
+#modelSelectorMenuTitle {
+    color: {{textTertiary}};
+    font-size: 12px;
+    font-weight: 500;
+}
+#modelSelectorMenuGroup {
+    color: {{textCaption}};
+    font-size: 11px;
+    font-weight: 600;
+}
+/* 档位行：同样需要 #modelSelectorMenu QPushButton 前缀压过通用按钮规则 */
+#modelSelectorMenu QPushButton#modelSelectorOption {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 0;
+    min-width: 0;
+    text-align: left;
+}
+#modelSelectorMenu QPushButton#modelSelectorOption:hover,
+#modelSelectorMenu QPushButton#modelSelectorOption:focus {
+    background: {{chipHoverBg}};
+}
+/* 选中行只靠右侧 ✓ 表达（原生 .selected 背景同样透明） */
+#modelSelectorMenu QPushButton#modelSelectorOption:checked {
+    background: transparent;
+}
+#modelSelectorOptionName {
+    color: {{textPrimary}};
+    font-size: 14px;
+    font-weight: 500;
+}
+#modelSelectorOptionDesc {
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+#modelSelectorOptionCheck {
+    color: {{accent}};
+    font-size: 13px;
+    font-weight: 600;
+}
+/* 没有可选项时的说明行（例如当前模型不公布档位） */
+#modelSelectorOptionHint {
+    color: {{textCaption}};
+    font-size: 12px;
+}
+
+/* ===== LoadMoreButton.cpp ===== */
+/* “加载更多”按钮（原样式里重复声明的 border/background 已合并为最终生效值；
+   前缀 #chatScrollContent 用于压过 base.qss 的通用 QPushButton 规则） */
+#chatScrollContent QPushButton#loadMoreButton {
+    border: 1px solid {{inputBorder}};
+    background: {{panelBg}};
+    color: {{accent}};
+    border-radius: 15px;
+    padding: 6px 18px;
+    font-size: 13px;
+}
+/* hover 只改变字色；background 显式钉住 panelBg，
+   避免 base.qss 通用 QPushButton:hover 把底色换成 buttonHover */
+#chatScrollContent QPushButton#loadMoreButton:hover {
+    background: {{panelBg}};
+    color: {{accentHover}};
+}
+
+/* ===== CodeBlockView.cpp（路线2：气泡内独立代码块控件） =====
+ * 背景/边框/圆角由这里统一绘制，不再用 HTML 背景渲染；
+ * 等宽字体在控件内设置，颜色走色板。 */
+#codeBlockView {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    selection-background-color: {{selectionBg}};
+}
+/* 代码块内的横向/纵向滚动条（细条，避免挤压可视区）
+ *
+ * 注意：QAbstractScrollArea 的滚动条是在**基类构造**里创建的，那时子类的
+ * objectName 还没设，QStyleSheetStyle 会把"匹配不到本规则"缓存下来 —— 之后再设
+ * objectName 也不会重新匹配。所以凡是新建这类滚动区，设完 objectName 必须调用
+ * Theme::repolishScrollArea()（见 CodeBlockView / AgentMessageUnit::createRichPart）。
+ * 以后再加带滚动条规则的控件，别忘了这一步。 */
+#codeBlockView QScrollBar:horizontal,
+#codeBlockView QScrollBar:vertical {
+    background: transparent;
+    height: 8px;
+    width: 8px;
+    margin: 0;
+}
+#codeBlockView QScrollBar::handle:horizontal,
+#codeBlockView QScrollBar::handle:vertical {
+    background: {{scrollbarHandle}};
+    border-radius: 4px;
+    min-height: 20px;
+    min-width: 20px;
+}
+#codeBlockView QScrollBar::handle:horizontal:hover,
+#codeBlockView QScrollBar::handle:vertical:hover {
+    background: {{scrollbarHandleHover}};
+}
+#codeBlockView QScrollBar::add-line:horizontal,
+#codeBlockView QScrollBar::sub-line:horizontal,
+#codeBlockView QScrollBar::add-line:vertical,
+#codeBlockView QScrollBar::sub-line:vertical {
+    height: 0;
+    width: 0;
+}
+#codeBlockView QScrollBar::add-page:horizontal,
+#codeBlockView QScrollBar::sub-page:horizontal,
+#codeBlockView QScrollBar::add-page:vertical,
+#codeBlockView QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+/* ===== AgentMessageUnit.cpp 的正文视图（QTextBrowser，#agentProse）=====
+ * 正文视图自带横向滚动条（防止极端 HTML 撑宽），这里同样给一条细条样式；
+ * 不写的话它就会按原生（老式）滚动条绘制 —— 与代码块外观不一致。
+ * 同样需要在建好控件后调 Theme::repolishScrollArea() 才会生效。 */
+#agentProse QScrollBar:horizontal {
+    background: transparent;
+    height: 8px;
+    margin: 0;
+}
+#agentProse QScrollBar::handle:horizontal {
+    background: {{scrollbarHandle}};
+    border-radius: 4px;
+    min-width: 20px;
+}
+#agentProse QScrollBar::handle:horizontal:hover {
+    background: {{scrollbarHandleHover}};
+}
+#agentProse QScrollBar::add-line:horizontal,
+#agentProse QScrollBar::sub-line:horizontal {
+    height: 0;
+    width: 0;
+}
+#agentProse QScrollBar::add-page:horizontal,
+#agentProse QScrollBar::sub-page:horizontal {
+    background: transparent;
+}

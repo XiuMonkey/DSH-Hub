@@ -1,0 +1,9 @@
+{
+  "name": "add3",
+  "signature": {
+    "returnType": "int",
+    "arguments": ["int", "int", "int"]
+  },
+  "args": [1, 2, 3],
+  "expected": 6
+}

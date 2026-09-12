@@ -1,0 +1,135 @@
+/* ==========================================================================
+ * base.qss — 全局基础控件外观
+ *
+ * 规则文件里不写任何具体颜色：颜色一律来自调色板 theme-<mode>.json，
+ * 加载时用 {{key}} 占位符替换。颜色只允许出现在 JSON 色板文件中。
+ *
+ * 第一批（迁自 DSHHub 主窗口内联样式）；后续板块迁移时若出现重复的
+ * “通用外观”规则，优先收敛到这里，并删除控件级内联样式。
+ * ========================================================================== */
+
+/* 主窗口中央容器（整棵工作区子树的背景与默认文字色）。
+ * 它同时充当“自绘窗口边框”：主窗口是无边框 + 透明窗口
+ * （Qt::FramelessWindowHint + WA_TranslucentBackground，见 DSHHub 构造函数），
+ * 圆角之外什么都不画，于是圆角与 1px 描边就是窗口真实的外轮廓。
+ * 内容区（侧边栏/对话列）左右各留 24px、下侧留 9px 白边，不会盖住圆角。 */
+#dshhubCentral {
+    background: {{windowBg}};
+    color: {{textPrimary}};
+    border: 1px solid {{windowBorder}};
+    border-radius: 12px;
+}
+
+/* 最大化/全屏时窗口贴屏幕边缘：圆角与描边会露出底色，这里切掉
+ * （DSHHub::syncWindowFrameStyle 负责切换该动态属性） */
+#dshhubCentral[maximized="true"] {
+    border: none;
+    border-radius: 0px;
+}
+
+/* 无边框主窗口本体：自身不画任何东西，可见面完全交给 #dshhubCentral */
+QMainWindow#dshHubWindow {
+    background: transparent;
+    border: none;
+}
+
+/* ===== 自绘标题栏（TitleBar.cpp）=====
+ * 标题栏本体与图标只提供底板；右侧三个窗口按钮是普通 QPushButton，
+ * 外观（形状 / 底色 / 悬停 / 按下 / 字形颜色 / 字体）全部在这里，
+ * C++ 侧只负责换字形（最大化 ↔ 还原）与发意图信号。
+ * 规则前缀 #windowTitleBar + 控件 id 用于压过下面的通用 QPushButton
+ * (:hover/:pressed) 规则 —— 否则按钮会拿到通用按钮底色。 */
+#windowTitleBar {
+    background: transparent;
+}
+#windowTitleBar QPushButton#windowMinButton,
+#windowTitleBar QPushButton#windowMaxButton,
+#windowTitleBar QPushButton#windowCloseButton {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+    margin: 0;
+    color: {{textSecondary}};
+    /* 字形来自符号字体（−/□/❐/✕），缺失时回退主题字体 */
+    font-family: "Segoe UI Symbol", "Microsoft YaHei UI";
+    font-size: 12px;
+}
+#windowTitleBar QPushButton#windowMinButton:hover,
+#windowTitleBar QPushButton#windowMaxButton:hover {
+    background: {{captionHoverBg}};
+    color: {{textPrimary}};
+}
+#windowTitleBar QPushButton#windowMinButton:pressed,
+#windowTitleBar QPushButton#windowMaxButton:pressed {
+    background: {{activeBg}};
+    color: {{textPrimary}};
+}
+#windowTitleBar QPushButton#windowCloseButton:hover {
+    background: {{dangerButtonBg}};
+    color: {{textOnAccent}};
+}
+#windowTitleBar QPushButton#windowCloseButton:pressed {
+    background: {{danger}};
+    color: {{textOnAccent}};
+}
+#windowTitleLogo {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* 通用输入框（作用于主窗口子树；弹窗内自定义样式优先） */
+#dshhubCentral QLineEdit {
+    background: {{panelBg}};
+    border: 1px solid {{inputBorder}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: {{textPrimary}};
+}
+#dshhubCentral QLineEdit:focus {
+    border-color: {{accent}};
+}
+
+/* 通用按钮 */
+#dshhubCentral QPushButton {
+    background: {{buttonBg}};
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    color: {{textPrimary}};
+}
+#dshhubCentral QPushButton:hover {
+    background: {{buttonHover}};
+}
+#dshhubCentral QPushButton:pressed {
+    background: {{buttonPressed}};
+}
+
+/* 聊天滚动区与滚动条 */
+#chatScrollArea {
+    background: {{windowBg}};
+    border: none;
+}
+#chatScrollArea QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 2px;
+}
+#chatScrollArea QScrollBar::handle:vertical {
+    background: {{scrollbarHandle}};
+    border-radius: 4px;
+    min-height: 30px;
+}
+#chatScrollArea QScrollBar::handle:vertical:hover {
+    background: {{scrollbarHandleHover}};
+}
+#chatScrollArea QScrollBar::add-line:vertical,
+#chatScrollArea QScrollBar::sub-line:vertical {
+    height: 0;
+}
+#chatScrollArea QScrollBar::add-page:vertical,
+#chatScrollArea QScrollBar::sub-page:vertical {
+    background: transparent;
+}

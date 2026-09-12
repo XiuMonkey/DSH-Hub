@@ -1,0 +1,421 @@
+/* ==========================================================================
+ * settings.qss — 设置窗口
+ *
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位，加载时替换）。
+ * 第二批迁移（Settings.cpp）。规则必须带父级 objectName 作用域，
+ * 等价还原原控件级 setStyleSheet 的子树影响范围。
+ * ========================================================================== */
+
+/* ===== Settings.cpp ===== */
+/* SettingsButton 导航按钮（modelButton/agentButton/serverButton 三个实例共用
+ * #settingsNavButton；:checked 由栏目切换代码 setChecked() 驱动）
+ * 高度只给下限（见 SettingsButton 构造）：pinned 的高度下文字居中，
+ * padding 只影响按钮自身 sizeHint，不影响文字上下留白。 */
+QPushButton#settingsNavButton {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: {{textPrimary}};
+    font-size: 14px;
+    text-align: left;
+}
+QPushButton#settingsNavButton:hover,
+QPushButton#settingsNavButton:checked {
+    background: {{hoverBg}};
+}
+QPushButton#settingsNavButton:pressed {
+    background: {{border}};
+}
+
+/* ===== Settings.cpp ===== */
+/* 各栏目小节标题/提示文字（agentLabel、agentHint、serverLabel、serverHint、
+ * appearanceHint、appearanceFeedback 等 QLabel，原控件级样式同为 QLabel{...} 同款规则） */
+#settingsAgentLabel,
+#settingsAgentHint,
+#settingsServerLabel,
+#settingsServerHint,
+#settingsAppearanceLabel,
+#settingsAppearanceHint,
+#settingsAppearanceFeedback {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+
+/* m_languageCombo（界面语言下拉；切换立即生效，见 TranslationManager） */
+#settingsLanguageCombo {
+    background: {{inputBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: {{textPrimary}};
+    min-width: 200px;
+}
+#settingsLanguageCombo:hover {
+    border-color: {{accent}};
+}
+#settingsLanguageCombo::drop-down {
+    border: none;
+    width: 18px;
+}
+
+/* ===== Settings.cpp ===== */
+/* m_agentPresetButton（默认 Agent 预设选择按钮；:pressed 态与 hover 同底色） */
+QPushButton#agentPresetButton {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 14px;
+    color: {{textPrimary}};
+    text-align: left;
+}
+QPushButton#agentPresetButton:hover {
+    background: {{hoverBg}};
+    border-color: {{accent}};
+}
+QPushButton#agentPresetButton:pressed {
+    background: {{hoverBg}};
+}
+
+/* ===== Settings.cpp ===== */
+/* m_agentPresetPopup（下拉面板 QFrame，自绘背景） */
+QFrame#agentPresetPopup {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+}
+
+/* ===== Settings.cpp ===== */
+/* m_agentPresetList（预设列表 + 内部纵向滚动条） */
+QListWidget#agentPresetList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+QListWidget#agentPresetList::item {
+    min-height: 34px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    margin: 2px 4px;
+    color: {{textPrimary}};
+}
+QListWidget#agentPresetList::item:hover {
+    background: {{hoverBg}};
+}
+QListWidget#agentPresetList::item:selected {
+    background: {{accent}};
+    color: {{textOnAccent}};
+}
+QListWidget#agentPresetList QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 4px 2px;
+}
+QListWidget#agentPresetList QScrollBar::handle:vertical {
+    background: {{scrollbar}};
+    border-radius: 4px;
+    min-height: 30px;
+}
+QListWidget#agentPresetList QScrollBar::handle:vertical:hover {
+    background: {{scrollbarHover}};
+}
+QListWidget#agentPresetList QScrollBar::add-line:vertical,
+QListWidget#agentPresetList QScrollBar::sub-line:vertical {
+    height: 0;
+}
+QListWidget#agentPresetList QScrollBar::add-page:vertical,
+QListWidget#agentPresetList QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+/* ===== Settings.cpp ===== */
+/* m_serverUrlEdit（服务器地址输入框，无 :focus 专属样式，维持原状） */
+QLineEdit#serverUrlEdit {
+    background: {{inputBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: {{textPrimary}};
+}
+
+/* ===== Settings.cpp ===== */
+/* serverSaveButton（保存并重启服务）/ stylesResetButton（重置样式为默认） */
+QPushButton#settingsServerSaveButton,
+QPushButton#settingsStylesResetButton {
+    background: {{accent}};
+    color: {{textOnAccent}};
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+}
+
+/* ===== Settings.cpp ===== */
+/* m_overlay（打开设置窗口时的半透明遮罩，宿主子控件）
+ * 原代码裸写 rgba(128,128,128,0.65)，与色板 overlayBg 完全一致（浅/深主题同值），
+ * 参照 panels.qss 的 #initOverlay/#pluginsOverlay/#extensionOverlay 统一并入该 token。 */
+#settingsOverlay {
+    background-color: {{overlayBg}};
+    /* 只盖内容区：底角跟随无边框主窗口的圆角，顶角是标题栏下沿、保持直角 */
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+/* ===== ModelListPanel.cpp（设置 → 模型列表）===== */
+#modelListPanel {
+    background: transparent;
+}
+#modelListTitle {
+    color: {{textPrimary}};
+    font-size: 14px;
+    font-weight: 600;
+}
+#modelListHint,
+#modelListStatus,
+#modelListEmpty {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+/* 列表级操作的瞬时提示（右键删除的结果），几秒后自动消失 */
+#modelListNotice {
+    background: transparent;
+    color: {{accent}};
+    font-size: 12px;
+}
+
+/* 成员行右键菜单：圆角主体 + 透明外圈（不用 QMenu，理由见 ModelListPanel.cpp） */
+#modelListContextMenu {
+    background: {{menuBg}};
+    border: 1px solid {{menuBorder}};
+    border-radius: 8px;
+}
+/* 动作行带 #modelListContextMenu 前缀以压过 base.qss 的通用按钮规则。
+   静止态也给底色与描边：这是菜单里唯一一项，不要做成“看不见的透明文字”。 */
+#modelListContextMenu QPushButton#modelListContextAction {
+    background: {{hoverBg}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    padding: 0 14px;
+    min-width: 0;
+    text-align: left;
+    font-size: 13px;
+    color: {{textPrimary}};
+}
+#modelListContextMenu QPushButton#modelListContextAction:hover {
+    background: {{activeBg}};
+    border-color: {{accent}};
+}
+#modelListContextMenu QPushButton#modelListContextAction:pressed {
+    background: {{border}};
+}
+#modelListContextMenu QPushButton#modelListContextAction:disabled {
+    background: transparent;
+    border-color: {{border}};
+    color: {{textTertiary}};
+}
+#modelListContextHint {
+    background: transparent;
+    color: {{textCaption}};
+    font-size: 11px;
+    padding: 2px 12px 2px 12px;
+}
+#modelListRouteHint {
+    background: transparent;
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+/* API Key 一行的引用名与“已配置/未配置”状态 */
+#modelListApiKeyRef {
+    background: transparent;
+    color: {{textCaption}};
+    font-size: 11px;
+}
+#modelListFeedback {
+    background: transparent;
+    color: {{accent}};
+    font-size: 12px;
+}
+
+/* 列表容器：只滚动，不画自己的边框 */
+#modelListScroll {
+    background: transparent;
+    border: none;
+}
+#modelListScroll QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 4px 2px;
+}
+#modelListScroll QScrollBar::handle:vertical {
+    background: {{scrollbar}};
+    border-radius: 4px;
+    min-height: 30px;
+}
+#modelListScroll QScrollBar::handle:vertical:hover {
+    background: {{scrollbarHover}};
+}
+#modelListScroll QScrollBar::add-line:vertical,
+#modelListScroll QScrollBar::sub-line:vertical {
+    height: 0;
+}
+#modelListScroll QScrollBar::add-page:vertical,
+#modelListScroll QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+#modelListContent {
+    background: transparent;
+}
+/* 模型行容器：只给行做分组，不画东西 */
+#modelListRows {
+    background: transparent;
+}
+/* 提供方分组标题 */
+#modelListGroup {
+    background: transparent;
+    color: {{textCaption}};
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 2px 0 2px;
+}
+
+/* 一个可展开成员：卡片底 + 表头按钮 + 详情区 */
+#modelListEntry {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+}
+/* 表头带 #modelListEntry 前缀以压过 base.qss 的通用 QPushButton 规则 */
+#modelListEntry QPushButton#modelListEntryHeader {
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    padding: 0;
+    min-width: 0;
+    text-align: left;
+}
+#modelListEntry QPushButton#modelListEntryHeader:hover {
+    background: {{hoverBg}};
+}
+#modelListEntryName {
+    color: {{textPrimary}};
+    font-size: 14px;
+    font-weight: 500;
+}
+#modelListEntryMeta {
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+#modelListEntryBadge {
+    background: {{tagBg}};
+    color: {{accent}};
+    border-radius: 8px;
+    padding: 1px 8px;
+    font-size: 11px;
+}
+#modelListEntryChevron {
+    color: {{textCaption}};
+    font-size: 12px;
+}
+#modelListEntryDetail {
+    background: transparent;
+}
+#modelListDetailName {
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+#modelListDetailValue {
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+
+/* “添加模型”按钮 */
+QPushButton#modelListAddButton {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 14px;
+    color: {{textPrimary}};
+}
+QPushButton#modelListAddButton:hover {
+    background: {{hoverBg}};
+    border-color: {{accent}};
+}
+QPushButton#modelListAddButton:disabled {
+    color: {{textTertiary}};
+    border-color: {{border}};
+}
+
+/* 拉出的新增模型表单 */
+#modelListForm {
+    background: {{inputBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+}
+#modelListFormTitle {
+    color: {{textPrimary}};
+    font-size: 13px;
+    font-weight: 600;
+}
+#modelListFieldLabel {
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+/* 表单里的输入框与下拉（同一个 objectName，两种控件各写一条） */
+#modelListForm QLineEdit#modelListField {
+    background: {{panelBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: {{textPrimary}};
+}
+#modelListForm QLineEdit#modelListField:focus {
+    border-color: {{accent}};
+}
+#modelListForm QComboBox#modelListField {
+    background: {{panelBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: {{textPrimary}};
+}
+#modelListForm QComboBox#modelListField:hover {
+    border-color: {{accent}};
+}
+#modelListForm QComboBox#modelListField::drop-down {
+    border: none;
+    width: 18px;
+}
+#modelListForm QCheckBox#modelListField {
+    color: {{textPrimary}};
+    font-size: 13px;
+}
+QPushButton#modelListSubmitButton {
+    background: {{accent}};
+    color: {{textOnAccent}};
+    border: none;
+    border-radius: 8px;
+    padding: 7px 16px;
+}
+QPushButton#modelListSubmitButton:disabled {
+    background: {{border}};
+    color: {{textTertiary}};
+}
+QPushButton#modelListCancelButton {
+    background: transparent;
+    color: {{textSecondary}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    padding: 7px 16px;
+}
+QPushButton#modelListCancelButton:hover {
+    background: {{hoverBg}};
+}

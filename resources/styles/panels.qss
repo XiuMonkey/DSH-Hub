@@ -1,0 +1,220 @@
+/* ==========================================================================
+ * panels.qss — 弹窗/浮层/覆盖层（Toast、初始化卡、主题切换弹窗、各蒙版）
+ *
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位，加载时替换）。
+ * 第二批迁移目标：PopupWindow / Settings / PluginsManager /
+ * ExtensionManagerPopup / TopBar / InteractionHandler。
+ * ========================================================================== */
+
+/* --- DSHHub 主窗口内的浮层（第一批：迁自 DSHHub 内联样式） --- */
+
+/* 底部“没有更多了”提示 */
+#toastLabel {
+    background: {{toastBg}};
+    color: {{textOnAccent}};
+    border-radius: 16px;
+    padding: 8px 16px;
+    font-size: 13px;
+}
+
+/* 初始化蒙版与居中卡片 */
+/* 蒙版铺满客户区，必须带与窗口一致的圆角：无边框窗口的圆角之外是透明的，
+ * 蒙版若画成直角就会在四个角糊出一块灰色方块。 */
+#initOverlay {
+    background-color: {{overlayBg}};
+    border-radius: 12px;
+}
+#initCard {
+    background: {{panelBg}};
+    border-radius: 20px;
+}
+#initLabel {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* 插件市场 / 扩展管理弹出层的半透明蒙版：
+ * 只盖内容区（不含自绘标题栏，窗口按钮要能继续点），所以底角跟随窗口圆角、
+ * 顶角保持直角。 */
+#pluginsOverlay {
+    background-color: {{overlayBg}};
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+#extensionOverlay {
+    background-color: {{overlayBg}};
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+/* 主题切换过渡弹窗 */
+#themeSwitchBody {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 20px;
+}
+#themeSwitchLabel {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 16px;
+}
+
+/* --------------------------------------------------------------------------
+ * 第二批（迁自控件级 setStyleSheet）：
+ * PopupWindow / ExtensionManagerPopup / TopBar / InteractionHandler
+ * -------------------------------------------------------------------------- */
+
+/* ===== PopupWindow.cpp ===== */
+#popupBody {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 16px;
+}
+#popupTitle {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 16px;
+}
+#popupCloseButton {
+    background: transparent;
+    color: {{textSecondary}};
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+}
+#popupCloseButton:hover {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+}
+
+/* ===== ExtensionManagerPopup.cpp ===== */
+#extPopupInstallButton, #extPopupRemoveButton, #extPopupRefreshButton {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+#extPopupInstallButton:hover, #extPopupRemoveButton:hover, #extPopupRefreshButton:hover {
+    background: {{border}};
+}
+#extPopupInstallButton:disabled, #extPopupRemoveButton:disabled, #extPopupRefreshButton:disabled {
+    color: {{textSecondary}};
+    background: {{inputBg}};
+}
+QListWidget#extPopupList {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    padding: 8px;
+    font-size: 13px;
+}
+QListWidget#extPopupList::item {
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+QListWidget#extPopupList::item:selected {
+    background: {{activeBg}};
+    color: {{textPrimary}};
+}
+QListWidget#extPopupList::item:hover {
+    background: {{hoverBg}};
+}
+#extPopupStatus {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+
+/* ===== TopBar.cpp ===== */
+#topBar {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+}
+#topBarTitle {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 14px;
+}
+
+/* ===== InteractionHandler.cpp ===== */
+#interactionPanel {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+}
+#interactionPanel QLabel {
+    background: transparent;
+    color: {{textPrimary}};
+}
+#interactionPanel QFrame#questionCard {
+    background: {{hoverBg}};
+    border-radius: 10px;
+}
+#interactionPanel QRadioButton,
+#interactionPanel QCheckBox {
+    background: transparent;
+    spacing: 8px;
+    font-size: 13px;
+    color: {{textPrimary}};
+}
+#interactionPanel QRadioButton::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    border: 2px solid {{border}};
+    background: transparent;
+}
+#interactionPanel QRadioButton::indicator:hover {
+    border-color: {{accent}};
+}
+#interactionPanel QRadioButton::indicator:checked {
+    border-color: {{accent}};
+    background: {{accent}};
+}
+#interactionPanel QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    border: 2px solid {{border}};
+    background: transparent;
+}
+#interactionPanel QCheckBox::indicator:hover {
+    border-color: {{accent}};
+}
+#interactionPanel QCheckBox::indicator:checked {
+    border-color: {{accent}};
+    background: {{accent}};
+}
+#interactionPanel QLineEdit {
+    background: {{inputBg}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+#interactionPanel QPushButton {
+    background: {{accent}};
+    color: {{textOnAccent}};
+    border: none;
+    border-radius: 8px;
+    padding: 6px 16px;
+}
+#interactionPanel QPushButton:hover {
+    background: {{accentHover}};
+}
+#interactionPanel QPushButton#approvalRejectButton {
+    background: transparent;
+    color: {{danger}};
+    border: 1px solid {{danger}};
+}
+#interactionPanel QPushButton#approvalRejectButton:hover {
+    background: {{dangerBg}};
+}
