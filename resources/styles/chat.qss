@@ -1,9 +1,10 @@
 /* ==========================================================================
- * chat.qss — 聊天区（消息列表/气泡/流式块）
+ * chat.qss — 对话列：消息单元、输入卡片、模型选择、加载更多、提问与审批卡片
  *
- * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位，加载时替换）。
- * 第二批迁移目标：AgentMessageUnit / UserMessageUnit / SystemMessageUnit /
- * MessageQuery / ChatInputWidget / LoadMoreButton。
+ * 归属：src/chat/*.cpp、src/ui/ChatInputWidget.cpp、src/ui/ModelSelector.cpp、
+ *       src/common/InteractionHandler.cpp（提问与审批卡片）、MessageHost.cpp（会话载入提示）
+ * 约定：这一列的所有样式都在这里；插件市场、设置等其他窗口的样式去各自的文件。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
  * ========================================================================== */
 
 /* 消息滚动内容与右侧对话面板底色（第一批：迁自 DSHHub 内联样式） */
@@ -49,7 +50,7 @@
 
 /* ===== MessageQuery.cpp ===== */
 /* 消息复制按钮（makeCopyButton 每个消息动态创建，统一挂 #msgCopyButton；
-   前缀 #chatScrollContent 用于压过 base.qss 的通用 QPushButton 规则） */
+   前缀 #chatScrollContent 用于压过 defaults.qss 的通用 QPushButton 规则） */
 #chatScrollContent QPushButton#msgCopyButton {
     border: none;
     background: transparent;
@@ -135,6 +136,15 @@
 #inputControlRow {
     background: transparent;
 }
+/* 输入卡片**下方**那行会话统计小灰字（ChatInputWidget 的 SessionStatsLine）：
+   它落在卡片外面，所以规则挂在 #sessionStatsLine 上而不是 #inputCapsule 下。
+   行高固定 14px 由代码给（卡片上抬 8px 腾出来的那一行，见 Main.cpp 的输入区留白），
+   这里只给字号；自绘文字的颜色在 ChatInputWidget.cpp 里取
+   Theme::color("textTertiary")，与官方 StatsLine 的"第三级文字"是同一个角色。 */
+#sessionStatsLine {
+    background: transparent;
+    font-size: 12px;
+}
 /* 发送按钮：透明底 + 固定 32x32，hover/按下效果由 ChatInputWidget 的动态蒙版实现 */
 #inputCapsule QPushButton#sendButton {
     border: none;
@@ -149,7 +159,7 @@
 
 /* ===== ModelSelector.cpp（模型 + 思考档位 chip 与上拉菜单）===== */
 /* chip：无边框、圆角 14px、高 28px（原生 .trigger）。
-   选择器带 #inputCapsule 前缀以压过 base.qss 的通用 QPushButton 规则 */
+   选择器带 #inputCapsule 前缀以压过 defaults.qss 的通用 QPushButton 规则 */
 #inputCapsule QPushButton#modelSelectorChip {
     background: transparent;
     border: none;
@@ -195,30 +205,10 @@
     background: transparent;
 }
 /* 滚动区自身不画背景，圆角与边框都由 #modelSelectorMenu 承担 */
+/* 滚动条样式走 scrollbars.qss 的全局规则（不再逐控件重复） */
 #modelSelectorScroll {
     background: transparent;
     border: none;
-}
-#modelSelectorScroll QScrollBar:vertical {
-    background: transparent;
-    width: 8px;
-    margin: 2px 0;
-}
-#modelSelectorScroll QScrollBar::handle:vertical {
-    background: {{scrollbar}};
-    border-radius: 4px;
-    min-height: 30px;
-}
-#modelSelectorScroll QScrollBar::handle:vertical:hover {
-    background: {{scrollbarHover}};
-}
-#modelSelectorScroll QScrollBar::add-line:vertical,
-#modelSelectorScroll QScrollBar::sub-line:vertical {
-    height: 0;
-}
-#modelSelectorScroll QScrollBar::add-page:vertical,
-#modelSelectorScroll QScrollBar::sub-page:vertical {
-    background: transparent;
 }
 /* 小节标题（「模型」「思考深度」）与提供方分组标签 */
 #modelSelectorMenuTitle {
@@ -270,7 +260,7 @@
 
 /* ===== LoadMoreButton.cpp ===== */
 /* “加载更多”按钮（原样式里重复声明的 border/background 已合并为最终生效值；
-   前缀 #chatScrollContent 用于压过 base.qss 的通用 QPushButton 规则） */
+   前缀 #chatScrollContent 用于压过 defaults.qss 的通用 QPushButton 规则） */
 #chatScrollContent QPushButton#loadMoreButton {
     border: 1px solid {{inputBorder}};
     background: {{panelBg}};
@@ -280,7 +270,7 @@
     font-size: 13px;
 }
 /* hover 只改变字色；background 显式钉住 panelBg，
-   避免 base.qss 通用 QPushButton:hover 把底色换成 buttonHover */
+   避免 defaults.qss 通用 QPushButton:hover 把底色换成 buttonHover */
 #chatScrollContent QPushButton#loadMoreButton:hover {
     background: {{panelBg}};
     color: {{accentHover}};
@@ -296,68 +286,102 @@
     border-radius: 8px;
     selection-background-color: {{selectionBg}};
 }
-/* 代码块内的横向/纵向滚动条（细条，避免挤压可视区）
- *
- * 注意：QAbstractScrollArea 的滚动条是在**基类构造**里创建的，那时子类的
- * objectName 还没设，QStyleSheetStyle 会把"匹配不到本规则"缓存下来 —— 之后再设
- * objectName 也不会重新匹配。所以凡是新建这类滚动区，设完 objectName 必须调用
- * Theme::repolishScrollArea()（见 CodeBlockView / AgentMessageUnit::createRichPart）。
- * 以后再加带滚动条规则的控件，别忘了这一步。 */
-#codeBlockView QScrollBar:horizontal,
-#codeBlockView QScrollBar:vertical {
-    background: transparent;
-    height: 8px;
-    width: 8px;
-    margin: 0;
-}
-#codeBlockView QScrollBar::handle:horizontal,
-#codeBlockView QScrollBar::handle:vertical {
-    background: {{scrollbarHandle}};
-    border-radius: 4px;
-    min-height: 20px;
-    min-width: 20px;
-}
-#codeBlockView QScrollBar::handle:horizontal:hover,
-#codeBlockView QScrollBar::handle:vertical:hover {
-    background: {{scrollbarHandleHover}};
-}
-#codeBlockView QScrollBar::add-line:horizontal,
-#codeBlockView QScrollBar::sub-line:horizontal,
-#codeBlockView QScrollBar::add-line:vertical,
-#codeBlockView QScrollBar::sub-line:vertical {
-    height: 0;
-    width: 0;
-}
-#codeBlockView QScrollBar::add-page:horizontal,
-#codeBlockView QScrollBar::sub-page:horizontal,
-#codeBlockView QScrollBar::add-page:vertical,
-#codeBlockView QScrollBar::sub-page:vertical {
-    background: transparent;
+/* 代码块、正文视图（#agentProse）、思考/工具卡片正文（#agentThinkBody / #agentToolBody）
+ * 的滚动条都不再单独写规则：scrollbars.qss 里有一条全局滚动条样式，所有滚动区共用。
+ * 只是这些控件仍要在建好之后调 Theme::repolishScrollArea()（见该函数注释）。 */
+
+/* ===== AgentMessageUnit.cpp 的正文视图（QTextBrowser，#agentProse）===== */
+/* 正文视图自带横向滚动条（防止极端 HTML 撑宽）；纵向在 createRichPart() 里设为
+ * AlwaysOff（高度自适应）。滚动条外观来自 scrollbars.qss 的全局规则 —— 以前这两个
+ * （#agentThinkBody / #agentToolBody 也是）压根没写规则，一出现滚动条就是原生
+ * 老式样式，现在统一由全局规则覆盖。 */
+
+
+/* 聊天滚动区 */
+#chatScrollArea {
+    background: {{windowBg}};
+    border: none;
 }
 
-/* ===== AgentMessageUnit.cpp 的正文视图（QTextBrowser，#agentProse）=====
- * 正文视图自带横向滚动条（防止极端 HTML 撑宽），这里同样给一条细条样式；
- * 不写的话它就会按原生（老式）滚动条绘制 —— 与代码块外观不一致。
- * 同样需要在建好控件后调 Theme::repolishScrollArea() 才会生效。 */
-#agentProse QScrollBar:horizontal {
+/* 会话切换时的"正在载入"提示：透明提示层（无蒙版、无卡片），
+ * 只有居中的小转圈 + 这行文字；层本身鼠标穿透，只做反馈不挡操作。
+ * 父控件是聊天区 viewport，所以不会盖到侧边栏/输入框。 */
+#sessionLoadingLabel {
     background: transparent;
-    height: 8px;
-    margin: 0;
+    color: {{textSecondary}};
+    font-size: 14px;
 }
-#agentProse QScrollBar::handle:horizontal {
-    background: {{scrollbarHandle}};
-    border-radius: 4px;
-    min-width: 20px;
+
+/* ===== InteractionHandler.cpp ===== */
+#interactionPanel {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
 }
-#agentProse QScrollBar::handle:horizontal:hover {
-    background: {{scrollbarHandleHover}};
-}
-#agentProse QScrollBar::add-line:horizontal,
-#agentProse QScrollBar::sub-line:horizontal {
-    height: 0;
-    width: 0;
-}
-#agentProse QScrollBar::add-page:horizontal,
-#agentProse QScrollBar::sub-page:horizontal {
+#interactionPanel QLabel {
     background: transparent;
+    color: {{textPrimary}};
+}
+#interactionPanel QFrame#questionCard {
+    background: {{hoverBg}};
+    border-radius: 10px;
+}
+#interactionPanel QRadioButton,
+#interactionPanel QCheckBox {
+    background: transparent;
+    spacing: 8px;
+    font-size: 13px;
+    color: {{textPrimary}};
+}
+#interactionPanel QRadioButton::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    border: 2px solid {{border}};
+    background: transparent;
+}
+#interactionPanel QRadioButton::indicator:hover {
+    border-color: {{accent}};
+}
+#interactionPanel QRadioButton::indicator:checked {
+    border-color: {{accent}};
+    background: {{accent}};
+}
+#interactionPanel QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    border: 2px solid {{border}};
+    background: transparent;
+}
+#interactionPanel QCheckBox::indicator:hover {
+    border-color: {{accent}};
+}
+#interactionPanel QCheckBox::indicator:checked {
+    border-color: {{accent}};
+    background: {{accent}};
+}
+#interactionPanel QLineEdit {
+    background: {{inputBg}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+#interactionPanel QPushButton {
+    background: {{accent}};
+    color: {{textOnAccent}};
+    border: none;
+    border-radius: 8px;
+    padding: 6px 16px;
+}
+#interactionPanel QPushButton:hover {
+    background: {{accentHover}};
+}
+#interactionPanel QPushButton#approvalRejectButton {
+    background: transparent;
+    color: {{danger}};
+    border: 1px solid {{danger}};
+}
+#interactionPanel QPushButton#approvalRejectButton:hover {
+    background: {{dangerBg}};
 }

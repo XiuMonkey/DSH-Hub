@@ -26,22 +26,15 @@
 #include "Thunk.h"
 #include "ComCaller.h"
 
-#include <QFile>
-#include <QCoreApplication>
-#include <QDir>
-#include <QCoreApplication>
-#include <QFileInfo>
-#include <QCoreApplication>
-#include <QJsonArray>
-#include <QCoreApplication>
-#include <QJsonDocument>
-#include <QCoreApplication>
-#include <QJsonParseError>
 #include <QCoreApplication>
 #include <QDebug>
-#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QSet>
-#include <QCoreApplication>
 #include <cstdint>
 #include <utility>
 

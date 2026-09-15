@@ -72,7 +72,7 @@ void DSHHub::buildUi()
 	central->setAttribute(Qt::WA_StyledBackground, true);
 	auto* layout = new QVBoxLayout(central);
 	// 客户区铺满整个窗口：圆角与 1px 描边都由 #dshhubCentral 自己画
-	// （见 base.qss + common/WindowFrame），所以四周不留边距，
+	// （见 main-window.qss + common/WindowFrame），所以四周不留边距，
 	// 自绘标题栏才能贴着窗口上沿、右沿放窗口按钮。
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
@@ -103,7 +103,6 @@ void DSHHub::buildUi()
 	scrollLayout->setAlignment(Qt::AlignTop);
 
 	m_messagesLayout = scrollLayout;
-	m_messages = new MessageQuery;
 	scrollContent->setLayout(scrollLayout);
 
 	// 顶部“加载更多”按钮，默认隐藏
@@ -146,11 +145,27 @@ void DSHHub::buildUi()
 
 	panelLayout->addLayout(scrollRow, 1);
 
-	// 输入卡片与消息内容左右对齐（同一份 16px 留白）
+	// 输入卡片与消息内容左右对齐（同一份 16px 留白）。
+	//
+	// 上下留白里那 14px 是给卡片下方"会话统计小灰字"的
+	// （行高固定 = ChatInputWidget 的 SessionStatsLine::kHeight）：
+	//   改造前： 8 + 卡片 + 8
+	//   现在：   2 + 卡片 + 14(小灰字) + 0
+	// 总高不变（消息区大小不受影响）。
+	//
+	// 输入区是"贴着面板底边"摆的，所以底部留白决定整块的高度位置：
+	// 底部 2 -> 0 让"卡片 + 小灰字"整块下沉 2px，窗口底边留白
+	// （下面 bodyRow 的 kContentBottomInset 9 -> 7）再下沉 2px，合计 4px。
+	constexpr int kInputTopClearance = 2;
+	constexpr int kInputBottomClearance = 0;
+	static_assert(kInputTopClearance + SessionStatsLine::kHeight + kInputBottomClearance == 8 + 8,
+		"输入区总高必须与改造前一致：改 SessionStatsLine::kHeight 时要同步这三个数");
+
 	auto* inputLayout = new QHBoxLayout;
 	inputLayout->addWidget(m_chatInput, 1);
 
-	inputLayout->setContentsMargins(kColumnSideClearance, 8, kColumnSideClearance, 8);
+	inputLayout->setContentsMargins(kColumnSideClearance, kInputTopClearance,
+		kColumnSideClearance, kInputBottomClearance);
 	inputLayout->setSpacing(0);
 	panelLayout->addLayout(inputLayout);
 
@@ -187,8 +202,11 @@ void DSHHub::buildUi()
 	contentLayout->setContentsMargins(0, 0, 0, 0);
 	contentLayout->addLayout(bodyLayout, 1);
 
+	// 底部留白 7（原 9）：从这里再挪 2px 出去，配合输入区底部留白 2 -> 0，
+	// 让"输入卡片 + 小灰字"整块相对窗口底边下沉 4px
+	constexpr int kContentBottomInset = 7;
 	auto* bodyRow = new QVBoxLayout;
-	bodyRow->setContentsMargins(9, 0, 9, 9);
+	bodyRow->setContentsMargins(9, 0, 9, kContentBottomInset);
 	bodyRow->setSpacing(0);
 	bodyRow->addWidget(content, 0, Qt::AlignHCenter);
 	layout->addLayout(bodyRow, 1);

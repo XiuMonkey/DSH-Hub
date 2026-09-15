@@ -229,17 +229,6 @@ namespace Translation
 		return languages;
 	}
 
-	QString displayNameFor(const QString& languageCode)
-	{
-		if (isSourceLanguage(languageCode)) {
-			const QString name = QLocale(sourceLanguageCode()).nativeLanguageName();
-			return name.isEmpty() ? QStringLiteral("中文") : name;
-		}
-
-		const QString name = QLocale(languageCode).nativeLanguageName();
-		return name.isEmpty() ? languageCode : name;
-	}
-
 	QVector<TranslationSource> translationSources()
 	{
 		QVector<TranslationSource> sources;

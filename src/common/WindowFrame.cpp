@@ -42,11 +42,6 @@ namespace
 	const char kWindowControlProperty[] = "dshWindowControl";
 	const char kMaximizedProperty[] = "maximized";
 
-	QWidget* titleBarOf(QWidget* host)
-	{
-		return host ? host->findChild<QWidget*>(QLatin1String(kTitleBarObjectName)) : nullptr;
-	}
-
 	// 命中测试用：该点是否落在标题栏的窗口按钮上
 	bool isWindowControlAt(QWidget* window, const QPoint& clientPos)
 	{
@@ -249,6 +244,19 @@ namespace WindowFrame
 		const QMargins margins(inset, inset, inset, inset);
 		if (contentLayout->contentsMargins() != margins)
 			contentLayout->setContentsMargins(margins);
+	}
+
+	// 边框收尾的组合动作：判定是否贴屏幕边缘，再分别落到"圆角描边状态"与
+	// "最大化内容补偿"两步上。返回 edgeToEdge，供调用方刷新标题栏图标。
+	bool applyFrameStyle(QWidget* window, QWidget* surface)
+	{
+		if (!window || !surface)
+			return false;
+
+		const bool edgeToEdge = isEdgeToEdge(window);
+		applyBorderState(surface, edgeToEdge);
+		applyMaximizedContentInset(window, surface->layout());
+		return edgeToEdge;
 	}
 
 	QRect overlayRect(const QWidget* host)

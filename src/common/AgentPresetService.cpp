@@ -1,5 +1,7 @@
 #include "AgentPresetService.h"
 
+#include "SessionCommands.h"
+
 // ------------------------------------------------------------------
 // AgentPresetService.cpp
 // ------------------------------------------------------------------
@@ -17,9 +19,10 @@ namespace AgentPresetService
 		if (!api)
 			return;
 
+		// dsh 0.1.5：命名空间变成复数 agentPresets，且该端点无参数（args 为空）
 		api->callMethod(
-			QStringLiteral("agentPreset.list"),
-			{},
+			QStringLiteral("agentPresets/list"),
+			SessionCommands::emptyArgs(),
 			[onLoaded](const QJsonObject& value) {
 				if (onLoaded)
 					onLoaded(parsePresets(value));

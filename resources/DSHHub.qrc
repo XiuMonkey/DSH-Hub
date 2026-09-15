@@ -12,15 +12,31 @@
         <file>highlight_rules.json</file>
         <file alias="styles/theme-light.json">styles/theme-light.json</file>
         <file alias="styles/theme-dark.json">styles/theme-dark.json</file>
-        <file alias="styles/base.qss">styles/base.qss</file>
+        <!-- 样式表：一个文件 = 一个界面/表面，文件名就是它负责的那个界面，
+             加载顺序见 ThemeManager.cpp 的 kModules（顺序即级联顺序）。
+             每个文件头部都写明「归属」，改某个界面时只动它自己那个文件。 -->
+        <file alias="styles/main-window.qss">styles/main-window.qss</file>
+        <file alias="styles/defaults.qss">styles/defaults.qss</file>
+        <file alias="styles/scrollbars.qss">styles/scrollbars.qss</file>
         <file alias="styles/chat.qss">styles/chat.qss</file>
         <file alias="styles/sidebar.qss">styles/sidebar.qss</file>
-        <file alias="styles/panels.qss">styles/panels.qss</file>
+        <file alias="styles/popups.qss">styles/popups.qss</file>
+        <file alias="styles/extension-manager.qss">styles/extension-manager.qss</file>
+        <file alias="styles/topbar.qss">styles/topbar.qss</file>
         <file alias="styles/settings.qss">styles/settings.qss</file>
-        <file alias="styles/plugins.qss">styles/plugins.qss</file>
+        <file alias="styles/model-list.qss">styles/model-list.qss</file>
+        <file alias="styles/plugin-market.qss">styles/plugin-market.qss</file>
         <!-- 默认语言包（源语言=中文）：随程序内置，启动时从资源加载。
              由 tools\release-translations.ps1 从 translations\dshhub_zh_CN.ts 生成，
              外部 translations\ 里同名文件可覆盖（见 TranslationManager.cpp）。 -->
         <file alias="translations/dshhub_zh_CN.qm">translations/dshhub_zh_CN.qm</file>
+        <!-- 内置插件：工具过滤器（按会话隐藏模型可见的工具，见
+             resources/ToolsFilterPlugin/）。编译进 exe 是为了让内置插件不依赖
+             发布目录里的散装文件；首次启动服务端时由
+             ServerManager::ensureBuiltinPlugins() 调用 ExtensionLoader 安装到
+             <DSH_HOME>/profiles/web/node_modules/ 下。 -->
+        <file alias="ToolsFilterPlugin/package.json">ToolsFilterPlugin/package.json</file>
+        <file alias="ToolsFilterPlugin/index.js">ToolsFilterPlugin/index.js</file>
+        <file alias="ToolsFilterPlugin/example.ToolsFilterConfig.json">ToolsFilterPlugin/example.ToolsFilterConfig.json</file>
     </qresource>
 </RCC>

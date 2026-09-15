@@ -57,7 +57,7 @@ namespace
 		const auto add = [&targets](const QString& text, std::function<void(const QString&)> apply) {
 			if (!text.isEmpty())
 				targets.append(TextSlot{ text, std::move(apply) });
-		};
+			};
 
 		add(widget->windowTitle(), [widget](const QString& t) { widget->setWindowTitle(t); });
 		add(widget->toolTip(), [widget](const QString& t) { widget->setToolTip(t); });

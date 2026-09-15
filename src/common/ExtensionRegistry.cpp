@@ -1,17 +1,12 @@
 #include "ExtensionRegistry.h"
 
+#include <QCoreApplication>
 #include <QDebug>
-#include <QCoreApplication>
 #include <QDir>
-#include <QCoreApplication>
 #include <QFile>
-#include <QCoreApplication>
 #include <QFileInfo>
-#include <QCoreApplication>
 #include <QJsonArray>
-#include <QCoreApplication>
 #include <QJsonDocument>
-#include <QCoreApplication>
 
 namespace
 {
@@ -164,6 +159,49 @@ QString ExtensionRegistry::patchNameLine(const QString& name)
 	return QStringLiteral("      name: '%1'").arg(name);
 }
 
+ExtensionRegistry::PatchEntryResult ExtensionRegistry::ensurePatchEntry(const QString& profilePath,
+	const QString& id,
+	const QString& name,
+	const QString& comment,
+	QString* error)
+{
+	if (id.isEmpty() || name.isEmpty()) {
+		if (error)
+			*error = QStringLiteral("a patch entry needs both an id and a name");
+		return PatchEntryResult::Failed;
+	}
+
+	const QString patchPath = profilePath + QLatin1String(kPatchFileName);
+	QFile file(patchPath);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		if (error)
+			*error = QStringLiteral("cannot open cordis.patch.yml: %1").arg(patchPath);
+		return PatchEntryResult::Failed;
+	}
+
+	QString text = QString::fromUtf8(file.readAll());
+	file.close();
+
+	if (text.contains(patchNameLine(name)))
+		return PatchEntryResult::AlreadyPresent;
+
+	// 结构必须与 removePatchEntry 解析的两行完全一致，否则那个函数删不掉它。
+	text += QLatin1Char('\n');
+	if (!comment.isEmpty())
+		text += QStringLiteral("# %1\n").arg(comment);
+	text += QStringLiteral("%1\n%2\n%3\n").arg(
+		QLatin1String(kInsertHeader), patchIdLine(id), patchNameLine(name));
+
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+		if (error)
+			*error = QStringLiteral("cannot write cordis.patch.yml: %1").arg(patchPath);
+		return PatchEntryResult::Failed;
+	}
+	file.write(text.toUtf8());
+	file.close();
+	return PatchEntryResult::Added;
+}
+
 bool ExtensionRegistry::removePatchEntry(const QString& profilePath, const QString& name)
 {
 	const QString patchPath = profilePath + QLatin1String(kPatchFileName);
@@ -205,12 +243,18 @@ bool ExtensionRegistry::removePatchEntry(const QString& profilePath, const QStri
 		return true;
 
 	// Remove empty "- insert:" headers left behind after deleting the entry lines.
+	// 注释行不算"内容"：这个 patch 文件里会混进注释（ServerManager 追加 session-stats
+	// 那行时就带了一句），只跳空行的话会把"后面还有内容"误判成真，空头就删不掉了。
 	QStringList cleaned;
 	for (int i = 0; i < kept.size(); ++i) {
 		if (kept.at(i).trimmed() == QLatin1String(kInsertHeader)) {
 			int j = i + 1;
-			while (j < kept.size() && kept.at(j).trimmed().isEmpty())
+			while (j < kept.size()) {
+				const QString next = kept.at(j).trimmed();
+				if (!next.isEmpty() && !next.startsWith(QLatin1Char('#')))
+					break;
 				++j;
+			}
 			if (j >= kept.size() || kept.at(j).trimmed().startsWith(QLatin1String(kInsertHeader)))
 				continue;
 		}

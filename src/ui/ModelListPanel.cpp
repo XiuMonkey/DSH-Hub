@@ -179,15 +179,15 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 
 		addDetailRow(detailLayout, m_detail, tr("思考档位"),
 			tr("该模型未公布（界面按通用档位提供：%1）")
-				.arg(fallback.join(QStringLiteral(" / "))));
+			.arg(fallback.join(QStringLiteral(" / "))));
 	}
 
 	addDetailRow(detailLayout, m_detail, tr("配置来源"),
 		info.declared
-			? (info.userDeclared
-				? tr("settings 用户层")
-				: tr("settings 随附配置"))
-			: tr("适配器公布，未在 settings 中声明"));
+		? (info.userDeclared
+			? tr("settings 用户层")
+			: tr("settings 随附配置"))
+		: tr("适配器公布，未在 settings 中声明"));
 
 	if (!info.settingsNs.isEmpty()) {
 		QStringList path = info.settingsPath;
@@ -470,7 +470,7 @@ void ModelListPanel::refresh()
 		[self](const DshApiClient::RpcError& error) {
 			if (!self)
 				return;
-			qWarning().noquote() << QStringLiteral("[ModelList] llm.models failed:")
+			qWarning().noquote() << QStringLiteral("[ModelList] session/modelCatalog failed:")
 				<< error.code << error.message;
 			if (self->m_status) {
 				self->m_status->setText(
@@ -585,7 +585,7 @@ void ModelListPanel::updateStatus()
 		m_addButton->setEnabled(canWrite);
 		m_addButton->setToolTip(canWrite
 			? QString()
-			: tr("需要 llm.providers 与可写的设置文档才能新增模型"));
+			: tr("需要 llm/listConfigurableProviders 与可写的设置文档才能新增模型"));
 	}
 }
 
@@ -620,7 +620,7 @@ void ModelListPanel::buildForm(QWidget* parent)
 		grid->addWidget(label, row, 0, Qt::AlignRight | Qt::AlignVCenter);
 		grid->addWidget(field, row, 1);
 		++row;
-	};
+		};
 
 	m_providerCombo = new QComboBox(m_form);
 	m_providerCombo->setObjectName(QStringLiteral("modelListField"));
@@ -727,7 +727,7 @@ void ModelListPanel::buildForm(QWidget* parent)
 		if (m_submitting)
 			return;
 		syncFormToRoute();
-	});
+		});
 }
 
 void ModelListPanel::setFeedback(const QString& text)
@@ -825,7 +825,7 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 			self->populateRows();
 			self->updateStatus();
 
-			// 目录是适配器侧的：删掉的条目要等 settings 热生效后才会从 llm.models 消失，
+			// 目录是适配器侧的：删掉的条目要等 settings 热生效后才会从 session/modelCatalog 消失，
 			// 所以再拉一次以服务端事实为准。
 			self->refresh();
 
@@ -837,7 +837,7 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 			if (!self)
 				return;
 
-			qWarning().noquote() << QStringLiteral("[ModelList] settings.mutate (remove) failed:")
+			qWarning().noquote() << QStringLiteral("[ModelList] settings/mutate (remove) failed:")
 				<< error.code << error.message;
 			self->setNotice(
 				tr("删除模型 %1 失败：%2 %3").arg(modelId, error.code, error.message));
@@ -1048,7 +1048,7 @@ void ModelListPanel::refreshCredentialRow()
 			if (!self || self->m_keyRef != ref)
 				return;
 
-			qWarning().noquote() << QStringLiteral("[ModelList] credentials.describe failed:")
+			qWarning().noquote() << QStringLiteral("[ModelList] credentials/describe failed:")
 				<< error.code << error.message;
 			// 问不到状态不阻塞填写：按“可写、未知是否已配置”处理
 			self->m_credential = CredentialStatus();
@@ -1223,7 +1223,7 @@ void ModelListPanel::submitForm()
 			if (self->m_submitButton)
 				self->m_submitButton->setEnabled(true);
 
-			qWarning().noquote() << QStringLiteral("[ModelList] credentials.set failed:")
+			qWarning().noquote() << QStringLiteral("[ModelList] credentials/set failed:")
 				<< error.code << error.message;
 
 			self->setFeedback(tr("写入凭据 %1 失败：%2 %3（模型未新增）")
@@ -1275,7 +1275,7 @@ void ModelListPanel::writeModel(const ConfigurableProvider& provider, const Sett
 			self->updateStatus();
 
 			// 目录是适配器侧的：刚写下的条目要等 settings 热生效后才会出现在
-			// llm.models 里，所以再拉一次以服务端事实为准。
+			// session/modelCatalog 里，所以再拉一次以服务端事实为准。
 			self->refresh();
 
 			qInfo().noquote() << QStringLiteral("[ModelList] %1 %2 -> %3/%4")
@@ -1307,7 +1307,7 @@ void ModelListPanel::writeModel(const ConfigurableProvider& provider, const Sett
 			if (self->m_submitButton)
 				self->m_submitButton->setEnabled(true);
 
-			qWarning().noquote() << QStringLiteral("[ModelList] settings.mutate failed:")
+			qWarning().noquote() << QStringLiteral("[ModelList] settings/mutate failed:")
 				<< error.code << error.message;
 
 			self->setFeedback(

@@ -12,7 +12,9 @@
 //       下段「思考深度」——当前模型适配器公布的档位，当前档位带勾选；
 //   - 换模型时把档位清空（交给新模型的默认档位），换档位时沿用当前 provider/model；
 //     两次操作都走 session.selectModel，以服务端回显为准。
-//   - 目录来自当前会话的 `session.models`；没有会话时整个控件隐藏。
+//   - 目录来自部署级的 session/modelCatalog；会话自己的选择由 DSHHub 从
+//     session/list 的投影里取出来推入（overrideCurrentSelection）。
+//     没有会话时整个控件隐藏。
 //
 // 网络逻辑在 common 的 ModelSelectionService，这里只负责画与交互。
 // ------------------------------------------------------------------
@@ -91,6 +93,17 @@ public:
 	// 用服务端最新数据刷新（会话切换、连接建立后调用）
 	void refresh();
 
+	/**
+	 * 用"该会话记录的选择"覆盖 chip 的当前值。
+	 *
+	 * 0.1.5 的 modelCatalog 只给部署默认值（default），会话自己的选择在
+	 * session/list 行的 projections.values.modelSelection 里；DSHHub 从
+	 * SessionCatalog 取出来喂给这里。provider/model 为空表示"服务端还没记录"，
+	 * 此时保持目录给的默认值不动。
+	 */
+	void overrideCurrentSelection(const QString& provider, const QString& model,
+		const QString& reasoningEffort);
+
 signals:
 	// 用户换了模型（服务端已接受）
 	void modelChanged(const QString& provider, const QString& model);
@@ -123,6 +136,9 @@ private:
 	DshApiClient* m_api = nullptr;
 	QString m_sessionId;
 	SessionModelDirectory m_directory;
+	// 该会话记录的模型选择（来自 session/list 投影）；目录刷新后仍以它为准
+	ModelSelection m_sessionSelection;
+	bool m_hasSessionSelection = false;
 	bool m_hasDirectory = false;
 
 	QLabel* m_label = nullptr;   // 当前模型名

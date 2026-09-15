@@ -34,9 +34,35 @@ void PluginMarketClient::setBaseUrl(const QUrl& url)
 	m_baseUrl = url;
 }
 
-QUrl PluginMarketClient::baseUrl() const
+/**
+ * 由 baseUrl 拼出接口地址：**只借它的 scheme/host/port**，path 重设、query 与 fragment 清掉。
+ *
+ * 为什么必须这样：ServerManager::baseUrlReady 交出来的 baseUrl 是"带启动令牌"的那条
+ * （http://127.0.0.1:<port>/?token=…）。老写法
+ *     QUrl(base.toString(QUrl::RemovePath) + path)
+ * 会得到 http://127.0.0.1:<port>?token=…/dsh-market/registry —— path 为空、接口地址被
+ * 当成 token 的参数值，请求实际落到 `GET /`：
+ *   · 没有 cookie 时 → index 围栏 401；
+ *   · 有 cookie 时   → index 路由 303 到 index.html，客户端把 HTML 当 JSON 解析，
+ *                      于是市场显示"0 个插件"（静默故障，最难查的那种）。
+ */
+QUrl PluginMarketClient::endpointUrl(const QString& path) const
 {
-	return m_baseUrl;
+	QUrl url = m_baseUrl;
+	url.setPath(path);
+	url.setQuery(QString());
+	url.setFragment(QString());
+	return url;
+}
+
+/** 纯 origin（scheme://host:port），给 POST 的 Origin 头用。 */
+static QUrl originOf(const QUrl& base)
+{
+	QUrl url = base;
+	url.setPath(QString());
+	url.setQuery(QString());
+	url.setFragment(QString());
+	return url;
 }
 
 QString PluginMarketClient::registryPath()
@@ -76,8 +102,7 @@ QString PluginMarketClient::restartPath()
 void PluginMarketClient::fetchRegistry()
 {
 	const QString path = registryPath();
-	QNetworkRequest request(m_baseUrl);
-	request.setUrl(QUrl(m_baseUrl.toString(QUrl::RemovePath) + path));
+	QNetworkRequest request(endpointUrl(path));
 	qInfo().noquote() << "[Market] GET" << path;
 
 	QNetworkReply* reply = m_nam->get(request);
@@ -103,6 +128,12 @@ void PluginMarketClient::fetchRegistry()
 		const QJsonArray plugins = root.value(QStringLiteral("registry")).toObject()
 			.value(QStringLiteral("plugins")).toArray();
 
+		// 契约没满足就喊出来：这类"静默 0 个插件"（例如被前端回退喂了一份 HTML）
+		// 过去只能靠猜，这里把状态码/字节数/响应开头都打出来
+		if (plugins.isEmpty())
+			qWarning().noquote() << "[PluginMarketClient] registry payload unexpected"
+				<< "status=" << status << "bytes=" << raw.size() << "body=" << bodyPreview(raw);
+
 		qInfo().noquote() << "[PluginMarketClient] registry loaded"
 			<< "source=" << source
 			<< "plugins=" << plugins.size();
@@ -114,8 +145,7 @@ void PluginMarketClient::fetchRegistry()
 void PluginMarketClient::fetchInstalled()
 {
 	const QString path = installedPath();
-	QNetworkRequest request(m_baseUrl);
-	request.setUrl(QUrl(m_baseUrl.toString(QUrl::RemovePath) + path));
+	QNetworkRequest request(endpointUrl(path));
 	qInfo().noquote() << "[Market] GET" << path;
 
 	QNetworkReply* reply = m_nam->get(request);
@@ -130,7 +160,6 @@ void PluginMarketClient::fetchInstalled()
 			qWarning().noquote() << "[PluginMarketClient] installed request failed, status=" << status
 				<< "error=" << transportError
 				<< "body=" << bodyPreview(raw);
-			emit installedFailed(transportError, status);
 			return;
 		}
 
@@ -174,11 +203,10 @@ void PluginMarketClient::restartServer()
 
 void PluginMarketClient::post(const QString& path, const QJsonObject& body)
 {
-	QUrl url = m_baseUrl;
-	url.setPath(path);
-	QNetworkRequest request(url);
+	QNetworkRequest request(endpointUrl(path));
 	request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-	request.setRawHeader("Origin", m_baseUrl.toString(QUrl::RemovePath).toUtf8());
+	// 市场服务端要求同源（Origin 的 host 必须等于 Host）；用纯 origin，别把令牌带进去
+	request.setRawHeader("Origin", originOf(m_baseUrl).toString().toUtf8());
 
 	qInfo().noquote() << QStringLiteral("[Market] POST %1 body=%2")
 		.arg(path, QString::fromUtf8(QJsonDocument(body).toJson(QJsonDocument::Compact)));
@@ -216,9 +244,7 @@ void PluginMarketClient::post(const QString& path, const QJsonObject& body)
 
 void PluginMarketClient::fetchDiagnosticLogs(const QString& reason)
 {
-	QUrl url = m_baseUrl;
-	url.setPath(QLatin1String(kLogsPath));
-	QNetworkRequest request(url);
+	QNetworkRequest request(endpointUrl(QLatin1String(kLogsPath)));
 
 	QNetworkReply* reply = m_nam->get(request);
 	connect(reply, &QNetworkReply::finished, this, [reason, reply]() {

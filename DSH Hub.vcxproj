@@ -113,19 +113,24 @@
   <ItemGroup>
     <ClCompile Include="src\chat\AgentMessageUnit.cpp" />
     <ClCompile Include="src\chat\CodeBlockView.cpp" />
+    <ClCompile Include="src\common\TopBarTools.cpp" />
     <ClCompile Include="src\ui\LoadMoreButton.cpp" />
     <ClCompile Include="src\ui\ChatInputWidget.cpp" />
     <ClCompile Include="src\ui\Main.cpp">
       <ObjectFileName>$(IntDir)ui-Main.obj</ObjectFileName>
     </ClCompile>
     <ClCompile Include="src\ui\Sidebar.cpp" />
+    <ClCompile Include="src\ui\SmoothWheelScroller.cpp" />
     <ClCompile Include="src\chat\UserMessageUnit.cpp" />
     <QtRcc Include="resources\DSHHub.qrc" />
     <QtMoc Include="include\DSHHub.h" />
+    <QtMoc Include="include\MessageHost.h" />
+    <QtMoc Include="include\SmoothWheelScroller.h" />
     <QtMoc Include="include\ServerManager.h" />
     <ClCompile Include="src\network\DshApiClient.cpp" />
     <ClCompile Include="src\network\DshEventParser.cpp" />
     <ClCompile Include="src\core\DSHHub.cpp" />
+    <ClCompile Include="src\core\MessageHost.cpp" />
     <ClCompile Include="src\core\ServerManager.cpp" />
     <ClCompile Include="src\core\main.cpp" />
     <ClCompile Include="src\chat\MessageQuery.cpp" />
@@ -149,11 +154,11 @@
     <ClCompile Include="src\ui\ModelSelector.cpp" />
     <ClCompile Include="src\ui\ModelListPanel.cpp" />
     <ClCompile Include="src\ui\SpinnerWidget.cpp" />
-    <ClCompile Include="src\network\SessionPrefetcher.cpp" />
     <ClCompile Include="src\ui\TopBar.cpp" />
     <ClCompile Include="src\ui\TitleBar.cpp" />
     <ClCompile Include="src\common\WindowFrame.cpp" />
     <ClCompile Include="src\chat\CacheHistoryManager.cpp" />
+    <ClCompile Include="src\network\SessionPrefetcher.cpp" />
     <ClCompile Include="src\ui\PopupWindow.cpp" />
     <ClCompile Include="src\ui\Settings.cpp" />
     <ClCompile Include="src\common\ThemeManager.cpp" />
@@ -166,7 +171,6 @@
     <ClCompile Include="src\ExtensionSystem\Thunk.cpp" />
     <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp" />
     <None Include="resources\highlight_rules.json" />
-    <None Include="resources\registry-snapshot.json" />
     <None Include="resources\DSH-Hub-Logo-Tiny@2x.png" />
     <None Include="resources\DSH-Hub-Logo-Tiny-Dark@2x.png" />
     <None Include="resources\DSH-Hub-Icon.png" />
@@ -207,6 +211,7 @@
     <ClInclude Include="include\InteractionHandler.h" />
     <ClInclude Include="include\CacheHistoryManager.h" />
     <ClInclude Include="include\ThemeManager.h" />
+    <ClInclude Include="include\TopBarTools.h" />
     <ClInclude Include="include\WindowFrame.h" />
     <ClInclude Include="include\Logger.h" />
     <ClInclude Include="include\SessionCatalog.h" />

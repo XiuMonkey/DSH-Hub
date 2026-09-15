@@ -580,15 +580,18 @@ void Sidebar::addCreatedSession(const QString& sessionId, const QString& workspa
 	m_workspaceList->setCurrentSession(sessionId);
 }
 
-void Sidebar::refreshSessions(DshApiClient* api, SessionPrefetcher* prefetcher)
+void Sidebar::refreshSessions(DshApiClient* api)
 {
 	if (!m_workspaceList)
 		return;
 
-	SessionService::refreshSessions(api, prefetcher, &m_workspaceList->catalog(),
+	SessionService::refreshSessions(api, &m_workspaceList->catalog(),
 		[this](const QString& autoSelectSessionId) {
 			// 数据已写入 catalog，这里只重建视图并转发结果
 			m_workspaceList->rebuildFromCatalog();
+
+			// 会话集合已更新：让 DSHHub 对可见会话排一轮首屏预取
+			emit sessionsRefreshed();
 
 			// auto select the first available non-running session
 			if (!autoSelectSessionId.isEmpty())

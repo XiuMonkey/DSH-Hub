@@ -59,9 +59,9 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 	layout->addLayout(navLayout);
 
 	// ---------------- 模型列表 ----------------
-	// 模型信息与凭据的事实来源都在服务端：目录由适配器公布（llm.models），
+	// 模型信息与凭据的事实来源都在服务端：目录由适配器公布（session/modelCatalog），
 	// 新增的条目写进 settings 文档，API Key 按该路由 profile 的 apiKeyEnv 引用
-	// 经 credentials.set 写入。面板自己不存任何清单，打开即重新拉取。
+	// 经 credentials/set 写入。面板自己不存任何清单，打开即重新拉取。
 	auto* modelPanel = new QWidget(content);
 	auto* modelLayout = new QVBoxLayout(modelPanel);
 	modelLayout->setContentsMargins(0, 0, 0, 0);

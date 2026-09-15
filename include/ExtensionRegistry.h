@@ -43,8 +43,26 @@ public:
 	bool removeExtensionDirectory(const QString& name, QString* error = nullptr) const;
 
 	// ---- cordis.patch.yml ----
+	// 追加一条插件行的结果：失败 / 已存在（未改动）/ 本次追加
+	enum class PatchEntryResult
+	{
+		Failed,
+		AlreadyPresent,
+		Added,
+	};
+
 	// 移除指定扩展的条目（ExtensionLoader 写入的两行结构）
 	static bool removePatchEntry(const QString& profilePath, const QString& name);
+
+	// 写侧的对应物：确保 <profile>/cordis.patch.yml 里有这一行。
+	// id 与 name 分开传，因为两者并不总相等 —— 例如 session-stats 那一行的 id 是
+	// 短名、name 是包名。comment 非空时写成一行 ASCII 注释（这个文件常被别的工具
+	// 读，无 BOM 的中文注释容易显示成乱码）。判重看 name 行。
+	static PatchEntryResult ensurePatchEntry(const QString& profilePath,
+		const QString& id,
+		const QString& name,
+		const QString& comment = QString(),
+		QString* error = nullptr);
 
 	// 清理残留配置的结果
 	struct CleanupResult

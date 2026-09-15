@@ -238,7 +238,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 
 	// 联网拉取不放在构造里：常驻对象在服务端可能尚未就绪，
 	// 市场/已安装数据改由 openPlugins() 每次打开时经 refreshOnOpen() 拉取。
-hide();
+	hide();
 }
 
 // ------------------------------------------------------------------
@@ -281,7 +281,7 @@ void PluginsManager::closePlugins()
 	if (m_overlay)
 		m_overlay->hide();
 	// 隐藏自己（常驻：不销毁，等待下次打开）
-hide();
+	hide();
 }
 
 void PluginsManager::syncOverlayToHost()

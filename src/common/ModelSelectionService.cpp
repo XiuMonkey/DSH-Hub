@@ -1,5 +1,7 @@
 #include "ModelSelectionService.h"
 
+#include "SessionCommands.h"
+
 #include <QDebug>
 #include <QCoreApplication>
 
@@ -12,26 +14,29 @@
 // 里的（见 ModelSelectionService.h），便于脱离网络做单元测试。
 //
 // 模型信息的事实来源全在服务端：
-//   - 目录（有哪些模型、每个模型公布哪些思考档位）来自适配器：llm.models
-//     与会话级的 session.models；
+//   - 目录（有哪些模型、每个模型公布哪些思考档位）来自适配器：session/modelCatalog
+//     （会话级的当前选择在 session/list 的投影里）；
 //   - 用户新增/覆盖的模型条目写进 settings 文档：llm-deepseek 整节即 profile，
 //     llm-pi-ai 是 providers.<路由>，两者都用 `models` 数组承载条目；
-//   - llm.providers 告诉客户端每条路由的 settings 命名空间与路径，
+//   - llm/listConfigurableProviders 告诉客户端每条路由的 settings 命名空间与路径，
 //     所以客户端不需要把提供方→命名空间的映射写死在自己这里。
 // ------------------------------------------------------------------
 
 namespace
 {
-	const char* const kModelsMethod = "session.models";
-	const char* const kSelectModelMethod = "session.selectModel";
-	const char* const kLlmModelsMethod = "llm.models";
-	const char* const kLlmProvidersMethod = "llm.providers";
-	const char* const kSettingsDescribeMethod = "settings.describe";
-	const char* const kSettingsMutateMethod = "settings.mutate";
-	const char* const kCredentialsDescribeMethod = "credentials.describe";
-	const char* const kCredentialsSetMethod = "credentials.set";
+	// dsh 0.1.5：斜杠 endpoint；无参端点（catalog/providers/describe）args 为空。
+	// session.models / llm.models 两个旧端点都并入 session/modelCatalog
+	// （返回 { default, routableProviders, groups, failures }）。
+	const char* const kModelsMethod = "session/modelCatalog";
+	const char* const kSelectModelMethod = "session/selectModel";
+	const char* const kLlmModelsMethod = "session/modelCatalog";
+	const char* const kLlmProvidersMethod = "llm/listConfigurableProviders";
+	const char* const kSettingsDescribeMethod = "settings/describe";
+	const char* const kSettingsMutateMethod = "settings/mutate";
+	const char* const kCredentialsDescribeMethod = "credentials/describe";
+	const char* const kCredentialsSetMethod = "credentials/set";
 
-	// settings.mutate 的一个 set 操作
+	// settings/mutate 的一个 set 操作
 	QJsonObject setOp(const QStringList& path, const QJsonValue& value)
 	{
 		QJsonObject op;
@@ -53,12 +58,14 @@ namespace ModelSelectionService
 		if (!api || sessionId.isEmpty())
 			return;
 
-		QJsonObject payload;
-		payload.insert(QStringLiteral("sessionId"), sessionId);
+		// dsh 0.1.5：session/models 变成无参的 session/modelCatalog（全局目录），
+		// 所以这里不再发 sessionId；会话级的"当前选择"在 session/list 行的
+		// projections.values.modelSelection 里（step2 再接）。
+		Q_UNUSED(sessionId);
 
 		api->callMethod(
 			QLatin1String(kModelsMethod),
-			payload,
+			SessionCommands::emptyArgs(),
 			[onLoaded](const QJsonObject& value) {
 				if (onLoaded)
 					onLoaded(parseDirectory(value));
@@ -79,17 +86,10 @@ namespace ModelSelectionService
 		if (!api || sessionId.isEmpty() || !selection.isValid())
 			return;
 
-		QJsonObject payload;
-		payload.insert(QStringLiteral("sessionId"), sessionId);
-		payload.insert(QStringLiteral("provider"), selection.provider);
-		payload.insert(QStringLiteral("model"), selection.model);
-		// 省略即提供方默认档位；显式档位才写入
-		if (!selection.reasoningEffort.isEmpty())
-			payload.insert(QStringLiteral("reasoningEffort"), selection.reasoningEffort);
-
 		api->callMethod(
 			QLatin1String(kSelectModelMethod),
-			payload,
+			SessionCommands::sessionSelectModel(sessionId, selection.provider, selection.model,
+				selection.reasoningEffort),
 			[selection, onSelected](const QJsonObject& value) {
 				if (!onSelected)
 					return;
@@ -112,9 +112,9 @@ namespace ModelSelectionService
 	// 服务端模型视图：目录 + 可配置提供方 + settings 命名空间
 	// ------------------------------------------------------------------
 	// 三个 RPC 依次发，任一可选部分失败都只降级、不整体失败：
-	//   - llm.models 失败 -> 没有目录可显示，整体失败；
-	//   - llm.providers 失败 -> 目录仍显示，但“新增模型”拿不到写回地址；
-	//   - settings.describe 失败 -> 目录仍显示，条目看不到容量/来源，
+	//   - session/modelCatalog 失败 -> 没有目录可显示，整体失败；
+	//   - llm/listConfigurableProviders 失败 -> 目录仍显示，但“新增模型”拿不到写回地址；
+	//   - settings/describe 失败 -> 目录仍显示，条目看不到容量/来源，
 	//     写回也会被禁用（面板据此提示）。
 	// 三个请求的返回顺序不确定：共享状态累积结果，等三个都有着落、
 	// 且目录到手之后才回调一次，避免界面为了半份数据重建多次。
@@ -152,7 +152,7 @@ namespace ModelSelectionService
 
 		api->callMethod(
 			QLatin1String(kLlmModelsMethod),
-			{},
+			SessionCommands::emptyArgs(),
 			[shared, settle](const QJsonObject& value) {
 				shared->view.groups = parseCatalogGroups(value);
 				shared->view.failures = parseFailures(value.value(QStringLiteral("failures")).toArray());
@@ -165,22 +165,25 @@ namespace ModelSelectionService
 					onError(error);
 			});
 
-		api->callMethod(
+		// 0.1.5：llm/models 没了，可选提供方路由用 llm/listConfigurableProviders，
+		// 它返回的是**裸数组** [{ provider, displayName, settingsNs, settingsPath, … }]，
+		// 所以走 callMethodValue。
+		api->callMethodValue(
 			QLatin1String(kLlmProvidersMethod),
-			{},
-			[shared, settle](const QJsonObject& value) {
-				shared->view.providers = parseProviders(value);
+			SessionCommands::emptyArgs(),
+			[shared, settle](const QJsonValue& value) {
+				shared->view.providers = parseProviders(value.toArray());
 				settle();
 			},
 			[settle](const DshApiClient::RpcError& error) {
 				settle();
-				qWarning().noquote() << QStringLiteral("[ModelSelection] llm.providers failed:")
+				qWarning().noquote() << QStringLiteral("[ModelSelection] llm/listConfigurableProviders failed:")
 					<< error.code << error.message;
 			});
 
 		api->callMethod(
 			QLatin1String(kSettingsDescribeMethod),
-			{},
+			SessionCommands::emptyArgs(),
 			[shared, settle](const QJsonObject& value) {
 				bool writable = false;
 				shared->view.namespaces = parseNamespaces(value, &writable);
@@ -189,16 +192,16 @@ namespace ModelSelectionService
 			},
 			[settle](const DshApiClient::RpcError& error) {
 				settle();
-				qWarning().noquote() << QStringLiteral("[ModelSelection] settings.describe failed:")
+				qWarning().noquote() << QStringLiteral("[ModelSelection] settings/describe failed:")
 					<< error.code << error.message;
 			});
 	}
 
 	// ------------------------------------------------------------------
-	// settings.mutate：新增 / 删除模型条目
+	// settings/mutate：新增 / 删除模型条目
 	// ------------------------------------------------------------------
 
-	// settings.mutate 的公共收尾：回包本身就是该命名空间的新视图，
+	// settings/mutate 的公共收尾：回包本身就是该命名空间的新视图，
 	// 缺失时用请求前的视图兜底（新增与删除共用）。
 	void reportNamespaceUpdate(
 		const QJsonObject& value,
@@ -218,7 +221,7 @@ namespace ModelSelectionService
 		onUpdated(updated);
 	}
 
-	// settings.mutate 的公共发送
+	// settings/mutate 的公共发送
 	void mutateSettings(
 		DshApiClient* api,
 		const QString& ns,
@@ -227,13 +230,9 @@ namespace ModelSelectionService
 		const std::function<void(const SettingsNamespace& updated)>& onUpdated,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
-		QJsonObject payload;
-		payload.insert(QStringLiteral("ns"), ns);
-		payload.insert(QStringLiteral("ops"), ops);
-
 		api->callMethod(
 			QLatin1String(kSettingsMutateMethod),
-			payload,
+			SessionCommands::settingsMutate(ns, ops),
 			[fallbackView, onUpdated](const QJsonObject& value) {
 				reportNamespaceUpdate(value, fallbackView, onUpdated);
 			},
@@ -334,12 +333,9 @@ namespace ModelSelectionService
 		if (!api || ref.isEmpty())
 			return;
 
-		QJsonObject payload;
-		payload.insert(QStringLiteral("refs"), QJsonArray{ ref });
-
 		api->callMethod(
 			QLatin1String(kCredentialsDescribeMethod),
-			payload,
+			SessionCommands::credentialsDescribe(QJsonArray{ ref }),
 			[ref, onDescribed](const QJsonObject& value) {
 				if (onDescribed)
 					onDescribed(parseCredential(ref, value));
@@ -367,14 +363,11 @@ namespace ModelSelectionService
 			return;
 		}
 
-		QJsonObject payload;
-		payload.insert(QStringLiteral("ref"), ref);
-		payload.insert(QStringLiteral("value"), value);
-
-		// 只发不收：值不回显，回调里也不留任何副本
+		// 只发不收：值不回显，回调里也不留任何副本。
+		// 0.1.5：credentials/set 的结果是 void，回包里没有 value 字段（正常）。
 		api->callMethod(
 			QLatin1String(kCredentialsSetMethod),
-			payload,
+			SessionCommands::credentialsSet(ref, value),
 			[onSaved](const QJsonObject&) {
 				if (onSaved)
 					onSaved();

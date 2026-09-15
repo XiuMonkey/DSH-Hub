@@ -7,7 +7,7 @@
 // 关闭三个按钮。按钮被点击时只发出“意图”信号，具体动作（最小化/最大化/
 // 关闭窗口）由 common/WindowFrame 落地，接线在 DSHHub 构造函数。
 //
-// 三个按钮是普通 QPushButton，**外观全部走 QSS**（resources/styles/base.qss
+// 三个按钮是普通 QPushButton，**外观全部走 QSS**（resources/styles/main-window.qss
 // 里的 #windowMinButton / #windowMaxButton / #windowCloseButton 规则），
 // 这里只负责换字形（最大化 ↔ 还原）与发意图信号。
 //

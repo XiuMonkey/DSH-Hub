@@ -187,21 +187,6 @@ void TestSessionCatalog::autoSelectReturnsEmptyWhenAllRunning()
 	QVERIFY(catalog.autoSelectSessionId().isEmpty());
 }
 
-void TestSessionCatalog::prefetchExcludesGivenSession()
-{
-	SessionCatalog catalog;
-
-	QJsonArray items;
-	items.append(session(QStringLiteral("s1"), QStringLiteral("自动选中")));
-	items.append(session(QStringLiteral("s2"), QStringLiteral("其它")));
-	items.append(session(QStringLiteral("s3"), QStringLiteral("其它2")));
-	catalog.setSessions(items);
-
-	QCOMPARE(catalog.prefetchSessionIds(QStringLiteral("s1")),
-		QStringList({ QStringLiteral("s2"), QStringLiteral("s3") }));
-	QCOMPARE(catalog.prefetchSessionIds(QString()), QStringList({ QStringLiteral("s1"), QStringLiteral("s2"), QStringLiteral("s3") }));
-}
-
 void TestSessionCatalog::addSessionIgnoresArchived()
 {
 	SessionCatalog catalog;

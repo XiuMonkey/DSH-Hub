@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
+#include <QEvent>
 #include <QEventLoop>
 #include <QFile>
 #include <QGuiApplication>
@@ -14,6 +15,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QList>
 #include <QObject>
 #include <QPalette>
 #include <QRegularExpression>
@@ -34,14 +36,24 @@ namespace Theme
 	namespace
 	{
 		const QString kResourcePrefix = QStringLiteral(":/DSHHub/styles/");
-		// 各板块样式文件（与 resources/styles 下的默认模板一一对应）
+		// 各板块样式文件（与 resources/styles 下的默认模板一一对应）。
+		//
+		// 组织约定：一个文件 = 一个界面/表面，文件名就是它负责的那个界面；
+		// 每个文件的头部注释写明「归属」与「别把别的板块写进来」。
+		// 顺序 = 级联顺序（同优先级的选择器后来者胜），所以下面这份列表的顺序有意义：
+		// 全局默认（外壳/通用控件/滚动条）在前，各界面在后，便于界面覆盖默认。
 		const QStringList kModules = {
-			QStringLiteral("base.qss"),
-			QStringLiteral("chat.qss"),
-			QStringLiteral("sidebar.qss"),
-			QStringLiteral("panels.qss"),
-			QStringLiteral("settings.qss"),
-			QStringLiteral("plugins.qss"),
+			QStringLiteral("main-window.qss"),      // 主窗口外壳与自绘标题栏
+			QStringLiteral("defaults.qss"),         // 通用控件默认外观（各界面覆盖它）
+			QStringLiteral("scrollbars.qss"),       // 全局滚动条（唯一一份滚动条规则）
+			QStringLiteral("chat.qss"),             // 对话列
+			QStringLiteral("sidebar.qss"),          // 左侧会话栏
+			QStringLiteral("popups.qss"),           // 浮层与各窗口遮罩、弹窗外壳
+			QStringLiteral("extension-manager.qss"),// 扩展管理窗口
+			QStringLiteral("topbar.qss"),           // 对话顶栏与工具过滤窗口
+			QStringLiteral("settings.qss"),         // 设置窗口
+			QStringLiteral("model-list.qss"),       // 模型列表面板（设置 → 模型列表）
+			QStringLiteral("plugin-market.qss"),    // 插件市场窗口
 		};
 
 		QString resourcePath(const QString& fileName)
@@ -115,7 +127,7 @@ namespace Theme
 								<< "[Theme] external style differs from the shipped default:"
 								<< target
 								<< "-> 这份外部样式优先于程序内置模板；"
-								   "若刚更新过程序、看不到新样式，请在“设置 - 外观设置”里重置样式为默认";
+								"若刚更新过程序、看不到新样式，请在“设置 - 外观设置”里重置样式为默认";
 						}
 						continue;
 					}
@@ -305,6 +317,35 @@ namespace Theme
 		}
 	} // namespace
 
+	// 全局兜底：任何滚动区**首次显示**时补一次滚动条解析。
+	//   · 有了它，"新控件忘了调 repolishScrollArea" 不会再变成视觉 bug；
+	//   · 显式调用仍然有意义：它在第一次绘制前就弄对了，不会闪一下。
+	// 挂在 qApp 上（见 init()），只在 Show 事件上做一次廉价的 qobject_cast。
+	// （repolishScrollArea 的声明在头文件里，所以这里定义在它之前也没问题。）
+	namespace
+	{
+	class ScrollAreaShowFilter : public QObject
+	{
+	public:
+		using QObject::QObject;
+
+	protected:
+		bool eventFilter(QObject* watched, QEvent* event) override
+		{
+			if (event->type() == QEvent::Show) {
+				if (auto* area = qobject_cast<QAbstractScrollArea*>(watched)) {
+					// Show 派发期间重新解析会搅乱事件流：排到本轮之后；以控件自身为
+					// 上下文，控件先销毁时这次调用自动作废。
+					// repolishScrollArea 自带"每个控件只挂一次补丁"的标记，重复调用无害。
+					QMetaObject::invokeMethod(area, [area]() { repolishScrollArea(area); },
+						Qt::QueuedConnection);
+				}
+			}
+			return QObject::eventFilter(watched, event);
+		}
+	};
+	} // namespace
+
 	void init(const QString& stylesDir, Mode mode)
 	{
 		Impl& s = impl();
@@ -315,6 +356,15 @@ namespace Theme
 		s.buildAllCaches();
 
 		setMode(mode);
+
+		// 全局兜底：滚动区首次显示时补一次滚动条解析（见 ScrollAreaShowFilter）。
+		// 这样"新加滚动区忘了调 Theme::repolishScrollArea()"不会再退回原生老式滚动条。
+		static bool showFilterInstalled = false;
+		if (!showFilterInstalled && qApp) {
+			showFilterInstalled = true;
+			qApp->installEventFilter(new ScrollAreaShowFilter(qApp));
+		}
+
 		qInfo().noquote() << "[Theme] styles initialized from:" << stylesDir
 			<< "mode=" << (mode == Mode::Dark ? "Dark" : "Light")
 			<< "paletteKeys=" << s.palette.size();
@@ -392,14 +442,84 @@ namespace Theme
 		return QStringLiteral("#000000");
 	}
 
-	QString styleSheet()
-	{
-		return impl().qss;
-	}
-
 	// 见头文件注释：滚动条是基类构造时建好的，那时子类的 objectName 还没设，
-	// QStyleSheetStyle 会把"匹配不到 #objectName QScrollBar"缓存下来，
-	// 这里在设完名字后强制重新解析一次（控件本体 + 两个滚动条）。
+	// QStyleSheetStyle 会把"匹配不到规则"缓存下来。
+	//
+	// 光在构造后解析一次还不够：样式表是**按顶层窗口**挂的（见 applyToWindow），
+	// 控件在构造时可能还没接进那个窗口（预构建的控件树、先建后插的卡片都属于这种），
+	// 或者那条规则要等滚动条真的出现才谈得上。表现就是"首次渲染是原生老式滚动条，
+	// 重启/切主题后又好了"——重启会重新 setStyleSheet，整棵子树被重新解析。
+	//
+	// 所以这里一次挂好两个只跑一次的补丁：
+	//   1) 首次 Show 之后再解析一次（那时控件一定已经在带样式表的窗口里）；
+	//   2) 任一滚动条第一次真的有范围（= 它真的会出现）时再解析一次。
+	// 补丁跑完自动摘掉，对滚动列表没有持续开销。
+	//
+	// 另有一层全局兜底 ScrollAreaShowFilter（见 init()）：任何滚动区首次显示都会被
+	// 抓一次，所以**新控件忘记调用也不会再退回原生滚动条**；显式调用仍然值得做，
+	// 它让控件在第一次绘制之前就已经是对的样子。
+	namespace
+	{
+	class ScrollBarRepolisher : public QObject
+	{
+	public:
+		explicit ScrollBarRepolisher(QAbstractScrollArea* area)
+			: QObject(area)
+			, m_area(area)
+		{
+			area->installEventFilter(this);
+			for (QScrollBar* bar : bars()) {
+				if (!bar)
+					continue;
+				m_connections.append(connect(bar, &QScrollBar::rangeChanged, this, [this, bar]() {
+					if (m_ranged || bar->maximum() <= bar->minimum())
+						return;
+					m_ranged = true;
+					repolishScrollArea(m_area);
+					retireIfDone();
+				}));
+			}
+		}
+
+	protected:
+		bool eventFilter(QObject* watched, QEvent* event) override
+		{
+			if (event->type() == QEvent::Show && !m_shown) {
+				m_shown = true;
+				// Show 期间重新解析会把正在派发的事件搅乱，挪到本轮事件之后
+				QMetaObject::invokeMethod(this, [this]() {
+					repolishScrollArea(m_area);
+					retireIfDone();
+				}, Qt::QueuedConnection);
+			}
+			return QObject::eventFilter(watched, event);
+		}
+
+	private:
+		QList<QScrollBar*> bars() const
+		{
+			return { m_area->horizontalScrollBar(), m_area->verticalScrollBar() };
+		}
+
+		void retireIfDone()
+		{
+			// 两个触发都见过就不再需要自己了（只挂一次的补丁）
+			if (!m_shown || !m_ranged)
+				return;
+			for (const QMetaObject::Connection& connection : m_connections)
+				disconnect(connection);
+			m_connections.clear();
+			m_area->removeEventFilter(this);
+			deleteLater();
+		}
+
+		QAbstractScrollArea* m_area = nullptr;
+		QList<QMetaObject::Connection> m_connections;
+		bool m_shown = false;
+		bool m_ranged = false;
+	};
+	} // namespace
+
 	void repolishScrollArea(QWidget* widget)
 	{
 		if (!widget)
@@ -422,6 +542,14 @@ namespace Theme
 				style->polish(bar);
 			}
 		}
+
+		// 构造期解析可能太早（那时还没接进带样式表的窗口）：挂上"首次显示/首次
+		// 真出现滚动条"的补丁（每个控件只挂一次）
+		static const char* const kHooked = "dshScrollAreaRepolishHooked";
+		if (area->property(kHooked).toBool())
+			return;
+		area->setProperty(kHooked, true);
+		new ScrollBarRepolisher(area);
 	}
 
 	void switchTheme(QWidget* currentWindow)
@@ -475,7 +603,9 @@ namespace Theme
 		QUrl oldBaseUrl;
 		QProcess* oldServerProcess = nullptr;
 		if (auto* oldHub = qobject_cast<DSHHub*>(currentWindow)) {
-			oldBaseUrl = oldHub->baseUrl();
+			// 带令牌的 URL：0.1.5 的 /api 需要 cookie，而 cookie 只能用启动令牌换，
+			// 只传域名端口的话新窗口会 401（表现为"切主题后窗口不再出现"）。
+			oldBaseUrl = oldHub->authenticatedBaseUrl();
 			oldServerProcess = oldHub->takeServerProcess();
 		}
 

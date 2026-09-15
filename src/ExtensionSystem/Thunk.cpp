@@ -241,11 +241,6 @@ namespace Thunk
 		fn(args, result);
 	}
 
-	void* Thunk::entry() const
-	{
-		return m_code;
-	}
-
 	QString Thunk::errorString() const
 	{
 		return m_errorString;

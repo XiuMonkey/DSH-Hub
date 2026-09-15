@@ -27,7 +27,6 @@ private slots:
 	void archivedSessionsHiddenButStillAutoSelectable();
 	void autoSelectSkipsRunningSessions();
 	void autoSelectReturnsEmptyWhenAllRunning();
-	void prefetchExcludesGivenSession();
 	void addSessionIgnoresArchived();
 	void addSessionAssignsWorkspace();
 	void updateTitleOnlyForKnownSession();

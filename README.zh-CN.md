@@ -47,7 +47,6 @@ DSH Hub/
 ├── resources/
 │   ├── 图标/图片与 QRC
 │   ├── highlight_rules.json    # 代码高亮规则
-│   ├── registry-snapshot.json  # 插件市场离线快照
 │   └── server/
 │       └── launch-root/
 │           └── FFmpegExt/      # FFmpeg 示例扩展包

@@ -16,8 +16,7 @@ void CacheManager::cacheSessionMessages(const QString& sessionId, MessageQuery* 
 	if (sessionId.isEmpty() || !messages)
 		return;
 
-	// 缓存被新内容整体替换：旧标记/快照不再适用
-	m_dirtyCacheSessions.remove(sessionId);
+	// 缓存被新内容整体替换：旧的分页快照不再适用
 	m_cacheMeta.remove(sessionId);
 
 	if (m_messageCache.contains(sessionId))
@@ -30,7 +29,6 @@ void CacheManager::cacheSessionMessages(const QString& sessionId, MessageQuery* 
 
 MessageQuery* CacheManager::takeCachedMessages(const QString& sessionId)
 {
-	m_dirtyCacheSessions.remove(sessionId);
 	m_cacheMeta.remove(sessionId);
 	MessageQuery* messages = m_messageCache.take(sessionId);
 	if (messages) {
@@ -43,29 +41,16 @@ MessageQuery* CacheManager::takeCachedMessages(const QString& sessionId)
 	return messages;
 }
 
-void CacheManager::markDirtyCache(const QString& sessionId)
-{
-	// 后台会话每个事件都会进这里：只在该会话首次变脏时插集合+记日志，
-	// 避免每个事件刷一条日志。
-	if (!sessionId.isEmpty() && !m_dirtyCacheSessions.contains(sessionId)) {
-		m_dirtyCacheSessions.insert(sessionId);
-		qInfo().noquote() << "[CacheManager] mark dirty cache sessionId=" << sessionId;
-	}
-}
-
-bool CacheManager::isDirtyCache(const QString& sessionId) const
-{
-	return m_dirtyCacheSessions.contains(sessionId);
-}
-
-void CacheManager::storeCacheMeta(const QString& sessionId, int rawEventCount, bool hasMore)
+void CacheManager::storeCacheMeta(const QString& sessionId, int rawEventCount, bool hasMore,
+	int throughSeq, int oldestSeq, int lastSeq)
 {
 	if (sessionId.isEmpty())
 		return;
-	m_cacheMeta.insert(sessionId, CacheMeta{ rawEventCount, hasMore });
+	m_cacheMeta.insert(sessionId, CacheMeta{ rawEventCount, hasMore, throughSeq, oldestSeq, lastSeq });
 }
 
-bool CacheManager::takeCacheMeta(const QString& sessionId, int* rawEventCount, bool* hasMore)
+bool CacheManager::takeCacheMeta(const QString& sessionId, int* rawEventCount, bool* hasMore,
+	int* throughSeq, int* oldestSeq, int* lastSeq)
 {
 	const auto it = m_cacheMeta.constFind(sessionId);
 	if (it == m_cacheMeta.constEnd())
@@ -74,6 +59,12 @@ bool CacheManager::takeCacheMeta(const QString& sessionId, int* rawEventCount, b
 		*rawEventCount = it->rawEventCount;
 	if (hasMore)
 		*hasMore = it->hasMore;
+	if (throughSeq)
+		*throughSeq = it->throughSeq;
+	if (oldestSeq)
+		*oldestSeq = it->oldestSeq;
+	if (lastSeq)
+		*lastSeq = it->lastSeq;
 	m_cacheMeta.erase(it);
 	return true;
 }
@@ -114,22 +105,30 @@ bool CacheManager::hasCachedMessages(const QString& sessionId) const
 	return m_messageCache.contains(sessionId);
 }
 
-void CacheManager::storePrefetchedHistory(const QString& sessionId, const QJsonArray& events)
+void CacheManager::storePrefetchedHistory(const QString& sessionId, const PrefetchedHistory& history)
 {
-	if (sessionId.isEmpty())
+	if (sessionId.isEmpty() || history.events.isEmpty())
 		return;
 
-	m_prefetchedHistory.insert(sessionId, events);
+	m_prefetchedHistory.insert(sessionId, history);
 	qInfo().noquote() << "[CacheManager] store prefetched history sessionId=" << sessionId
-		<< " events=" << events.size();
+		<< "events=" << history.events.size() << "throughSeq=" << history.throughSeq
+		<< "hasMore=" << history.hasMore;
 }
 
-QJsonArray CacheManager::takePrefetchedHistory(const QString& sessionId)
+bool CacheManager::takePrefetchedHistory(const QString& sessionId, PrefetchedHistory* history)
 {
-	const QJsonArray events = m_prefetchedHistory.take(sessionId);
+	const auto it = m_prefetchedHistory.find(sessionId);
+	if (it == m_prefetchedHistory.end())
+		return false;
+
+	if (history)
+		*history = it.value();
+
 	qInfo().noquote() << "[CacheManager] take prefetched history sessionId=" << sessionId
-		<< " events=" << events.size();
-	return events;
+		<< "events=" << it.value().events.size();
+	m_prefetchedHistory.erase(it);
+	return true;
 }
 
 void CacheManager::clearAll()
@@ -137,7 +136,6 @@ void CacheManager::clearAll()
 	qInfo().noquote() << "[CacheManager] clear all caches";
 	qDeleteAll(m_messageCache);
 	m_messageCache.clear();
-	m_prefetchedHistory.clear();
-	m_dirtyCacheSessions.clear();
 	m_cacheMeta.clear();
+	m_prefetchedHistory.clear();
 }

@@ -9,7 +9,7 @@
 //
 // 画的部分不在这里：
 //   * 标题栏控件与窗口按钮 → src/ui/TitleBar.cpp
-//   * 圆角 + 1px 描边       → resources/styles/base.qss（#dshhubCentral）
+//   * 圆角 + 1px 描边       → resources/styles/main-window.qss（#dshhubCentral）
 //
 // 与控件之间的两条约定（约定写在控件侧，这里只做判定）：
 //   * 标题栏控件的 objectName 必须是 windowTitleBar（拖动区与遮罩范围都按它算）
@@ -40,12 +40,19 @@ namespace WindowFrame
 	bool isEdgeToEdge(const QWidget* window);
 
 	// 按“是否贴屏幕边缘”切换可见面的圆角描边状态：给可见面打上 maximized
-	// 动态属性，由 base.qss 里 #dshhubCentral[maximized="true"] 那条规则生效
+	// 动态属性，由 main-window.qss 里 #dshhubCentral[maximized="true"] 那条规则生效
 	// （动态属性变化不会自动重新匹配选择器，这里顺带 repolish）
 	void applyBorderState(QWidget* surface, bool edgeToEdge);
 
 	// 最大化/全屏时把“系统多给的那一圈”补进内容边距（非最大化时归零）
 	void applyMaximizedContentInset(const QWidget* window, QLayout* contentLayout);
+
+	// 边框的“界面收尾”组合动作：按当前是否贴屏幕边缘，依次切可见面的圆角描边
+	// 状态、补最大化时的内容边距。返回是否贴屏幕边缘——调用方据此刷新标题栏
+	// 按钮的“最大化/还原”图标（按钮是控件，本文件不碰控件类型）。
+	// 顺序固定在这里，省得每个调用方各写一遍。
+	// surface 传窗口的可见面（主窗口即 centralWidget()）。
+	bool applyFrameStyle(QWidget* window, QWidget* surface);
 
 	// 半透明遮罩（设置/插件/扩展管理）的覆盖范围：标题栏以下的内容区。
 	// 遮罩铺满客户区会把自绘标题栏一起盖住，窗口按钮就点不动了。

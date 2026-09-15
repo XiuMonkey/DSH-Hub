@@ -34,7 +34,6 @@ class QPaintEvent;
 class QResizeEvent;
 class QContextMenuEvent;
 class DshApiClient;
-class SessionPrefetcher;
 
 // 左侧边栏 Logo
 class SidebarLogo : public QLabel
@@ -233,7 +232,7 @@ public:
 
 	// 刷新工作区/会话列表：数据解析由 SessionService 负责，本类只把
 	// 结果映射成界面状态并转发信号
-	void refreshSessions(DshApiClient* api, SessionPrefetcher* prefetcher);
+	void refreshSessions(DshApiClient* api);
 	void createSession(DshApiClient* api, const QString& workspaceId = QString());
 
 	// 清空全部会话：文件与目录清理由 SessionService 负责，
@@ -254,6 +253,8 @@ signals:
 	void themeToggleRequested();
 	void extensionsRequested();
 
+	// 会话列表已刷新并写入 catalog（DSHHub 用它触发首屏预取）
+	void sessionsRefreshed();
 	void initialSessionReady(const QString& sessionId, const QString& title);
 	void sessionCreated(const QString& sessionId, const QString& workspaceId);
 	void noSessionAvailable();

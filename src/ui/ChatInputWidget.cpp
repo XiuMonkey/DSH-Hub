@@ -1,22 +1,29 @@
 #include "ChatInputWidget.h"
 
 #include "ModelSelector.h"
+#include "ThemeManager.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QKeyEvent>
 #include <QLayout>
+#include <QPainter>
+#include <QPaintEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollBar>
 #include <QSize>
 #include <QSizePolicy>
 #include <QTextOption>
 #include <QTimer>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 namespace
 {
@@ -36,17 +43,279 @@ namespace
 	constexpr int kEditorMinHeight = 40;
 	// 原生 --dsh-composer-text-max-height: 336px
 	constexpr int kEditorMaxHeight = 336;
+
+	// 卡片下方小灰字的字号（行高固定 14px，见 SessionStatsLine::kHeight）。
+	// 字号在代码里也设一遍：外部定制的 styles 目录里没有新规则时，
+	// 只靠 QSS 会回落到默认字号（比 14px 高），那行字就会被切掉。
+	constexpr int kStatsFontPixelSize = 12;
+
+	// ------------------------------------------------------------------
+	// 小灰字的数字格式化
+	// ------------------------------------------------------------------
+	// 规则与官方 Web 端 chat/StatsLine 里的同名函数逐条对齐（单位、小数位、
+	// 何时进位都一致），这样两端的同一份投影数据看起来是同一个东西。
+
+	/** 时长：一分钟以内 "45.2s"，以上 "2m42s"。 */
+	QString formatDuration(double ms)
+	{
+		const double seconds = ms / 1000.0;
+		if (seconds < 60.0)
+			return QStringLiteral("%1s").arg(std::round(seconds * 10.0) / 10.0, 0, 'g', 10);
+
+		const qint64 whole = static_cast<qint64>(std::llround(seconds));
+		return QStringLiteral("%1m%2s").arg(whole / 60).arg(whole % 60);
+	}
+
+	/** token 数：517 / 12.2K / 517K / 1.2M（三位以上保留一位小数，够三位就取整）。 */
+	QString formatTokens(qint64 tokens)
+	{
+		if (tokens < 1000)
+			return QString::number(tokens);
+
+		const auto scaled = [](double value) {
+			if (value >= 100.0)
+				return QString::number(static_cast<qint64>(std::llround(value)));
+			return QString::number(std::round(value * 10.0) / 10.0, 'g', 10);
+			};
+
+		if (tokens < 1000000)
+			return scaled(tokens / 1000.0) + QStringLiteral("K");
+		return scaled(tokens / 1000000.0) + QStringLiteral("M");
+	}
+
+	/** 解码吞吐：两位数以上取整，个位数留一位小数。 */
+	QString formatThroughput(double tokensPerSecond)
+	{
+		const double clamped = tokensPerSecond > 0.0 ? tokensPerSecond : 0.0;
+		if (clamped >= 10.0)
+			return QString::number(static_cast<qint64>(std::llround(clamped)));
+		return QString::number(std::round(clamped * 10.0) / 10.0, 'g', 10);
+	}
+
+	/**
+	 * 缓存命中率：命中读 / 计费输入（未缓存 + 缓存读 + 缓存写）。
+	 *
+	 * 官方实现（StatsLine::cacheHitPercent）在"四舍五入会变成 100%、但其实没全中"
+	 * 的时候多给几位小数（所以线上显示的是 99.6% 而不是 100%）。这里保留同样的
+	 * 取舍：整数百分比 < 100 就取整，会进到 100 就逐步加小数位，直到严格小于 100。
+	 * 没有计费输入时返回空串（这一组不显示）。
+	 */
+	QString formatCacheHitPercent(qint64 cacheReadTokens, qint64 billedInputTokens)
+	{
+		if (billedInputTokens <= 0)
+			return QString();
+
+		if (cacheReadTokens >= billedInputTokens)
+			return QStringLiteral("100");
+
+		const double percent = 100.0 * static_cast<double>(cacheReadTokens)
+			/ static_cast<double>(billedInputTokens);
+
+		if (qRound(percent) < 100)
+			return QString::number(qRound(percent));
+
+		for (int decimals = 1; decimals <= 4; ++decimals) {
+			const double factor = std::pow(10.0, decimals);
+			const double rounded = std::round(percent * factor) / factor;
+			if (rounded < 100.0)
+				return QString::number(rounded, 'f', decimals);
+		}
+
+		// 理论上到不了这里（percent 严格小于 100）；留个兜底免得画出 "100%"
+		return QStringLiteral("99.99");
+	}
 }
+
+bool SessionUsageStats::isEmpty() const
+{
+	if (turns > 0 || steps > 0 || llmMs > 0 || toolMs > 0
+		|| ttftSteps > 0 || decodeMs > 0 || decodeTokens > 0)
+		return false;
+
+	// tokenUsage 没给过（hasUsage=false）就不算数；给过但要全是 0
+	// （例如会话还没有任何一次成功请求）同样什么都不显示
+	if (hasUsage && (uncachedInputTokens > 0 || cacheReadTokens > 0
+		|| cacheWriteTokens > 0 || outputTokens > 0))
+		return false;
+
+	return true;
+}
+
+// ------------------------------------------------------------------
+// SessionStatsLine：卡片下方那行小灰字（本控件只负责画）
+// ------------------------------------------------------------------
+
+SessionStatsLine::SessionStatsLine(QWidget* parent)
+	: QWidget(parent)
+{
+	setObjectName(QStringLiteral("sessionStatsLine"));
+	// 固定行高 = 输入区留白里留给小灰字的那一条
+	setFixedHeight(kHeight);
+	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+	// 字号在这里设一遍（理由见 kStatsFontPixelSize 的注释）
+	QFont lineFont = font();
+	lineFont.setPixelSize(kStatsFontPixelSize);
+	setFont(lineFont);
+
+	// 不设 WA_TransparentForMouseEvents：那会让 tooltip（文本被截断时的完整内容）
+	// 也收不到悬停事件。这行本身没有点击语义，收到事件也不做任何事。
+}
+
+void SessionStatsLine::setStats(const SessionUsageStats& stats)
+{
+	setLineText(formatStats(stats));
+}
+
+void SessionStatsLine::setLineText(const QString& line)
+{
+	if (m_lineText == line)
+		return;
+
+	m_lineText = line;
+	syncToolTip();
+	update();
+}
+
+void SessionStatsLine::clearStats()
+{
+	setLineText(QString());
+}
+
+void SessionStatsLine::paintEvent(QPaintEvent* event)
+{
+	Q_UNUSED(event)
+
+	if (m_lineText.isEmpty())
+		return;
+
+	QPainter painter(this);
+	painter.setFont(font());
+	// 颜色取主题的"第三级文字"（和官方 StatsLine 的 label-tertiary 同一个角色）；
+	// 主题切换会重建主窗口，所以这里不需要跟着变
+	painter.setPen(QColor(Theme::color(QStringLiteral("textTertiary"))));
+
+	// 一行、居中，放不下就省略号（完整内容在 tooltip 里）
+	const QFontMetrics metrics(font());
+	const QString shown = metrics.elidedText(m_lineText, Qt::ElideRight, width());
+	painter.drawText(rect(), Qt::AlignHCenter | Qt::AlignVCenter, shown);
+}
+
+void SessionStatsLine::resizeEvent(QResizeEvent* event)
+{
+	QWidget::resizeEvent(event);
+	// 宽度变了，是否被截断（要不要挂 tooltip）可能跟着变
+	syncToolTip();
+}
+
+void SessionStatsLine::syncToolTip()
+{
+	if (m_lineText.isEmpty()) {
+		setToolTip(QString());
+		return;
+	}
+
+	const QFontMetrics metrics(font());
+	const bool truncated = metrics.horizontalAdvance(m_lineText) > width();
+	setToolTip(truncated ? m_lineText : QString());
+}
+
+/**
+ * 拼整行：组的顺序、分隔符、每组内部显示什么，都与官方 Web 端 StatsLine 一致 ——
+ *   轮/步 | LLM 用时 · 工具调用用时 | 首 token 平均 · 吞吐 | 缓存命中 | 输入 · 输出
+ * 组之间 " | "，组内 " · "；某一组没有可显示项就整组不出现。
+ */
+QString SessionStatsLine::formatStats(const SessionUsageStats& stats)
+{
+	QStringList groups;
+
+	if (stats.steps > 0) {
+		groups << tr("%1 轮 · %2 步").arg(stats.turns).arg(stats.steps);
+
+		QStringList durations;
+		if (stats.llmMs > 0)
+			durations << tr("LLM %1").arg(formatDuration(static_cast<double>(stats.llmMs)));
+		if (stats.toolMs > 0)
+			durations << tr("工具调用 %1").arg(formatDuration(static_cast<double>(stats.toolMs)));
+		if (!durations.isEmpty())
+			groups << durations.join(QStringLiteral(" · "));
+
+		QStringList speeds;
+		if (stats.ttftSteps > 0) {
+			// 首 token 是"平均"：累计延迟 / 记下首 token 的步数
+			const double averageMs = static_cast<double>(stats.ttftMs) / stats.ttftSteps;
+			speeds << tr("首 token 平均 %1").arg(formatDuration(averageMs));
+		}
+		if (stats.decodeMs > 0) {
+			const double tokensPerSecond = static_cast<double>(stats.decodeTokens)
+				/ (static_cast<double>(stats.decodeMs) / 1000.0);
+			speeds << tr("%1 tok/s").arg(formatThroughput(tokensPerSecond));
+		}
+		if (!speeds.isEmpty())
+			groups << speeds.join(QStringLiteral(" · "));
+	}
+
+	if (stats.hasUsage) {
+		// 计费输入的三个桶是不重叠的：未命中 + 缓存读 + 缓存写
+		const qint64 billedInput = stats.uncachedInputTokens
+			+ stats.cacheReadTokens + stats.cacheWriteTokens;
+
+		if (billedInput > 0 || stats.outputTokens > 0) {
+			const QString cacheHit = formatCacheHitPercent(stats.cacheReadTokens, billedInput);
+			if (!cacheHit.isEmpty())
+				groups << tr("缓存命中 %1%").arg(cacheHit);
+
+			groups << tr("输入 %1 tok · 输出 %2 tok")
+				.arg(formatTokens(billedInput))
+				.arg(formatTokens(stats.outputTokens));
+		}
+	}
+
+	return groups.join(QStringLiteral(" | "));
+}
+
+// ------------------------------------------------------------------
+// ChatInputWidget：卡片本体 + 卡片下方那行小灰字
+// ------------------------------------------------------------------
 
 ChatInputWidget::ChatInputWidget(QWidget* parent)
 	: QWidget(parent)
 {
-	setObjectName(QStringLiteral("inputCapsule"));
-	// 让 QWidget 子类真正绘制样式表里的背景和边框
-	setAttribute(Qt::WA_StyledBackground, true);
-	// 外观规则见 resources/styles/chat.qss（#inputCapsule / #inputCapsule QPlainTextEdit / #inputControlRow）
+	// 卡片本体（外观规则见 resources/styles/chat.qss 的 #inputCapsule /
+	// #inputCapsule QPlainTextEdit / #inputControlRow）
+	buildCapsule();
 
-	m_editor = new QPlainTextEdit(this);
+	// 卡片下方的小灰字统计（高度固定，没数据时只是不画字）
+	m_statsLine = new SessionStatsLine(this);
+
+	// 竖排：卡片在上、小灰字在下。两者之间不留间距 —— 上下留白由外层输入区
+	// 的边距给（见 Main.cpp：底部留白 0，整块贴着面板底边摆）
+	auto* layout = new QVBoxLayout(this);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(0);
+	layout->addWidget(m_capsule);
+	layout->addWidget(m_statsLine);
+
+	m_editor->installEventFilter(this);
+
+	connect(m_editor->document(), &QTextDocument::contentsChanged, this, [this]() {
+		// 放到事件循环里再算，确保 QPlainTextEdit 已经用当前 viewport 宽度完成内部布局
+		QTimer::singleShot(0, this, [this]() { adjustHeight(); });
+		});
+
+	QTimer::singleShot(0, this, [this]() { adjustHeight(); });
+
+	retranslateUi();
+}
+
+void ChatInputWidget::buildCapsule()
+{
+	m_capsule = new QWidget(this);
+	m_capsule->setObjectName(QStringLiteral("inputCapsule"));
+	// 让 QWidget 子类真正绘制样式表里的背景和边框
+	m_capsule->setAttribute(Qt::WA_StyledBackground, true);
+
+	m_editor = new QPlainTextEdit(m_capsule);
 	m_editor->setFrameShape(QFrame::NoFrame);
 	// 隐藏输入框滚动条，但保留鼠标滚轮滚动能力
 	m_editor->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -60,22 +329,11 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 	buildControlRow();
 
 	// 卡片：输入框在上，控制行在下（间距走布局 spacing，与原生 gap:12px 一致）
-	auto* layout = new QVBoxLayout(this);
-	layout->setContentsMargins(0, kCardTopPadding, 0, 0);
-	layout->setSpacing(kCardGap);
-	layout->addWidget(m_editor);
-	layout->addWidget(m_controlRow);
-
-	m_editor->installEventFilter(this);
-
-	connect(m_editor->document(), &QTextDocument::contentsChanged, this, [this]() {
-		// 放到事件循环里再算，确保 QPlainTextEdit 已经用当前 viewport 宽度完成内部布局
-		QTimer::singleShot(0, this, [this]() { adjustHeight(); });
-		});
-
-	QTimer::singleShot(0, this, [this]() { adjustHeight(); });
-
-	retranslateUi();
+	auto* capsuleLayout = new QVBoxLayout(m_capsule);
+	capsuleLayout->setContentsMargins(0, kCardTopPadding, 0, 0);
+	capsuleLayout->setSpacing(kCardGap);
+	capsuleLayout->addWidget(m_editor);
+	capsuleLayout->addWidget(m_controlRow);
 }
 
 void ChatInputWidget::retranslateUi()
@@ -98,7 +356,7 @@ void ChatInputWidget::changeEvent(QEvent* event)
 
 void ChatInputWidget::buildControlRow()
 {
-	m_controlRow = new QWidget(this);
+	m_controlRow = new QWidget(m_capsule);
 	m_controlRow->setObjectName(QStringLiteral("inputControlRow"));
 
 	auto* rowLayout = new QHBoxLayout(m_controlRow);
@@ -149,6 +407,18 @@ void ChatInputWidget::buildControlRow()
 	connect(m_sendButton, &QPushButton::clicked, this, &ChatInputWidget::handleSendClicked);
 }
 
+void ChatInputWidget::setSessionStats(const SessionUsageStats& stats)
+{
+	if (m_statsLine)
+		m_statsLine->setStats(stats);
+}
+
+void ChatInputWidget::clearSessionStats()
+{
+	if (m_statsLine)
+		m_statsLine->clearStats();
+}
+
 void ChatInputWidget::setModelSession(DshApiClient* api, const QString& sessionId)
 {
 	if (m_modelSelector)
@@ -159,6 +429,13 @@ void ChatInputWidget::refreshModelCatalog()
 {
 	if (m_modelSelector)
 		m_modelSelector->refresh();
+}
+
+void ChatInputWidget::applySessionModelSelection(const QString& provider, const QString& model,
+	const QString& reasoningEffort)
+{
+	if (m_modelSelector)
+		m_modelSelector->overrideCurrentSelection(provider, model, reasoningEffort);
 }
 
 QString ChatInputWidget::text() const
@@ -303,15 +580,15 @@ void ChatInputWidget::adjustHeight()
 		m_editor->setFixedHeight(newHeight);
 		m_editor->updateGeometry();
 
-		// 通知父级布局重新计算，避免 setFixedHeight 后外层容器没有立即跟随变化
-		if (QWidget* parent = m_editor->parentWidget()) {
-			if (QLayout* parentLayout = parent->layout())
-				parentLayout->activate();
-			if (QWidget* grandParent = parent->parentWidget()) {
-				grandParent->updateGeometry();
-				if (QLayout* grandParentLayout = grandParent->layout())
-					grandParentLayout->activate();
-			}
+		// 通知父级布局重新计算：输入框高度是 setFixedHeight 直接定的，卡片本体的
+		// sizeHint 跟着变，再往上还有"本控件（卡片 + 小灰字）"和输入区两层容器，
+		// 不逐层重算一次，外层会一直按旧高度摆到下一次窗口事件。
+		QWidget* level = m_editor->parentWidget();
+		for (int depth = 0; level && depth < 3; ++depth) {
+			level->updateGeometry();
+			if (QLayout* levelLayout = level->layout())
+				levelLayout->activate();
+			level = level->parentWidget();
 		}
 	}
 

@@ -46,9 +46,6 @@ namespace Theme
 	// 颜色值只允许出现在 theme-*.json；代码只引用语义 key。
 	QString color(const QString& key);
 
-	// 当前合成好的完整样式表（含所有板块）
-	QString styleSheet();
-
 	// 常用语义色，方便少量运行时拼接
 	inline QString windowBg() { return color(QStringLiteral("windowBg")); }
 	inline QString border() { return color(QStringLiteral("border")); }

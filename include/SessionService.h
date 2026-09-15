@@ -4,8 +4,8 @@
 // SessionService.h
 // ------------------------------------------------------------------
 // 会话相关的“功能逻辑”统一入口（不依赖任何 Qt Widget）：
-//   - 并行拉取 workspace.list / session.list 并解析进 SessionCatalog；
-//   - 调度历史预取（跳过马上要被全量加载的那个会话）；
+//   - 拉取 session.list 并解析进 SessionCatalog；
+//   - 触发侧栏重建与自动选中；
 //   - session.create、session.list 标题回填；
 //   - 清空 DSH home 下的会话数据。
 //
@@ -20,20 +20,15 @@
 #include <QString>
 #include <functional>
 
-class SessionPrefetcher;
-
 class SessionService
 {
 public:
-	// 并行拉取 workspace.list + session.list，两个都返回后：
-	//   1) 把结果写入 catalog（工作区/会话/归档状态）；
-	//   2) 为除自动选中会话外的可见会话调度历史预取；
-	//   3) 回调 onReady(autoSelectSessionId) 或 onError(error)。
-	// workspace.list 失败不算致命（按“无工作区”处理），
-	// session.list 失败才走 onError，且此时不会写入会话列表。
+	// 拉取 session.list 并写入 catalog（会话/归档状态；工作区由 workspace/follow 提供）：
+	//   1) 把结果写入 catalog；
+	//   2) 回调 onReady(autoSelectSessionId) 或 onError(error)。
+	// session/list 失败才走 onError，且此时不会写入会话列表。
 	static void refreshSessions(
 		DshApiClient* api,
-		SessionPrefetcher* prefetcher,
 		SessionCatalog* catalog,
 		const std::function<void(const QString& autoSelectSessionId)>& onReady,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);

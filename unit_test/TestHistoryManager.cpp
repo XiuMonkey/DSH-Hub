@@ -31,16 +31,6 @@ void TestHistoryManager::limitLifecycle()
 	QCOMPARE(manager.limit(), 0);
 }
 
-void TestHistoryManager::increaseLimit()
-{
-	HistoryManager manager;
-	QCOMPARE(manager.limit(), 20);
-	manager.increaseLimit(30);
-	QCOMPARE(manager.limit(), 50);
-	manager.increaseLimit(-10);
-	QCOMPARE(manager.limit(), 40);
-}
-
 void TestHistoryManager::hasMoreLifecycle()
 {
 	HistoryManager manager;

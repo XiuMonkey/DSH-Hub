@@ -19,11 +19,22 @@ namespace
 		return QJsonDocument::fromJson(json).object();
 	}
 
-	// 一份贴近 harness 实际返回的 session.models 回包：
+	// dsh 0.1.5：llm/listConfigurableProviders 返回的是**裸数组**
+	// （[{provider, displayName, settingsNs, settingsPath, …}]），
+	// 而这里的用例数据仍是旧形状 { "providers": [ … ] }，用这个适配函数取出来
+	// 再喂给生产解析函数，省得把每个用例的 JSON 都改一遍。
+	QVector<ConfigurableProvider> parseProvidersJson(const char* json)
+	{
+		return ModelSelectionService::parseProviders(
+			parseObject(json).value(QStringLiteral("providers")).toArray());
+	}
+
+	// 一份贴近 harness 实际返回的 session/modelCatalog 回包（0.1.5 形状）：
+	// default 是部署默认选择、routableProviders 是当前可路由的提供方；
 	// deepseek 提供方公布 off/low/high/max，默认 high；另一个模型不公布推理元数据
 	const char* const kDirectoryJson = R"({
-		"current": { "provider": "deepseek", "model": "deepseek-v4-flash", "reasoningEffort": "high" },
-		"routable": true,
+		"default": { "provider": "deepseek", "model": "deepseek-v4-flash", "reasoningEffort": "high" },
+		"routableProviders": [ "deepseek", "gateway" ],
 		"groups": [
 			{
 				"id": "deepseek",
@@ -124,8 +135,8 @@ void TestModelSelection::modelWithoutReasoningHasNoLevels()
 
 void TestModelSelection::minimalPayloadParsed()
 {
-	// 空回包（只有 routable）不应崩，也不该造出任何分组
-	const SessionModelDirectory directory = ModelSelectionService::parseDirectory(parseObject(R"({ "routable": false })"));
+	// 空回包（没有可路由提供方）不应崩，也不该造出任何分组
+	const SessionModelDirectory directory = ModelSelectionService::parseDirectory(parseObject(R"({ "routableProviders": [] })"));
 	QVERIFY(directory.groups.isEmpty());
 	QVERIFY(!directory.routable);
 	QVERIFY(!directory.current.isValid());
@@ -200,7 +211,7 @@ void TestModelSelection::currentLevelNullForUnknownEffort()
 void TestModelSelection::currentLevelNameIsEmptyWithoutMetadata()
 {
 	const SessionModelDirectory directory = ModelSelectionService::parseDirectory(parseObject(R"({
-		"current": { "provider": "p", "model": "m" },
+		"default": { "provider": "p", "model": "m" },
 		"groups": [ { "id": "p", "models": [ { "id": "m" } ] } ]
 	})"));
 
@@ -217,8 +228,8 @@ namespace
 {
 	// 一个不公布任何推理元数据的模型的会话目录（配一个公布档位的模型作对照）
 	const char* const kSparseLevelsJson = R"({
-		"current": { "provider": "p", "model": "m" },
-		"routable": true,
+		"default": { "provider": "p", "model": "m" },
+		"routableProviders": [ "p" ],
 		"groups": [
 			{
 				"id": "p",
@@ -387,7 +398,7 @@ namespace
 void TestModelSelection::providersParsed()
 {
 	const QVector<ConfigurableProvider> providers =
-		ModelSelectionService::parseProviders(parseObject(kProvidersJson));
+		parseProvidersJson(kProvidersJson);
 
 	QCOMPARE(providers.size(), 3);
 
@@ -409,9 +420,9 @@ void TestModelSelection::providersParsed()
 	QVERIFY(!providers.at(2).active);
 
 	// 缺 provider 的条目被丢弃
-	const QVector<ConfigurableProvider> sparse = ModelSelectionService::parseProviders(parseObject(R"({
+	const QVector<ConfigurableProvider> sparse = parseProvidersJson(R"({
 		"providers": [ { "displayName": "no id" }, { "provider": "ok" } ]
-	})"));
+	})");
 	QCOMPARE(sparse.size(), 1);
 	QCOMPARE(sparse.at(0).provider, QStringLiteral("ok"));
 }
@@ -476,7 +487,7 @@ void TestModelSelection::catalogGroupsAndFailuresParsed()
 void TestModelSelection::configuredModelsUseProfilePath()
 {
 	const QVector<ConfigurableProvider> providers =
-		ModelSelectionService::parseProviders(parseObject(kProvidersJson));
+		parseProvidersJson(kProvidersJson);
 	bool writable = false;
 	const QVector<SettingsNamespace> namespaces =
 		ModelSelectionService::parseNamespaces(parseObject(kNamespacesJson), &writable);
@@ -507,7 +518,7 @@ void TestModelSelection::configuredModelsUseProfilePath()
 void TestModelSelection::userDeclaresModelsDetectsUserLayerOnly()
 {
 	const QVector<ConfigurableProvider> providers =
-		ModelSelectionService::parseProviders(parseObject(kProvidersJson));
+		parseProvidersJson(kProvidersJson);
 	bool writable = false;
 	const QVector<SettingsNamespace> namespaces =
 		ModelSelectionService::parseNamespaces(parseObject(kNamespacesJson), &writable);
@@ -528,7 +539,7 @@ void TestModelSelection::userDeclaresModelsDetectsUserLayerOnly()
 void TestModelSelection::modelsForWritePrefersUserLayer()
 {
 	const QVector<ConfigurableProvider> providers =
-		ModelSelectionService::parseProviders(parseObject(kProvidersJson));
+		parseProvidersJson(kProvidersJson);
 	bool writable = false;
 	const QVector<SettingsNamespace> namespaces =
 		ModelSelectionService::parseNamespaces(parseObject(kNamespacesJson), &writable);
@@ -557,7 +568,7 @@ void TestModelSelection::modelsForWritePrefersUserLayer()
 void TestModelSelection::configuredModelFieldsParsed()
 {
 	const QVector<ConfigurableProvider> providers =
-		ModelSelectionService::parseProviders(parseObject(kProvidersJson));
+		parseProvidersJson(kProvidersJson);
 	bool writable = false;
 	const QVector<SettingsNamespace> namespaces =
 		ModelSelectionService::parseNamespaces(parseObject(kNamespacesJson), &writable);
@@ -613,7 +624,7 @@ namespace
 		view.groups = ModelSelectionService::parseCatalogGroups(parseObject(kCatalogJson));
 		view.failures = ModelSelectionService::parseFailures(
 			parseObject(kCatalogJson).value(QStringLiteral("failures")).toArray());
-		view.providers = ModelSelectionService::parseProviders(parseObject(kProvidersJson));
+		view.providers = parseProvidersJson(kProvidersJson);
 
 		bool writable = false;
 		view.namespaces = ModelSelectionService::parseNamespaces(parseObject(kNamespacesJson), &writable);
@@ -816,7 +827,7 @@ void TestModelSelection::keyRefDerivedFromRoute()
 void TestModelSelection::keyRefPrefersProfileApiKeyEnv()
 {
 	const QVector<ConfigurableProvider> providers =
-		ModelSelectionService::parseProviders(parseObject(kProvidersJson));
+		parseProvidersJson(kProvidersJson);
 	bool writable = false;
 	const QVector<SettingsNamespace> namespaces =
 		ModelSelectionService::parseNamespaces(parseObject(kNamespacesJson), &writable);
@@ -843,13 +854,11 @@ void TestModelSelection::keyRefPrefersProfileApiKeyEnv()
 
 void TestModelSelection::credentialStatusParsed()
 {
-	// 取自真实 credentials.describe 回包
+	// 取自真实 credentials/describe 回包（0.1.5：以引用名为键的直接映射，没有外层包装）
 	const QJsonObject value = parseObject(R"({
-		"credentials": {
-			"DEEPSEEK_API_KEY": { "configured": true, "source": "file", "writable": true },
-			"ANTHROPIC_API_KEY": { "configured": false, "writable": true },
-			"MANAGED_API_KEY": { "configured": true, "source": "env", "writable": false }
-		}
+		"DEEPSEEK_API_KEY": { "configured": true, "source": "file", "writable": true },
+		"ANTHROPIC_API_KEY": { "configured": false, "writable": true },
+		"MANAGED_API_KEY": { "configured": true, "source": "env", "writable": false }
 	})");
 
 	const CredentialStatus configured =

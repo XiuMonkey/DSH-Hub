@@ -45,7 +45,6 @@ DSH Hub/
 ├── resources/
 │   ├── icons/ images and QRC
 │   ├── highlight_rules.json    # Syntax highlighting rules
-│   ├── registry-snapshot.json  # Plugin market offline snapshot
 │   └── server/
 │       └── launch-root/
 │           └── FFmpegExt/      # Example FFmpeg extension package

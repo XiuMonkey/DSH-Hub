@@ -5,7 +5,7 @@
 // 按钮点击只发意图信号，动作在 common/WindowFrame.cpp 落地。
 //
 // 三个按钮是普通 QPushButton：形状/底色/悬停/按下/字形颜色全部由 QSS 决定
-// （resources/styles/base.qss 的 #windowMinButton / #windowMaxButton /
+// （resources/styles/main-window.qss 的 #windowMinButton / #windowMaxButton /
 // #windowCloseButton 规则），本文件只负责建控件、换字形（最大化 ↔ 还原）。
 // ------------------------------------------------------------------
 
@@ -89,7 +89,7 @@ TitleBar::TitleBar(QWidget* parent)
 	layout->addWidget(m_logoLabel, 0, Qt::AlignVCenter);
 	layout->addStretch(1);
 
-	// 右侧：最小化 / 最大化（还原）/ 关闭（外观见 base.qss）
+	// 右侧：最小化 / 最大化（还原）/ 关闭（外观见 main-window.qss）
 	m_minimizeButton = makeWindowButton(QStringLiteral("windowMinButton"),
 		minimizeGlyph(), tr("最小化"), this);
 	m_maximizeButton = makeWindowButton(QStringLiteral("windowMaxButton"),

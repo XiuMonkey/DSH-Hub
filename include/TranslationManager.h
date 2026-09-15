@@ -81,9 +81,6 @@ namespace Translation
 	// 可选语言：源语言（中文）在最前，其余按 .qm 出现情况列出
 	QVector<LanguageInfo> availableLanguages();
 
-	// 找一个可用语言的展示名；找不到回退成代码本身
-	QString displayNameFor(const QString& languageCode);
-
 	// 安装初始翻译。main() 里在 QApplication 之后、创建窗口之前调用。
 	void init();
 

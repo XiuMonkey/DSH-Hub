@@ -1,5 +1,7 @@
 #include "ModelSelector.h"
 
+#include <algorithm>
+
 #include "DshApiClient.h"
 #include "ThemeManager.h"
 
@@ -310,7 +312,7 @@ ModelSelector::ModelSelector(QWidget* parent)
 	: QPushButton(parent)
 {
 	setObjectName(QStringLiteral("modelSelectorChip"));
-	// 样式表按 #inputCapsule QPushButton#modelSelectorChip 给出，压过 base.qss 的通用按钮规则
+	// 样式表按 #inputCapsule QPushButton#modelSelectorChip 给出，压过 defaults.qss 的通用按钮规则
 	setCursor(Qt::PointingHandCursor);
 	setFixedHeight(kChipHeight);
 	setToolTip(tr("选择模型与思考深度"));
@@ -389,6 +391,10 @@ void ModelSelector::setSession(DshApiClient* api, const QString& sessionId)
 	m_api = api;
 	m_sessionId = sessionId;
 
+	// 会话换了：上一个会话的"会话级选择"作废，新会话的选择随后由 DSHHub 推入
+	m_hasSessionSelection = false;
+	m_sessionSelection = ModelSelection();
+
 	clearDirectory();
 
 	if (!m_api || m_sessionId.isEmpty())
@@ -415,7 +421,7 @@ void ModelSelector::refresh()
 		[self, sessionId](const DshApiClient::RpcError& error) {
 			if (!self || self->m_sessionId != sessionId)
 				return;
-			qWarning().noquote() << QStringLiteral("[ModelSelector] session.models failed:")
+			qWarning().noquote() << QStringLiteral("[ModelSelector] session/modelCatalog failed:")
 				<< error.code << error.message;
 			self->clearDirectory();
 		});
@@ -424,8 +430,49 @@ void ModelSelector::refresh()
 void ModelSelector::applyDirectory(const SessionModelDirectory& directory)
 {
 	m_directory = directory;
+
+	// 0.1.5：目录只给部署默认值，会话自己的选择优先（session/list 投影里的那条）。
+	// 只要该模型仍在目录里，就用它覆盖 current；刷新后仍然如此。
+	if (m_hasSessionSelection && !m_sessionSelection.provider.isEmpty()) {
+		const bool known = std::any_of(m_directory.groups.cbegin(), m_directory.groups.cend(),
+			[this](const ModelProviderGroup& group) {
+				if (group.id != m_sessionSelection.provider)
+					return false;
+				return std::any_of(group.models.cbegin(), group.models.cend(),
+					[this](const ModelOption& option) { return option.id == m_sessionSelection.model; });
+			});
+		if (known)
+			m_directory.current = m_sessionSelection;
+		else
+			qInfo().noquote() << QStringLiteral("[ModelSelector] session selection not in catalog, keeping default:")
+			<< m_sessionSelection.provider << m_sessionSelection.model;
+	}
+
 	m_hasDirectory = true;
 	updateChip();
+}
+
+void ModelSelector::overrideCurrentSelection(const QString& provider, const QString& model,
+	const QString& reasoningEffort)
+{
+	if (provider.isEmpty() || model.isEmpty()) {
+		// 服务端还没记录过该会话的选择：保持目录给的默认值
+		m_hasSessionSelection = false;
+		return;
+	}
+
+	m_sessionSelection.provider = provider;
+	m_sessionSelection.model = model;
+	m_sessionSelection.reasoningEffort = reasoningEffort;
+	m_hasSessionSelection = true;
+
+	if (m_hasDirectory) {
+		m_directory.current = m_sessionSelection;
+		updateChip();
+	}
+
+	qInfo().noquote() << QStringLiteral("[ModelSelector] session selection applied:")
+		<< provider << model << reasoningEffort;
 }
 
 void ModelSelector::clearDirectory()
@@ -576,7 +623,7 @@ void ModelSelector::openMenu()
 	m_chevron->setText(QStringLiteral("▾"));
 }
 
-// 换模型 / 换档位是同一套动作：乐观更新 chip -> 发 session.selectModel ->
+// 换模型 / 换档位是同一套动作：乐观更新 chip -> 发 session/selectModel ->
 // 以服务端回显为准；失败就回去拉一次目录（回到服务端事实）。
 // 差别只有两点，用参数区分：换模型后要重新拉目录（新模型可能带来别的档位集合），
 // 以及成功后发哪个信号。
@@ -585,6 +632,9 @@ void ModelSelector::submitSelection(const ModelSelection& selection, bool reload
 {
 	// 先乐观更新 chip，避免等待往返期间界面停在旧值
 	m_directory.current = selection;
+	// 用户的选择就是该会话的选择：记下来，后续目录刷新不会被部署默认值覆盖
+	m_sessionSelection = selection;
+	m_hasSessionSelection = true;
 	updateChip();
 
 	QPointer<ModelSelector> self(this);
@@ -605,7 +655,7 @@ void ModelSelector::submitSelection(const ModelSelection& selection, bool reload
 		[self, sessionId](const DshApiClient::RpcError& error) {
 			if (!self || self->m_sessionId != sessionId)
 				return;
-			qWarning().noquote() << QStringLiteral("[ModelSelector] session.selectModel failed:")
+			qWarning().noquote() << QStringLiteral("[ModelSelector] session/selectModel failed:")
 				<< error.code << error.message;
 			// 失败：回到服务端事实
 			self->refresh();

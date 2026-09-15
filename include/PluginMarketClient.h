@@ -31,7 +31,6 @@ public:
 	explicit PluginMarketClient(QObject* parent = nullptr);
 
 	void setBaseUrl(const QUrl& url);
-	QUrl baseUrl() const;
 
 	// 各接口路径（也用于让调用方识别失败来源）
 	static QString registryPath();
@@ -56,7 +55,6 @@ signals:
 
 	// 已安装列表拉取成功（name -> version）
 	void installedLoaded(const QJsonObject& installed);
-	void installedFailed(const QString& error, int status);
 
 	// POST 操作成功/失败；path 用于区分具体操作
 	void operationCompleted(const QString& path);
@@ -66,6 +64,8 @@ private:
 	void post(const QString& path, const QJsonObject& body);
 	// 诊断：拉取服务端 dshmarket 内存日志（5xx / 传输错误时自动触发）
 	void fetchDiagnosticLogs(const QString& reason);
+	// 由 baseUrl 只借 scheme/host/port 拼出接口地址（见实现里的说明）
+	QUrl endpointUrl(const QString& path) const;
 
 	QUrl m_baseUrl;
 	QNetworkAccessManager* m_nam = nullptr;

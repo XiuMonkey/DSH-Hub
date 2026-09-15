@@ -1,4 +1,5 @@
 #include "ExtensionLoader.h"
+#include "ExtensionRegistry.h"
 
 #include <QDebug>
 #include <QDir>
@@ -469,31 +470,14 @@ bool ExtensionLoader::installPlugin(const QString& pluginPath,
 		}
 	}
 
-	// Make sure cordis.patch.yml has an entry for the plugin.
-	const QString patchPath = profileDir.filePath(QStringLiteral("cordis.patch.yml"));
-	QFile patchFile(patchPath);
-	if (!patchFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-		m_errorString = QStringLiteral("cannot open cordis.patch.yml: %1").arg(patchPath);
+	// 确保 cordis.patch.yml 里有这个插件的行。行的格式与判重规则归
+	// ExtensionRegistry 所有（它同时负责解析这个文件做移除与残留清理），
+	// 这样"一行长什么样"只有一个地方定义。
+	if (ExtensionRegistry::ensurePatchEntry(serverProfilePath, out->pluginName, out->pluginName,
+		QString(), &m_errorString) == ExtensionRegistry::PatchEntryResult::Failed) {
 		if (error)
 			*error = m_errorString;
 		return false;
-	}
-
-	QString patchText = QString::fromUtf8(patchFile.readAll());
-	patchFile.close();
-
-	const QString marker = QStringLiteral("name: '%1'").arg(out->pluginName);
-	if (!patchText.contains(marker)) {
-		patchText += QStringLiteral("\n- insert:\n    - id: %1\n      name: '%1'\n").arg(out->pluginName);
-
-		if (!patchFile.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-			m_errorString = QStringLiteral("cannot write cordis.patch.yml: %1").arg(patchPath);
-			if (error)
-				*error = m_errorString;
-			return false;
-		}
-		patchFile.write(patchText.toUtf8());
-		patchFile.close();
 	}
 
 	return true;

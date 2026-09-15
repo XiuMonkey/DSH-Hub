@@ -1,4 +1,4 @@
-#include "SessionCatalog.h"
+		#include "SessionCatalog.h"
 
 #include <QCoreApplication>
 
@@ -29,13 +29,13 @@ void SessionCatalog::clear()
 
 void SessionCatalog::applySnapshot(const SessionListSnapshot& snapshot)
 {
-	// 归档集合只在 workspace.list 成功时更新（失败时沿用上一次的结果，
-	// 避免一次网络抖动把所有已删除会话又显示出来）
-	if (snapshot.workspacesOk)
+	// 0.1.5：工作区清单与归档集合来自 mux 上的 workspace/follow，不再随会话列表回来。
+	// 因此 workspacesOk=false 表示"本次没有任何工作区信息"，这时必须**保留**现有分组，
+	// 而不是清空——清空会把 workspace/follow 的基线抹掉。
+	if (snapshot.workspacesOk) {
 		setArchivedSessionIds(snapshot.archivedSessionIds);
-
-	// 工作区失败时用空列表，等价于“清掉旧分组”
-	setWorkspaces(snapshot.workspacesOk ? snapshot.workspaces : QJsonArray());
+		setWorkspaces(snapshot.workspaces);
+	}
 
 	if (snapshot.sessionsOk)
 		setSessions(snapshot.sessions);
@@ -86,6 +86,23 @@ void SessionCatalog::setSessions(const QJsonArray& items)
 		record.workspaceId = workspaceFor(sid);
 		record.running = session.value(QStringLiteral("running")).toBool();
 		record.archived = m_archivedSessionIds.contains(sid);
+
+		// 0.1.5：把两个会话级事实一起带进来（游标回落值 + 该会话的模型选择）
+		const QJsonObject projections = session.value(QStringLiteral("projections")).toObject();
+		record.asOfSeq = projections.value(QStringLiteral("asOfSeq")).toInt();
+
+		const QJsonObject values = projections.value(QStringLiteral("values")).toObject();
+		const QJsonObject selection = values.value(QStringLiteral("modelSelection")).toObject();
+		// next = 用户为下一轮选定的；没有再退回 lastUsed
+		QJsonObject chosen = selection.value(QStringLiteral("next")).toObject();
+		if (chosen.isEmpty())
+			chosen = selection.value(QStringLiteral("lastUsed")).toObject();
+		if (!chosen.isEmpty()) {
+			record.hasModelSelection = true;
+			record.modelProvider = chosen.value(QStringLiteral("provider")).toString();
+			record.modelId = chosen.value(QStringLiteral("model")).toString();
+			record.reasoningEffort = chosen.value(QStringLiteral("reasoningEffort")).toString();
+		}
 
 		m_sessions.append(record);
 	}
@@ -144,6 +161,29 @@ QString SessionCatalog::titleFor(const QString& sessionId) const
 	return QString();
 }
 
+int SessionCatalog::asOfSeqFor(const QString& sessionId) const
+{
+	if (const SessionRecord* record = find(sessionId))
+		return record->asOfSeq;
+	return 0;
+}
+
+bool SessionCatalog::modelSelectionFor(const QString& sessionId,
+	QString* provider, QString* model, QString* reasoningEffort) const
+{
+	const SessionRecord* record = find(sessionId);
+	if (!record || !record->hasModelSelection)
+		return false;
+
+	if (provider)
+		*provider = record->modelProvider;
+	if (model)
+		*model = record->modelId;
+	if (reasoningEffort)
+		*reasoningEffort = record->reasoningEffort;
+	return true;
+}
+
 QString SessionCatalog::workspaceFor(const QString& sessionId) const
 {
 	// 会话自身记录的归属优先：addSession / addSessionToWorkspace 会显式写入，
@@ -153,7 +193,7 @@ QString SessionCatalog::workspaceFor(const QString& sessionId) const
 			return record->workspaceId;
 	}
 
-	// 其次看 workspace.list 给出的 sessionIds 归属
+	// 其次看工作区记录（workspace/follow 的 baseline）给出的 sessionIds 归属
 	for (const WorkspaceRecord& workspace : m_workspaces) {
 		if (workspace.sessionIds.contains(sessionId))
 			return workspace.workspaceId;
@@ -184,18 +224,6 @@ QString SessionCatalog::autoSelectSessionId() const
 			return record.sessionId;
 	}
 	return QString();
-}
-
-QStringList SessionCatalog::prefetchSessionIds(const QString& excludeSessionId) const
-{
-	QStringList ids;
-	ids.reserve(m_sessions.size());
-	for (const SessionRecord& record : m_sessions) {
-		if (record.sessionId == excludeSessionId)
-			continue;
-		ids.append(record.sessionId);
-	}
-	return ids;
 }
 
 // ------------------------------------------------------------------

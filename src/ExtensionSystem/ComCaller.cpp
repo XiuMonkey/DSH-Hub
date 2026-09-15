@@ -7,14 +7,11 @@
 
 #include "ComCaller.h"
 
+#include <QCoreApplication>
 #include <QJsonArray>
-#include <QCoreApplication>
 #include <QJsonValue>
-#include <QCoreApplication>
 #include <QStringList>
-#include <QCoreApplication>
 #include <QVariant>
-#include <QCoreApplication>
 
 #ifndef NOMINMAX
 #define NOMINMAX

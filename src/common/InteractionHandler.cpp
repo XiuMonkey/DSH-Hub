@@ -3,31 +3,19 @@
 #include "DshApiClient.h"
 
 #include <QAbstractButton>
-#include <QCoreApplication>
 #include <QButtonGroup>
-#include <QCoreApplication>
 #include <QCheckBox>
 #include <QCoreApplication>
 #include <QFrame>
-#include <QCoreApplication>
 #include <QHBoxLayout>
-#include <QCoreApplication>
 #include <QJsonArray>
-#include <QCoreApplication>
 #include <QLabel>
-#include <QCoreApplication>
 #include <QLineEdit>
-#include <QCoreApplication>
 #include <QObject>
-#include <QCoreApplication>
 #include <QPushButton>
-#include <QCoreApplication>
 #include <QRadioButton>
-#include <QCoreApplication>
 #include <QVBoxLayout>
-#include <QCoreApplication>
 #include <QWidget>
-#include <QCoreApplication>
 
 namespace
 {

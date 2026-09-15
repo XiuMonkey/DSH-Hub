@@ -76,9 +76,6 @@ namespace Thunk
 		// 调用生成的 thunk。
 		void call(const Arg* args, void* result) const;
 
-		// 返回 thunk 入口地址（仅用于调试/测试）。
-		void* entry() const;
-
 		QString errorString() const;
 
 	private:

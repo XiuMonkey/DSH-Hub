@@ -2,41 +2,24 @@
 
 #include "DshApiClient.h"
 #include "SessionCommands.h"
-#include "SessionPrefetcher.h"
 #include "TimingLogger.h"
 
 #include <QDir>
 #include <QFile>
+#include <QHash>
 #include <QJsonObject>
 
 #include <memory>
 
 namespace
 {
-	const char* const kSessionListMethod = "session.list";
-	const char* const kWorkspaceListMethod = "workspace.list";
-	const char* const kSessionCreateMethod = "session.create";
-
-	// 每个可见会话预取的历史条数
-	constexpr int kPrefetchMessageCount = 20;
-
-	// 刷新过程中的累积状态：两个 RPC 都回来后统一应用
-	struct RefreshState
-	{
-		SessionListSnapshot snapshot;
-		bool workspacesDone = false;
-		bool sessionsDone = false;
-	};
-
-	bool isComplete(const RefreshState& state)
-	{
-		return state.workspacesDone && state.sessionsDone;
-	}
+	// dsh 0.1.5：endpoint 用斜杠；session/list 的 wire 名是 _request
+	const char* const kSessionListMethod = "session/list";
+	const char* const kSessionCreateMethod = "session/create";
 }
 
 void SessionService::refreshSessions(
 	DshApiClient* api,
-	SessionPrefetcher* prefetcher,
 	SessionCatalog* catalog,
 	const std::function<void(const QString& autoSelectSessionId)>& onReady,
 	const std::function<void(const DshApiClient::RpcError& error)>& onError)
@@ -44,69 +27,43 @@ void SessionService::refreshSessions(
 	if (!api || !catalog)
 		return;
 
-	// workspace.list 与 session.list 互不依赖：并行发出，两个都返回后再统一
-	// 应用（保证 archived/workspace 状态先就位，再处理会话列表与自动选中），
-	// 省掉原先一次串行 RPC 往返。
-	auto state = std::make_shared<RefreshState>();
+	auto state = std::make_shared<SessionListSnapshot>();
 
-	auto applyWhenBothDone = [api, prefetcher, catalog, state, onReady, onError]() {
-		if (!isComplete(*state))
-			return;
+	auto applySnapshot = [api, catalog, state, onReady, onError]() {
+		catalog->applySnapshot(*state);
 
-		catalog->applySnapshot(state->snapshot);
-
-		if (!state->snapshot.sessionsOk) {
+		if (!state->sessionsOk) {
 			if (onError)
-				onError(DshApiClient::RpcError{ state->snapshot.errorCode, state->snapshot.errorMessage, {} });
+				onError(DshApiClient::RpcError{ state->errorCode, state->errorMessage, {} });
 			return;
 		}
 
-		// 先确定会被自动选中的会话（第一个非 running 会话）：
-		// 它马上要由 HistoryLoader 拉全量历史，预取同一份历史只会
-		// 让服务端多建一次视图、客户端多一次重复渲染，直接跳过。
 		const QString autoSelectId = catalog->autoSelectSessionId();
 
-		if (prefetcher) {
-			for (const QString& sid : catalog->prefetchSessionIds(autoSelectId))
-				prefetcher->prefetchHistory(api->baseUrl(), sid, kPrefetchMessageCount);
-		}
-
-		TimingLogger::mark(QStringLiteral("session.list loaded (%1 items) + prefetch scheduled")
-			.arg(state->snapshot.sessions.size()));
+		TimingLogger::mark(QStringLiteral("session/list loaded (%1 items)")
+			.arg(state->sessions.size()));
 
 		if (onReady)
 			onReady(autoSelectId);
 		};
 
 	api->callMethod(
-		QLatin1String(kWorkspaceListMethod),
-		{},
-		[state, applyWhenBothDone](const QJsonObject& value) {
-			state->snapshot.workspacesOk = true;
-			state->snapshot.archivedSessionIds = SessionCatalog::parseArchivedSessionIds(value);
-			state->snapshot.workspaces = value.value(QStringLiteral("items")).toArray();
-			state->workspacesDone = true;
-			applyWhenBothDone();
-		},
-		[state, applyWhenBothDone](const DshApiClient::RpcError&) {
-			state->workspacesDone = true;
-			applyWhenBothDone();
-		});
-
-	api->callMethod(
 		QLatin1String(kSessionListMethod),
-		{},
-		[state, applyWhenBothDone](const QJsonObject& value) {
-			state->snapshot.sessions = value.value(QStringLiteral("items")).toArray();
-			state->snapshot.sessionsOk = true;
-			state->sessionsDone = true;
-			applyWhenBothDone();
+		SessionCommands::sessionList(),
+		[state, applySnapshot](const QJsonObject& value) {
+			const QJsonArray items = value.value(QStringLiteral("items")).toArray();
+			state->sessions = items;
+			state->sessionsOk = true;
+			// 0.1.5：session/list 里没有工作区信息（workspace.list 已删除），
+			// workspacesOk 保持 false 让 catalog 保留 workspace/follow 给的基线分组。
+			state->workspacesOk = false;
+			applySnapshot();
 		},
-		[state, applyWhenBothDone](const DshApiClient::RpcError& error) {
-			state->snapshot.errorCode = error.code;
-			state->snapshot.errorMessage = error.message;
-			state->sessionsDone = true;
-			applyWhenBothDone();
+		[state, applySnapshot](const DshApiClient::RpcError& error) {
+			state->errorCode = error.code;
+			state->errorMessage = error.message;
+			state->sessionsOk = false;
+			applySnapshot();
 		});
 }
 
@@ -144,7 +101,7 @@ void SessionService::refreshTitles(
 
 	api->callMethod(
 		QLatin1String(kSessionListMethod),
-		{},
+		SessionCommands::sessionList(),
 		[onTitle](const QJsonObject& value) {
 			const QJsonArray items = value.value(QStringLiteral("items")).toArray();
 			for (const auto& item : items) {
