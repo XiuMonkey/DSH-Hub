@@ -273,7 +273,7 @@ AttachedPlugin/
 
 ## 9. 调试与常见问题
 
-日志关键字（见 `x64/Debug/log.txt`）：
+日志关键字（见 `x64/Debug/logs/`，按模块分目录，如 `logs/session/info.log`、`logs/extension/error.log`，模块内再按级别分为 `debug.log` / `info.log` / `warn.log` / `error.log` / `fatal.log`）：
 
 - `[DllCaller] descriptor loaded / library loaded / tool call succeeded / unknown tool …`
 - `[DSH Pipe] request / response`

@@ -2,7 +2,7 @@
 
 #include "DshApiClient.h"
 #include "SessionCommands.h"
-#include "TimingLogger.h"
+#include "Logger.h"
 
 #include <QDir>
 #include <QFile>

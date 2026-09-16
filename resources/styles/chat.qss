@@ -264,7 +264,7 @@
 #chatScrollContent QPushButton#loadMoreButton {
     border: 1px solid {{inputBorder}};
     background: {{panelBg}};
-    color: {{accent}};
+    color: {{textSecondary}};
     border-radius: 15px;
     padding: 6px 18px;
     font-size: 13px;
@@ -273,7 +273,7 @@
    避免 defaults.qss 通用 QPushButton:hover 把底色换成 buttonHover */
 #chatScrollContent QPushButton#loadMoreButton:hover {
     background: {{panelBg}};
-    color: {{accentHover}};
+    color: {{textPrimary}};
 }
 
 /* ===== CodeBlockView.cpp（路线2：气泡内独立代码块控件） =====
@@ -355,11 +355,11 @@
     background: transparent;
 }
 #interactionPanel QCheckBox::indicator:hover {
-    border-color: {{accent}};
+    border-color: {{textSecondary}};
 }
 #interactionPanel QCheckBox::indicator:checked {
-    border-color: {{accent}};
-    background: {{accent}};
+    border-color: {{textSecondary}};
+    background: {{textSecondary}};
 }
 #interactionPanel QLineEdit {
     background: {{inputBg}};

@@ -1,7 +1,6 @@
 #include "DSHHub.h"
 #include "Logger.h"
 #include "ThemeManager.h"
-#include "TimingLogger.h"
 #include "TranslationManager.h"
 
 #include <QCoreApplication>

@@ -5,7 +5,7 @@
 #include "ToolRequestDispatcher.h"
 #include "ChatInputWidget.h"
 #include "Sidebar.h"
-#include "TimingLogger.h"
+#include "Logger.h"
 
 #include "DshApiClient.h"
 #include "MessageHost.h"

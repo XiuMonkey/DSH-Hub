@@ -168,6 +168,12 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/unit_test/TestSessionCatalog.cpp"
 		"${DSHHUB_ROOT}/unit_test/TestPluginMarketModel.cpp"
 		"${DSHHUB_ROOT}/unit_test/TestModelSelection.cpp"
+		"${DSHHUB_ROOT}/unit_test/TestDshApiClient.cpp"
+		"${DSHHUB_ROOT}/unit_test/TestSessionPrefetcher.cpp"
+		"${DSHHUB_ROOT}/unit_test/TestSettingsStore.cpp"
+		"${DSHHUB_ROOT}/unit_test/TestLogger.cpp"
+		"${DSHHUB_ROOT}/unit_test/TestTranslationManager.cpp"
+		"${DSHHUB_ROOT}/unit_test/TestServerManager.cpp"
 		"${DSHHUB_ROOT}/src/ExtensionSystem/Thunk.cpp"
 		"${DSHHUB_ROOT}/src/ExtensionSystem/DllCaller.cpp"
 		"${DSHHUB_ROOT}/src/ExtensionSystem/ComCaller.cpp"
@@ -175,7 +181,15 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/src/common/CodeHighlighter.cpp"
 		"${DSHHUB_ROOT}/src/common/MarkdownPreprocess.cpp"
 		"${DSHHUB_ROOT}/src/common/SessionCatalog.cpp"
-		"${DSHHUB_ROOT}/src/common/PluginMarketModel.cpp")
+		"${DSHHUB_ROOT}/src/common/PluginMarketModel.cpp"
+		"${DSHHUB_ROOT}/src/network/DshApiClient.cpp"
+		"${DSHHUB_ROOT}/src/network/SessionPrefetcher.cpp"
+		"${DSHHUB_ROOT}/src/common/SettingsStore.cpp"
+		"${DSHHUB_ROOT}/src/common/Logger.cpp"
+		"${DSHHUB_ROOT}/src/common/TranslationManager.cpp"
+		"${DSHHUB_ROOT}/src/ui/TranslationUi.cpp"
+		"${DSHHUB_ROOT}/src/core/ServerManager.cpp"
+		"${DSHHUB_ROOT}/src/common/ExtensionRegistry.cpp")
 
 	# 测试类头文件带 Q_OBJECT，交给 AUTOMOC
 	file(GLOB DSHHUB_TEST_HEADERS CONFIGURE_DEPENDS "${DSHHUB_ROOT}/unit_test/*.h")
@@ -194,7 +208,10 @@ if(DSHHUB_BUILD_TESTS)
 	target_link_libraries(dshhub_tests PRIVATE
 		Qt6::Core
 		Qt6::Gui
-		Qt6::Test)
+		Qt6::Widgets
+		Qt6::Test
+		Qt6::Network
+		Qt6::WebSockets)
 
 	# WORKING_DIRECTORY 必须指到仓库根：用例里读的是「相对当前目录」的路径
 	# （TestThunk 读 unit_test/test_signature.json 与 resources/server/launch-root/...），

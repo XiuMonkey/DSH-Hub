@@ -1120,7 +1120,7 @@ void HistoryLoader::continueBuild()
 	// 观感上像卡死（"纯白 + 干等"）。宁可让遮罩多留这一会儿。
 	emit firstHistoryArrived();
 	emit incrementalBuildReady(query);
-	emit loadMoreButtonVisibleChanged(true);
+	emit loadMoreButtonVisibleChanged(m_history ? m_history->hasMore() : false);
 }
 
 void HistoryLoader::applyPendingAnchor()

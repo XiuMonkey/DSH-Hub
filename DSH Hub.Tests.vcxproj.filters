@@ -23,10 +23,70 @@
     <ClCompile Include="unit_test\TestHistoryManager.cpp">
       <Filter>Test Files</Filter>
     </ClCompile>
+    <ClCompile Include="unit_test\TestMarkdownPreprocess.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestThunk.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestSessionCatalog.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestPluginMarketModel.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestModelSelection.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestDshApiClient.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestSessionPrefetcher.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestSettingsStore.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestLogger.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestTranslationManager.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
+    <ClCompile Include="unit_test\TestServerManager.cpp">
+      <Filter>Test Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\network\DshEventParser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\common\CodeHighlighter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\MarkdownPreprocess.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\SessionCatalog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\PluginMarketModel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\network\DshApiClient.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\network\SessionPrefetcher.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\SettingsStore.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\Logger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\TranslationManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\core\ServerManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -38,6 +98,39 @@
       <Filter>Test Files</Filter>
     </QtMoc>
     <QtMoc Include="unit_test\TestHistoryManager.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestMarkdownPreprocess.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestThunk.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestSessionCatalog.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestPluginMarketModel.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestModelSelection.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestDshApiClient.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestSessionPrefetcher.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestSettingsStore.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestLogger.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestTranslationManager.h">
+      <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="unit_test\TestServerManager.h">
       <Filter>Test Files</Filter>
     </QtMoc>
   </ItemGroup>

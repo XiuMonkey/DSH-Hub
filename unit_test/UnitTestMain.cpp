@@ -21,6 +21,12 @@
 #include "TestPluginMarketModel.h"
 #include "TestSessionCatalog.h"
 #include "TestThunk.h"
+#include "TestDshApiClient.h"
+#include "TestSessionPrefetcher.h"
+#include "TestSettingsStore.h"
+#include "TestLogger.h"
+#include "TestTranslationManager.h"
+#include "TestServerManager.h"
 
 namespace
 {
@@ -95,6 +101,36 @@ int main(int argc, char* argv[])
 	{
 		TestModelSelection test;
 		runClass(&test, "TestModelSelection");
+	}
+
+	{
+		TestDshApiClient test;
+		runClass(&test, "TestDshApiClient");
+	}
+
+	{
+		TestSessionPrefetcher test;
+		runClass(&test, "TestSessionPrefetcher");
+	}
+
+	{
+		TestSettingsStore test;
+		runClass(&test, "TestSettingsStore");
+	}
+
+	{
+		TestLogger test;
+		runClass(&test, "TestLogger");
+	}
+
+	{
+		TestTranslationManager test;
+		runClass(&test, "TestTranslationManager");
+	}
+
+	{
+		TestServerManager test;
+		runClass(&test, "TestServerManager");
 	}
 
 	return status;

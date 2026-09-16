@@ -37,12 +37,12 @@
   </ImportGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
     <QtInstall>6.11.2_msvc2022_64</QtInstall>
-    <QtModules>core;gui;testlib</QtModules>
+    <QtModules>core;gui;widgets;testlib;network;websockets</QtModules>
     <QtBuildConfig>debug</QtBuildConfig>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
     <QtInstall>6.11.2_msvc2022_64</QtInstall>
-    <QtModules>core;gui;testlib</QtModules>
+    <QtModules>core;gui;widgets;testlib;network;websockets</QtModules>
     <QtBuildConfig>release</QtBuildConfig>
   </PropertyGroup>
   <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
@@ -106,6 +106,12 @@
     <ClCompile Include="unit_test\TestSessionCatalog.cpp" />
     <ClCompile Include="unit_test\TestPluginMarketModel.cpp" />
     <ClCompile Include="unit_test\TestModelSelection.cpp" />
+    <ClCompile Include="unit_test\TestDshApiClient.cpp" />
+    <ClCompile Include="unit_test\TestSessionPrefetcher.cpp" />
+    <ClCompile Include="unit_test\TestSettingsStore.cpp" />
+    <ClCompile Include="unit_test\TestLogger.cpp" />
+    <ClCompile Include="unit_test\TestTranslationManager.cpp" />
+    <ClCompile Include="unit_test\TestServerManager.cpp" />
     <ClCompile Include="src\ExtensionSystem\Thunk.cpp" />
     <ClCompile Include="src\ExtensionSystem\DllCaller.cpp" />
     <ClCompile Include="src\ExtensionSystem\ComCaller.cpp" />
@@ -114,6 +120,14 @@
     <ClCompile Include="src\common\MarkdownPreprocess.cpp" />
     <ClCompile Include="src\common\SessionCatalog.cpp" />
     <ClCompile Include="src\common\PluginMarketModel.cpp" />
+    <ClCompile Include="src\network\DshApiClient.cpp" />
+    <ClCompile Include="src\network\SessionPrefetcher.cpp" />
+    <ClCompile Include="src\common\SettingsStore.cpp" />
+    <ClCompile Include="src\common\Logger.cpp" />
+    <ClCompile Include="src\common\TranslationManager.cpp" />
+    <ClCompile Include="src\ui\TranslationUi.cpp" />
+    <ClCompile Include="src\core\ServerManager.cpp" />
+    <ClCompile Include="src\common\ExtensionRegistry.cpp" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="unit_test\TestDshEventParser.h" />
@@ -124,11 +138,22 @@
     <QtMoc Include="unit_test\TestSessionCatalog.h" />
     <QtMoc Include="unit_test\TestPluginMarketModel.h" />
     <QtMoc Include="unit_test\TestModelSelection.h" />
+    <QtMoc Include="unit_test\TestDshApiClient.h" />
+    <QtMoc Include="unit_test\TestSessionPrefetcher.h" />
+    <QtMoc Include="unit_test\TestSettingsStore.h" />
+    <QtMoc Include="unit_test\TestLogger.h" />
+    <QtMoc Include="unit_test\TestTranslationManager.h" />
+    <QtMoc Include="unit_test\TestServerManager.h" />
+    <QtMoc Include="include\DshApiClient.h" />
+    <QtMoc Include="include\ServerManager.h" />
+    <QtMoc Include="include\SessionPrefetcher.h" />
+    <QtMoc Include="include\TranslationManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\Thunk.h" />
     <ClInclude Include="include\DllCaller.h" />
     <ClInclude Include="include\ComCaller.h" />
+    <ClInclude Include="include\ExtensionRegistry.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
