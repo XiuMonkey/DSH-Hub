@@ -26,6 +26,7 @@
 #include <functional>
 #include <vector>
 
+class QScrollArea;
 class QVBoxLayout;
 class QEnterEvent;
 class QEvent;
@@ -262,6 +263,8 @@ signals:
 	void sessionCreateError(const QString& code, const QString& message);
 
 private:
+	// 会话列表的滚动容器：列表内容再长也只滚动，不参与撑高侧栏
+	QScrollArea* m_workspaceScroll = nullptr;
 	WorkspaceList* m_workspaceList = nullptr;
 	SidebarLogo* m_logo = nullptr;
 	ClearSessionButton* m_clearButton = nullptr;

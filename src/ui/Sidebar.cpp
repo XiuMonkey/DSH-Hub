@@ -8,6 +8,7 @@
 #include <QDialog>
 #include <QEvent>
 #include <QFontMetrics>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
@@ -15,9 +16,18 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QResizeEvent>
+#include <QScrollArea>
 #include <QSize>
 #include <QSizePolicy>
 #include <QVBoxLayout>
+
+namespace
+{
+	// 会话列表滚动区的最小高度：只是让布局在极端情况下不至于把这块压没。
+	// 正常情况下它占满侧栏的剩余空间，装得下就不出滚动条，装不下才滚动 ——
+	// 关键在于它**不随会话数量增长**，所以会话再多也顶不高侧栏和窗口。
+	constexpr int kMinWorkspaceListHeight = 120;
+}
 
 // ------------------------------------------------------------------
 // SidebarLogo
@@ -515,11 +525,28 @@ Sidebar::Sidebar(QWidget* parent)
 	m_logo = new SidebarLogo(this);
 	m_clearButton = new ClearSessionButton(this);
 	m_newWorkspaceButton = new NewWorkspaceButton(this);
-	m_workspaceList = new WorkspaceList(this);
 	m_settingsButton = new SidebarSettingsButton(this);
 	m_pluginsButton = new SidebarPluginsButton(this);
 	m_themeButton = new SidebarThemeButton(this);
 	m_extensionButton = new SidebarExtensionButton(this);
+
+	// 会话列表（工作区分组 + 会话按钮）放进滚动区：会话/工作区多了以后列表内容
+	// 只是变长，滚动条出现，侧栏高度不变。以前它直接挂在侧栏布局里，内容多高
+	// 就把侧栏的最小高度顶多高，进而把整个窗口撑高（底部图标行还会被挤出可视区）。
+	// 滚动条外观来自 scrollbars.qss 的全局规则，这里不需要写任何滚动条样式。
+	m_workspaceScroll = new QScrollArea(this);
+	m_workspaceScroll->setObjectName(QStringLiteral("workspaceScrollArea"));
+	m_workspaceScroll->setFrameShape(QFrame::NoFrame);
+	m_workspaceScroll->setWidgetResizable(true);
+	m_workspaceScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_workspaceScroll->setMinimumHeight(kMinWorkspaceListHeight);
+	// 滚动条是 QAbstractScrollArea 基类构造时建的，那时 objectName 还没设，
+	// 规则会被缓存成"匹配不到"；设完名字后重新解析一次
+	// （见 Theme::repolishScrollArea 的注释）。
+	Theme::repolishScrollArea(m_workspaceScroll);
+
+	m_workspaceList = new WorkspaceList(m_workspaceScroll);
+	m_workspaceScroll->setWidget(m_workspaceList);
 
 	m_layout = new QVBoxLayout(this);
 	m_layout->setContentsMargins(10, 10, 10, 10);
@@ -527,7 +554,7 @@ Sidebar::Sidebar(QWidget* parent)
 	m_layout->addWidget(m_logo, 0, Qt::AlignHCenter);
 	m_layout->addWidget(m_clearButton);
 	m_layout->addWidget(m_newWorkspaceButton);
-	m_layout->addWidget(m_workspaceList, 1);
+	m_layout->addWidget(m_workspaceScroll, 1);
 
 	auto* bottomRow = new QHBoxLayout;
 	bottomRow->setContentsMargins(0, 0, 0, 0);

@@ -108,6 +108,15 @@ QPushButton#workspaceButton:hover {
     background: {{panelBg}};
     border-radius: 12px;
 }
+/* 会话列表的滚动区：只负责滚动，不画自己的底色/边框，侧栏底色透出来。
+ * 滚动条外观来自 scrollbars.qss 的全局规则（不要在这里再抄一份）。 */
+#workspaceScrollArea {
+    background: transparent;
+    border: none;
+}
+#workspaceScrollArea > QWidget > QWidget {
+    background: transparent;
+}
 #workspaceList {
     background: transparent;
 }
