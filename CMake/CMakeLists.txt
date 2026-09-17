@@ -194,9 +194,27 @@ if(DSHHUB_BUILD_TESTS)
 	# 测试类头文件带 Q_OBJECT，交给 AUTOMOC
 	file(GLOB DSHHUB_TEST_HEADERS CONFIGURE_DEPENDS "${DSHHUB_ROOT}/unit_test/*.h")
 
+	# include/ 下的头也要交给 AUTOMOC，但**只列测试目标真正编译了 .cpp 的那些**。
+	#
+	# 为什么需要：AUTOMOC 只扫描「出现在 target 源文件列表里」的头文件，而这些被测
+	# 源码的 Q_OBJECT 都在 include/ 里、.cpp 又在 src/ 下，不满足「同名同目录」的
+	# 自动推断 —— 漏掉它们 moc 不会生成，链接期报一串 metaObject / qt_metacast /
+	# staticMetaObject 无法解析。.vcxproj 侧由 Qt VS Tools 处理，所以那边一直是好的。
+	#
+	# 注意别图省事写成 include/*.h：那会把 DSHHub / ChatInputWidget 等**没有编进
+	# 测试目标**的类的 moc 也生成出来，反而引入新的未解析符号（moc 会引用它们的
+	# 构造函数与槽）。清单必须与上面 DSHHUB_TEST_SOURCES 里那几个带 Q_OBJECT 的
+	# 类一一对应。
+	set(DSHHUB_TEST_PUBLIC_HEADERS
+		"${DSHHUB_ROOT}/include/DshApiClient.h"
+		"${DSHHUB_ROOT}/include/SessionPrefetcher.h"
+		"${DSHHUB_ROOT}/include/TranslationManager.h"
+		"${DSHHUB_ROOT}/include/ServerManager.h")
+
 	qt_add_executable(dshhub_tests
 		${DSHHUB_TEST_SOURCES}
-		${DSHHUB_TEST_HEADERS})
+		${DSHHUB_TEST_HEADERS}
+		${DSHHUB_TEST_PUBLIC_HEADERS})
 
 	set_target_properties(dshhub_tests PROPERTIES
 		OUTPUT_NAME "DSH Hub.Tests")

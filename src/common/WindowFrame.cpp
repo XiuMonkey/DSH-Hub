@@ -8,7 +8,10 @@
 #include "WindowFrame.h"
 
 #include <QByteArray>
+#include <QHash>
 #include <QLayout>
+#include <QPointer>
+#include <QSet>
 #include <QStyle>
 #include <QWidget>
 
@@ -95,6 +98,46 @@ namespace
 		Q_UNUSED(pos);
 #endif
 		return HTCLIENT;
+	}
+
+	// --- 半透明遮罩的登记表（见 WindowFrame.h 的 showOverlay/hideOverlay）---
+	// 每个宿主窗口一条：遮罩控件 + 当前在用它的调用方。
+	// 宿主窗口正常情况下只有一个，所以这份表实际只有一项。
+	const char kScrimObjectName[] = "windowScrim";
+
+	struct OverlayState
+	{
+		// 遮罩是宿主的子控件，宿主析构时由 Qt 一起删掉；这里只留弱引用
+		QPointer<QWidget> widget;
+		QSet<const void*> owners;   // 谁在用（按调用方 this 记名）
+	};
+
+	QHash<const QWidget*, OverlayState>& overlayStates()
+	{
+		static QHash<const QWidget*, OverlayState> states;
+		return states;
+	}
+
+	// 取（必要时创建）宿主的遮罩控件；host 为空时返回 nullptr
+	QWidget* ensureOverlayWidget(QWidget* host)
+	{
+		if (!host)
+			return nullptr;
+
+		OverlayState& state = overlayStates()[host];
+		if (state.widget)
+			return state.widget;
+
+		auto* scrim = new QWidget(host);
+		scrim->setObjectName(QLatin1String(kScrimObjectName));
+		scrim->setAttribute(Qt::WA_StyledBackground, true);
+		state.widget = scrim;
+
+		// 宿主销毁时把登记项收掉（遮罩控件本身随宿主一起销毁，这里不要碰它）。
+		// 连接挂在 sender 上，宿主没了连接自然断掉。
+		QObject::connect(host, &QObject::destroyed, [host]() { overlayStates().remove(host); });
+
+		return scrim;
 	}
 }
 
@@ -272,6 +315,71 @@ namespace WindowFrame
 			area.setTop(belowBar.y());
 		}
 		return area;
+	}
+
+	void showOverlay(QWidget* host, const void* owner)
+	{
+		if (!owner)
+			return;
+
+		QWidget* scrim = ensureOverlayWidget(host);
+		if (!scrim)
+			return;
+
+		OverlayState& state = overlayStates()[host];
+		state.owners.insert(owner);
+		if (scrim->isVisible())
+			return;   // 已经有弹窗开着，这一层就是那层，不重复铺
+
+		const QRect area = overlayRect(host);
+		scrim->setGeometry(area);
+		scrim->raise();
+		scrim->show();
+
+		// 同步重绘一次：让遮罩在弹窗 show() 之前就落到屏幕上（理由见头文件）
+		host->repaint(area);
+	}
+
+	void hideOverlay(QWidget* host, const void* owner)
+	{
+		if (!host || !owner)
+			return;
+
+		// 只认领过 showOverlay 的宿主：没登记过就没有遮罩要收
+		auto it = overlayStates().find(host);
+		if (it == overlayStates().end())
+			return;
+
+		it.value().owners.remove(owner);
+		if (!it.value().owners.isEmpty())
+			return;   // 还有别的弹窗开着，遮罩得继续留着
+
+		QWidget* scrim = it.value().widget;
+		if (!scrim || !scrim->isVisible())
+			return;
+
+		const QRect area = overlayRect(host);
+		scrim->hide();
+
+		// 同步重绘一次：把遮罩立刻从屏幕上擦掉，和紧接着的"隐藏弹窗"落在同一帧
+		// （理由见头文件）。所以调用方必须先收遮罩、再隐藏弹窗。
+		host->repaint(area);
+	}
+
+	void syncOverlay(QWidget* host)
+	{
+		if (!host)
+			return;
+
+		auto it = overlayStates().find(host);
+		if (it == overlayStates().end() || !it.value().widget)
+			return;
+
+		QWidget* scrim = it.value().widget;
+		if (!scrim->isVisible())
+			return;   // 没显示就不用跟着 resize
+
+		scrim->setGeometry(overlayRect(host));
 	}
 
 	void minimize(QWidget* window)

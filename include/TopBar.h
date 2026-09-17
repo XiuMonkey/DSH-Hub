@@ -102,7 +102,8 @@ public:
 	void setSessionId(const QString& sessionId);
 	// 服务端地址用回调现取（它会随启动/重启变化，回调省掉排序问题）
 	void setBaseUrlProvider(std::function<QUrl()> provider);
-	// 窗口缩放或移动后：遮罩铺满 + 打开的窗口重新居中（DSHHub 统一调）
+	// 窗口缩放或移动后：遮罩（全窗口共用那一层）重新铺满 + 工具过滤窗口重新居中
+	// （DSHHub 统一调）
 	void syncOverlayToHost();
 
 protected:
@@ -121,7 +122,6 @@ private:
 	QString m_title;
 
 	QPushButton* m_toolsButton = nullptr;
-	QWidget* m_toolsOverlay = nullptr;      // 灰色遮罩（本类自管，常驻复用）
 	ToolsFilterPopup* m_toolsPopup = nullptr;
 	ToolsFilter* m_filter = nullptr;        // 功能半
 	std::function<QUrl()> m_baseUrlProvider;

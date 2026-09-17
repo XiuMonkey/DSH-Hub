@@ -1,6 +1,7 @@
 #include "ThemeManager.h"
 
 #include "DSHHub.h"
+#include "ShadowPanel.h"
 #include "SpinnerWidget.h"
 
 #include <QAbstractScrollArea>
@@ -558,15 +559,25 @@ namespace Theme
 		// 而不是等 setMode（重建 + 全应用重设样式表，较耗时）做完才显示。
 		auto* popup = new QWidget(nullptr, Qt::FramelessWindowHint | Qt::Dialog);
 		popup->setAttribute(Qt::WA_TranslucentBackground);
-		popup->setFixedSize(360, 200);
+
+		// 卡片外面套阴影外壳（浮层最高一档），整窗尺寸里要把它算进去
+		const CardShadow::Spec cardShadow = CardShadow::level3();
+		const QMargins cardPad = CardShadow::padding(cardShadow);
 
 		auto* outerLayout = new QVBoxLayout(popup);
-		outerLayout->setContentsMargins(1, 1, 1, 1);
+		outerLayout->setContentsMargins(0, 0, 0, 0);
 
 		auto* body = new QWidget(popup);
 		body->setObjectName(QStringLiteral("themeSwitchBody"));
 		body->setAttribute(Qt::WA_StyledBackground, true);
-		outerLayout->addWidget(body);
+
+		auto* bodyPanel = new ShadowPanel(QStringLiteral("shadowFloat"), cardShadow, popup);
+		bodyPanel->setRadius(20); // 与 #themeSwitchBody 的 QSS 圆角一致
+		bodyPanel->setCard(body);
+		body->setFixedSize(360, 200);
+		outerLayout->addWidget(bodyPanel);
+		popup->setFixedSize(360 + cardPad.left() + cardPad.right(),
+			200 + cardPad.top() + cardPad.bottom());
 
 		auto* layout = new QVBoxLayout(body);
 		layout->setContentsMargins(24, 20, 24, 20);

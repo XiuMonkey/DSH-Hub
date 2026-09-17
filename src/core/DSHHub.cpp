@@ -28,7 +28,6 @@
 #include "MessageQuery.h"
 
 #include <QCoreApplication>
-#include <QEventLoop>
 #include <QMoveEvent>
 #include <QShowEvent>
 
@@ -404,8 +403,7 @@ void DSHHub::resizeEvent(QResizeEvent* event)
 
 	if (m_pluginsManager)
 		m_pluginsManager->syncOverlayToHost();
-	if (m_extensionOverlay)
-		m_extensionOverlay->setGeometry(WindowFrame::overlayRect(this));
+	WindowFrame::syncOverlay(this);   // 扩展管理弹窗的遮罩
 
 	// 宿主缩放后把打开的弹窗重新居
 	keepOpenPopupsCentered();
@@ -1025,17 +1023,10 @@ void DSHHub::openExtensions()
 	if (m_extensionPopup)
 		return;
 
-	// 遮罩常驻复用：只在首次创建，关闭后仅隐藏，避免每次开关重建全窗半透明控件
-	if (!m_extensionOverlay) {
-		m_extensionOverlay = new QWidget(this);
-		m_extensionOverlay->setObjectName(QStringLiteral("extensionOverlay"));
-		m_extensionOverlay->setAttribute(Qt::WA_StyledBackground, true);
-	}
-	m_extensionOverlay->setGeometry(WindowFrame::overlayRect(this));
-	m_extensionOverlay->raise();
-	m_extensionOverlay->show();
-	// 强制先让遮罩画出来（否则与下方弹窗同一帧才呈现，观感像弹窗先出、遮罩延迟）
-	QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+	// 遮罩：本窗口上那唯一一层半透明控件（铺满内容区、不含自绘标题栏，否则
+	// 窗口按钮会被一起盖住点不动）。showOverlay() 里带一次同步重绘，所以
+	// 下面直接 show() 弹窗就行，不会再出现"弹窗先出、遮罩后到"。
+	WindowFrame::showOverlay(this, this);
 
 	m_extensionPopup = new ExtensionManagerPopup(m_serverManager->dshHome() + QStringLiteral("/profiles/web"), this);
 	m_extensionPopup->move(geometry().center() - m_extensionPopup->rect().center());
@@ -1063,9 +1054,9 @@ void DSHHub::openExtensions()
 			m_cleanupResidualsAfterServerError = true;
 		});
 	connect(m_extensionPopup, &PopupWindow::closed, this, [this]() {
-		// 遮罩常驻复用：只隐藏，不销
-		if (m_extensionOverlay)
-			m_extensionOverlay->hide();
+		// 先收遮罩、再销毁弹窗：收遮罩那一步会同步重绘一次本窗口，两件事
+		// 落在同一帧上（理由见 WindowFrame.h 的 showOverlay/hideOverlay）。
+		WindowFrame::hideOverlay(this, this);
 		if (m_extensionPopup) {
 			m_extensionPopup->deleteLater();
 			m_extensionPopup = nullptr;
@@ -1176,11 +1167,10 @@ void DSHHub::applySessionProjections(const QString& sessionId, int asOfSeq, cons
 		merged.insert(QStringLiteral("tokenUsage"), m_tokenUsageBlock);
 
 	const SessionUsageStats stats = parseSessionUsage(merged);
-	if (stats.isEmpty()) {
-		m_chatInput->clearSessionStats();
-		return;
-	}
 
+	// 全 0（新会话、或投影还没送出任何事件）也照样交给控件：
+	// 控件那条小灰字是"始终显示"的，全 0 时显示 0 轮 · 0 步 | 输入 0 tok · 输出 0 tok，
+	// 而不是把整行藏掉（见 SessionStatsLine::formatStats 的说明）。
 	qInfo().noquote() << "[DSH Hub] session stats applied: turns=" << stats.turns
 		<< "steps=" << stats.steps << "llmMs=" << stats.llmMs << "toolMs=" << stats.toolMs
 		<< "ttftSteps=" << stats.ttftSteps << "hasUsage=" << stats.hasUsage

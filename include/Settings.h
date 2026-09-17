@@ -39,9 +39,10 @@ class ModelListPanel;
 // 打开/关闭窗口统一走 openSettings() / closeSettings()：
 //   - 主窗口只保留少量调用（例如把侧边栏的 settingsRequested
 //     信号直接连到 openSettings()），不再在 DSHHub 里管理遮罩成员；
-//   - 遮罩是 Settings 自己创建的子控件，随宿主窗口 resize 时通过
-//     syncOverlayToHost() 保持铺满（由主窗口 resizeEvent 调用）；
-//   - 右上角关闭按钮 / ESC 关闭时也会自动清理遮罩（PopupWindow
+//   - 遮罩是窗口级的（settings/插件/扩展管理/工具过滤共用同一层，由
+//     WindowFrame::showOverlay/hideOverlay 持有）：打开时申请、关闭时归还，
+//     宿主窗口 resize 时通过 syncOverlayToHost() 保持铺满（由主窗口 resizeEvent 调用）；
+//   - 右上角关闭按钮 / ESC 关闭时也会自动归还遮罩（PopupWindow
 //     的 closed 信号 -> closeSettings()）。
 // ------------------------------------------------------------------
 class Settings : public PopupWindow
@@ -56,7 +57,7 @@ public:
 	// 打开设置窗口（幂等：已打开则直接返回；每次打开前刷新数据）
 	void openSettings();
 
-	// 关闭设置窗口并清理遮罩（幂等）
+	// 关闭设置窗口并归还遮罩（幂等）
 	void closeSettings();
 
 	// 宿主窗口 resize 后调用，让遮罩重新铺满宿主（未打开时为空操作）
@@ -83,7 +84,6 @@ private:
 
 	DshApiClient* m_api = nullptr;
 	QWidget* m_host = nullptr;            // 宿主主窗口（遮罩/居中定位）
-	QWidget* m_overlay = nullptr;         // 本系统自管的灰色遮罩
 	QLineEdit* m_serverUrlEdit = nullptr;
 	ModelListPanel* m_modelList = nullptr;
 	QPushButton* m_agentPresetButton = nullptr;

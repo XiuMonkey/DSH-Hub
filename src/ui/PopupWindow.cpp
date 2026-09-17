@@ -1,4 +1,5 @@
 #include "PopupWindow.h"
+#include "ShadowPanel.h"
 #include "ThemeManager.h"
 
 #include <QCloseEvent>
@@ -21,9 +22,17 @@ PopupWindow::PopupWindow(QWidget* parent)
 	body->setObjectName(QStringLiteral("popupBody"));
 	body->setAttribute(Qt::WA_StyledBackground, true);
 
+	// 弹窗外面套阴影外壳：弹窗是"浮起来的"一层，用最高一档阴影（lv3）。
+	// 外壳透明，只在四周留白里画阴影 —— 原来的 1px 边距（outerLayout）撑不下，
+	// 所以整窗尺寸会随留白一起变大，主体本身尺寸不变。
+	auto* bodyPanel = new ShadowPanel(QStringLiteral("shadowFloat"),
+		CardShadow::level3(), this);
+	bodyPanel->setRadius(16); // 与 #popupBody 的 QSS 圆角一致
+	bodyPanel->setCard(body);
+
 	auto* outerLayout = new QVBoxLayout(this);
-	outerLayout->setContentsMargins(1, 1, 1, 1);
-	outerLayout->addWidget(body);
+	outerLayout->setContentsMargins(0, 0, 0, 0);
+	outerLayout->addWidget(bodyPanel);
 
 	m_mainLayout = new QVBoxLayout(body);
 	m_mainLayout->setContentsMargins(20, 16, 20, 20);

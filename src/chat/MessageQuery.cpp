@@ -3,6 +3,7 @@
 #include "DshEventParser.h"
 #include "DshApiClient.h"
 #include "CacheHistoryManager.h"
+#include "ShadowPanel.h"
 
 #include <QClipboard>
 #include <QCoreApplication>
@@ -21,6 +22,16 @@
 
 namespace
 {
+	// 消息气泡的阴影档位（悬浮感，见 ShadowPanel.h）。
+	//
+	// 比主面板还轻：气泡在滚动列表里逐条出现，而外壳的上下留白会直接变成
+	// 消息之间的额外间距 —— 扩散给大了聊天节奏会被明显撑开。
+	// 想调整"气泡浮起多少 / 消息之间隔多远"，改这两个数就够了。
+	const CardShadow::Spec kMessageShadow = { 6, 1, 12 };
+
+	// 与 #agentBubble / #userUnit 的 QSS 圆角保持一致，阴影形状才贴合气泡
+	constexpr int kMessageRadius = 12;
+
 	// 历史日志里混有大量"流式输出分片"类事件（reasoning-chunks、
 	// assistant/chunk、text-chunks、tool-call-chunks、step/* 等）——
 	// 它们只是服务端记录的增量产物，渲染时永远不会被用到（历史回放只认
@@ -152,7 +163,13 @@ UserMessageUnit* MessageQuery::addUserMessage(const QString& text, QVBoxLayout* 
 	box->setContentsMargins(0, 0, 0, 0);
 	box->setSpacing(2);
 
-	box->addWidget(unit, 0, Qt::AlignRight);
+	// 气泡外面套阴影外壳（悬浮感）。复制按钮留在外壳**之外**，
+	// 否则阴影会把"气泡 + 复制按钮"整块当成一张卡片包起来。
+	auto* bubbleShadow = new ShadowPanel(QStringLiteral("shadow"), kMessageShadow, container);
+	bubbleShadow->setRadius(kMessageRadius);
+	bubbleShadow->setCard(unit);
+
+	box->addWidget(bubbleShadow, 0, Qt::AlignRight);
 
 	box->addWidget(makeCopyButton(unit), 0, Qt::AlignRight);
 
@@ -197,17 +214,30 @@ AgentMessageUnit* MessageQuery::addAgentMessage(const QString& markdown, QVBoxLa
 	unit->appendMarkdownWithCodeShadow(markdown);
 
 	// 整个容器作为白色圆角气泡，工具调用也会显示在气泡内部
-	auto* container = new QWidget;
-	container->setObjectName(QStringLiteral("agentBubble"));
-	container->setAttribute(Qt::WA_StyledBackground, true);
+	auto* bubble = new QWidget;
+	bubble->setObjectName(QStringLiteral("agentBubble"));
+	bubble->setAttribute(Qt::WA_StyledBackground, true);
 	// 气泡容器外观见 resources/styles/chat.qss（#agentBubble）
-	auto* box = new QVBoxLayout(container);
+	auto* box = new QVBoxLayout(bubble);
 	box->setContentsMargins(8, 8, 8, 8);
 	box->setSpacing(2);
 
 	box->addWidget(unit, 0, Qt::AlignLeft);
 
-	box->addWidget(makeCopyButton(unit), 0, Qt::AlignLeft);
+	// 气泡外面套阴影外壳（悬浮感）：外壳只画阴影，复制按钮放在外壳之外，
+	// 免得被一起包进阴影轮廓里。layout 里挂的是最外层的 container。
+	auto* bubbleShadow = new ShadowPanel(QStringLiteral("shadow"), kMessageShadow);
+	bubbleShadow->setRadius(kMessageRadius);
+	bubbleShadow->setCard(bubble);
+
+	auto* container = new QWidget;
+	auto* outerBox = new QVBoxLayout(container);
+	outerBox->setContentsMargins(0, 0, 0, 0);
+	outerBox->setSpacing(2);
+
+	outerBox->addWidget(bubbleShadow, 0, Qt::AlignLeft);
+
+	outerBox->addWidget(makeCopyButton(unit), 0, Qt::AlignLeft);
 
 	layout->addWidget(container, 0, Qt::AlignLeft);
 	messages.push_back(MessageUnit{ 1, unit, nullptr, nullptr, container });

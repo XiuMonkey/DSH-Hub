@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "DshApiClient.h"
+#include "ShadowPanel.h"
 #include "ThemeManager.h"
 
 #include <QDebug>
@@ -28,6 +29,15 @@ namespace
 	// 清单再矮也得有这么高（否则一两项时菜单会缩成一条）
 	constexpr int kMenuMinListHeight = 120;
 	constexpr int kChipHeight = 28;
+	// 菜单本体的圆角（= #modelSelectorMenu 的 QSS 圆角），阴影形状要跟着它
+	constexpr int kMenuRadius = 12;
+	// 菜单的阴影档位：浮层用最高一档
+	inline CardShadow::Spec menuShadowSpec()
+	{
+		CardShadow::Spec spec = CardShadow::level3();
+		spec.radius = kMenuRadius;
+		return spec;
+	}
 }
 
 // ------------------------------------------------------------------
@@ -145,7 +155,14 @@ public:
 		body->setObjectName(QStringLiteral("modelSelectorMenu"));
 		body->setAttribute(Qt::WA_StyledBackground, true);
 		body->setFixedWidth(kMenuWidth);
-		outer->addWidget(body);
+
+		// 上拉菜单是浮层：套一层阴影外壳（lv3）。留白会让整个弹窗比菜单本体大一圈，
+		// 菜单本体的宽度不变（body 仍是 setFixedWidth(kMenuWidth)）。
+		auto* bodyPanel = new ShadowPanel(QStringLiteral("shadowFloat"),
+			menuShadowSpec(), this);
+		bodyPanel->setRadius(kMenuRadius); // 与 #modelSelectorMenu 的 QSS 圆角一致
+		bodyPanel->setCard(body);
+		outer->addWidget(bodyPanel);
 
 		auto* layout = new QVBoxLayout(body);
 		layout->setContentsMargins(6, 6, 6, 6);
@@ -595,25 +612,33 @@ void ModelSelector::openMenu()
 		// 取更宽敞的一侧：菜单最终会落到那一侧
 		maxListHeight = qMax(above, below) - kMenuBodyChrome;
 	}
+	// 阴影外壳也占地方，可用高度里先扣掉它，否则菜单本体虽放得下、整窗却顶到屏幕外
+	const QMargins menuShadowPad = CardShadow::padding(menuShadowSpec());
+	maxListHeight -= menuShadowPad.top() + menuShadowPad.bottom();
 
 	buildMenu(maxListHeight);
 	// 弹窗尺寸按算出来的高度直接设定：滚动区高度刚改过，
 	// 靠 adjustSize() 可能还拿着旧的 sizeHint，那样下面定位会用错高度。
-	m_menu->setFixedSize(m_menu->menuWidth(), m_menu->menuHeight());
+	// 注意 = 菜单本体尺寸 + 阴影留白（menuWidth()/menuHeight() 给的是本体）。
+	m_menu->setFixedSize(m_menu->menuWidth() + menuShadowPad.left() + menuShadowPad.right(),
+		m_menu->menuHeight() + menuShadowPad.top() + menuShadowPad.bottom());
 
-	// 上拉：菜单底边贴在 chip 上方 kMenuGap 处
-	const QPoint above = mapToGlobal(QPoint(0, -m_menu->height() - kMenuGap));
+	// 上拉：菜单**本体**的底边贴在 chip 上方 kMenuGap 处。
+	// 整窗比本体大一圈（那圈是阴影留白），所以定位时要把留白补回来，
+	// 否则菜单会离 chip 远出留白那么多，看起来"浮得没道理"。
+	const QPoint above = mapToGlobal(QPoint(-menuShadowPad.left(),
+		-m_menu->height() - kMenuGap + menuShadowPad.bottom()));
 	QPoint pos = above;
 
 	if (screen) {
 		const QRect available = screen->availableGeometry();
 		// 水平越界就右对齐 chip，仍越界则夹到屏幕内
 		if (pos.x() + m_menu->width() > available.right())
-			pos.setX(mapToGlobal(QPoint(width(), 0)).x() - m_menu->width());
+			pos.setX(mapToGlobal(QPoint(width(), 0)).x() - m_menu->width() + menuShadowPad.right());
 		pos.setX(qBound(available.left(), pos.x(), qMax(available.left(), available.right() - m_menu->width())));
-		// 上方放不下时改到下方展开
+		// 上方放不下时改到下方展开（同样要把阴影上留白补回来）
 		if (pos.y() < available.top())
-			pos.setY(mapToGlobal(QPoint(0, height() + kMenuGap)).y());
+			pos.setY(mapToGlobal(QPoint(0, height() + kMenuGap)).y() - menuShadowPad.top());
 	}
 
 	m_menu->move(pos);

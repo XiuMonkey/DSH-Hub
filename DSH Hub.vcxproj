@@ -162,6 +162,8 @@
     <ClCompile Include="src\ui\PopupWindow.cpp" />
     <ClCompile Include="src\ui\Settings.cpp" />
     <ClCompile Include="src\common\ThemeManager.cpp" />
+    <ClCompile Include="src\common\CardShadow.cpp" />
+    <ClCompile Include="src\ui\ShadowPanel.cpp" />
     <ClCompile Include="src\common\Logger.cpp" />
     <ClCompile Include="src\ui\PluginsManager.cpp" />
     <ClCompile Include="src\ui\ExtensionManagerPopup.cpp" />
@@ -197,6 +199,7 @@
     <QtMoc Include="include\PluginMarketInstaller.h" />
     <QtMoc Include="include\ModelSelector.h" />
     <QtMoc Include="include\ModelListPanel.h" />
+    <QtMoc Include="include\ShadowPanel.h" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="include\UserMessageUnit.h" />
@@ -211,6 +214,7 @@
     <ClInclude Include="include\InteractionHandler.h" />
     <ClInclude Include="include\CacheHistoryManager.h" />
     <ClInclude Include="include\ThemeManager.h" />
+    <ClInclude Include="include\CardShadow.h" />
     <ClInclude Include="include\TopBarTools.h" />
     <ClInclude Include="include\WindowFrame.h" />
     <ClInclude Include="include\Logger.h" />

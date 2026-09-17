@@ -3,48 +3,79 @@
 #include "ThemeManager.h"
 #include "WindowFrame.h"
 
-#include <QCoreApplication>
 #include <QDebug>
 #include <QEvent>
-#include <QEventLoop>
 #include <QHBoxLayout>
-#include <QIcon>
 #include <QLabel>
 #include <QListWidget>
 #include <QPainter>
-#include <QPixmap>
 #include <QPushButton>
-#include <QSize>
 #include <QUrl>
 #include <QVBoxLayout>
 
 #include <utility>
 
+#include <cmath>
+
 namespace
 {
-	// 顶栏按钮图标：三根递减的横线（"过滤"），颜色取自当前主题 ——
-	// 主题切换会重建主窗口，所以这里不必做动态换色。
-	QIcon makeFilterIcon()
+	// 顶栏右侧的"工具过滤"按钮：图标是三条递减的胶囊，直接在 paintEvent 里画。
+	//
+	// 为什么不用 QIcon + QPixmap 位图（原来的写法）：
+	//   1) 位图得按 devicePixelRatio 预生成。只给 20×20、DPR=1 的位图，在 125%/150%
+	//      缩放的显示器上会被 Qt 放大 → 整条线发虚（本项目的 Logo 是按 @2x 处理的，
+	//      图标这里漏了）；
+	//   2) 更要紧的是它在**不缩放**时也不锐：QPen 宽 1.8、圆心落在整数 y=6/10/14 上，
+	//      描边覆盖 [5.1, 6.9]，横跨第 5、6 两行各 91% —— 实测整张图标**一个满覆盖
+	//      像素都没有**（最大 alpha 232/255），所以看着发灰、不干净。
+	// 直接矢量画、并把几何对齐到设备像素（实心胶囊、整高、整数坐标）就没有这两个问题：
+	// 实测满覆盖像素 0 → 44，最大 alpha 232 → 255，线正好落在整行像素上。
+	//
+	// 颜色每次绘制现取 Theme::textSecondary()，不缓存 —— 主题是重建窗口切换的，
+	// 这样连"忘了跟着换色"的机会都没有。
+	class ToolsFilterButton : public QPushButton
 	{
-		constexpr int kSize = 20;
-		QPixmap pixmap(kSize, kSize);
-		pixmap.fill(Qt::transparent);
+	public:
+		explicit ToolsFilterButton(QWidget* parent = nullptr)
+			: QPushButton(parent)
+		{
+			setObjectName(QStringLiteral("topBarToolsButton"));
+			setFixedSize(32, 32);
+			setCursor(Qt::PointingHandCursor);
+		}
 
-		QPainter painter(&pixmap);
-		painter.setRenderHint(QPainter::Antialiasing, true);
-		// 注意括号形式：QPen pen(QColor(Theme::textSecondary())) 会被解析成函数声明
-		const QColor iconColor(Theme::textSecondary());
-		QPen pen(iconColor);
-		pen.setWidthF(1.8);
-		pen.setCapStyle(Qt::RoundCap);
-		painter.setPen(pen);
-		painter.drawLine(QPointF(3.0, 6.0), QPointF(17.0, 6.0));
-		painter.drawLine(QPointF(5.5, 10.0), QPointF(14.5, 10.0));
-		painter.drawLine(QPointF(8.0, 14.0), QPointF(12.0, 14.0));
-		painter.end();
+	protected:
+		void paintEvent(QPaintEvent* event) override
+		{
+			// 先让 QSS 画底（透明 / hover / pressed），再把图标叠上去
+			QPushButton::paintEvent(event);
 
-		return QIcon(pixmap);
-	}
+			const qreal dpr = devicePixelRatioF() > 0.0 ? devicePixelRatioF() : 1.0;
+			// 20×20 的设计栅格换算到设备像素后取整：每条线的上下边都落在像素边界上，
+			// 不用靠抗锯齿"猜"，也就不会发灰。
+			const auto dev = [dpr](qreal value) { return std::round(value * dpr); };
+
+			QPainter painter(this);
+			painter.setRenderHint(QPainter::Antialiasing, true); // 只有胶囊两端的圆头需要
+			painter.setPen(Qt::NoPen);
+			painter.setBrush(QColor(Theme::textSecondary()));
+			// 之后 1 单位 = 1 设备像素
+			painter.scale(1.0 / dpr, 1.0 / dpr);
+
+			const qreal grid = dev(20.0);
+			const qreal originX = std::round((width() * dpr - grid) / 2.0);
+			const qreal originY = std::round((height() * dpr - grid) / 2.0);
+
+			const auto bar = [&](qreal x1, qreal x2, qreal y) {
+				const QRectF rect(originX + dev(x1), originY + dev(y),
+					dev(x2) - dev(x1), dev(2.0));
+				painter.drawRoundedRect(rect, rect.height() / 2.0, rect.height() / 2.0);
+				};
+			bar(3.0, 17.0, 6.0);   // 最宽：14
+			bar(5.0, 15.0, 10.0);  // 中：10
+			bar(8.0, 12.0, 14.0);  // 最窄：4（三根都以 x=10 居中）
+		}
+	};
 
 	// 列表项里存的角色：行号（勾选变化时按下标回写模型）
 	constexpr int kRowIndexRole = Qt::UserRole + 1;
@@ -296,13 +327,11 @@ TopBar::TopBar(QWidget* parent)
 	layout->addWidget(m_titleLabel);
 	layout->addStretch();
 
-	// 工具栏右侧：工具过滤入口
-	m_toolsButton = new QPushButton(this);
-	m_toolsButton->setObjectName(QStringLiteral("topBarToolsButton"));
-	m_toolsButton->setFixedSize(32, 32);
-	m_toolsButton->setCursor(Qt::PointingHandCursor);
-	m_toolsButton->setIcon(makeFilterIcon());
-	m_toolsButton->setIconSize(QSize(20, 20));
+	// 工具栏右侧：工具过滤入口。
+	// 图标在 ToolsFilterButton::paintEvent 里矢量绘制（清晰度与 devicePixelRatio
+	// 的处理见该类的注释），所以这里不设 icon/iconSize —— objectName 与 QSS 规则
+	// 由该类自己在构造里设好。
+	m_toolsButton = new ToolsFilterButton(this);
 	layout->addWidget(m_toolsButton);
 
 	connect(m_toolsButton, &QPushButton::clicked, this, &TopBar::openToolsFilter);
@@ -393,18 +422,10 @@ void TopBar::openToolsFilter()
 	if (m_toolsPopup && m_toolsPopup->isVisible())
 		return;
 
-	// 遮罩：宿主主窗口的子控件，铺满内容区并盖住主界面
-	// （不含自绘标题栏，否则窗口按钮会被一起盖住点不动）
-	if (!m_toolsOverlay) {
-		m_toolsOverlay = new QWidget(host);
-		m_toolsOverlay->setObjectName(QStringLiteral("toolsFilterOverlay"));
-		m_toolsOverlay->setAttribute(Qt::WA_StyledBackground, true);
-	}
-	m_toolsOverlay->setGeometry(WindowFrame::overlayRect(host));
-	m_toolsOverlay->raise();
-	m_toolsOverlay->show();
-	// 先让遮罩画出来（否则与弹窗同一帧才呈现，观感像弹窗先出、遮罩延迟）
-	QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+	// 遮罩：宿主主窗口上那唯一一层半透明控件（铺满内容区、不含自绘标题栏，
+	// 否则窗口按钮会被一起盖住点不动）。showOverlay() 里带一次同步重绘，
+	// 所以下面直接 show() 弹窗就行，不会再出现"弹窗先出、遮罩后到"。
+	WindowFrame::showOverlay(host, this);
 
 	if (!m_toolsPopup) {
 		m_toolsPopup = new ToolsFilterPopup(host);
@@ -424,8 +445,10 @@ void TopBar::openToolsFilter()
 
 void TopBar::closeToolsFilter()
 {
-	if (m_toolsOverlay)
-		m_toolsOverlay->hide();
+	// 先收遮罩、再隐藏弹窗：收遮罩那一步会同步重绘一次主窗口，两件事落在
+	// 同一帧上。反过来（或让遮罩等下一帧重绘）观感就是"弹窗没了、遮罩还留一拍"。
+	if (QWidget* host = window())
+		WindowFrame::hideOverlay(host, this);
 	if (m_toolsPopup)
 		m_toolsPopup->hide();
 }
@@ -436,8 +459,7 @@ void TopBar::syncOverlayToHost()
 	if (!host)
 		return;
 
-	if (m_toolsOverlay && m_toolsOverlay->isVisible())
-		m_toolsOverlay->setGeometry(WindowFrame::overlayRect(host));
+	WindowFrame::syncOverlay(host);
 	if (m_toolsPopup && m_toolsPopup->isVisible())
 		m_toolsPopup->move(host->geometry().center() - m_toolsPopup->rect().center());
 }

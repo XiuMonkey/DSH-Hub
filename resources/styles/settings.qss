@@ -134,15 +134,6 @@ QPushButton#settingsStylesResetButton {
 }
 
 /* ===== Settings.cpp ===== */
-/* m_overlay（打开设置窗口时的半透明遮罩，宿主子控件）
- * 原代码裸写 rgba(128,128,128,0.65)，与色板 overlayBg 完全一致（浅/深主题同值），
- * 参照 popups.qss 的 #initOverlay/#pluginsOverlay/#extensionOverlay 统一并入该 token。 */
-#settingsOverlay {
-    background-color: {{overlayBg}};
-    /* 只盖内容区：底角跟随无边框主窗口的圆角，顶角是标题栏下沿、保持直角 */
-    border-top-left-radius: 0px;
-    border-top-right-radius: 0px;
-    border-bottom-left-radius: 12px;
-    border-bottom-right-radius: 12px;
-}
+/* 设置窗口的半透明遮罩不再是"设置自己那份"：它和插件/扩展/工具过滤共用
+ * WindowFrame 持有的窗口级那一层，规则在 popups.qss 的 #windowScrim。 */
 

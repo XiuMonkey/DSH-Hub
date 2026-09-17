@@ -193,7 +193,7 @@ private:
 	MessageHost* m_messageHost = nullptr;
 	Settings* m_settings = nullptr;          // 常驻“设置系统”（自管窗口开关）
 	PluginsManager* m_pluginsManager = nullptr;  // 常驻“插件系统”（自管窗口开关）
-	QWidget* m_extensionOverlay = nullptr;
+	// 扩展管理弹窗（遮罩不用单独记：它用的是窗口级那一层，见 WindowFrame.h）
 	ExtensionManagerPopup* m_extensionPopup = nullptr;
 
 	bool m_initializationComplete = false;

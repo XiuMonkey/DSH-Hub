@@ -9,6 +9,7 @@
 
 #include "ChatInputWidget.h"
 #include "LoadMoreButton.h"
+#include "ShadowPanel.h"
 #include "Sidebar.h"
 #include "SpinnerWidget.h"
 #include "ThemeManager.h"
@@ -43,6 +44,17 @@ namespace
 	constexpr int kMinConversationColumnWidth = 320;
 	// 自绘标题栏高度：窗口高度里要把它算进去，内容区才不会比改造前矮一截
 	constexpr int kTitleBarHeight = TitleBar::kHeight;
+	// 内容块四周的留白（下面 bodyRow 用）。
+	// 它是"窗口内缘 -> 内容块"的距离；侧栏卡片离窗口左缘的距离 =
+	// 这个值 + 侧栏阴影外壳的左留白，两者一起决定观感。
+	constexpr int kContentSideInset = 9;
+	// 侧栏阴影规格：比输入卡片那一档收窄（原版那套 12px 模糊的阴影如果照搬到
+	// 贴着窗口边框的常驻侧栏上，留白会明显挤窄会话列）。
+	// 数值单独写在这里，是为了能只调侧栏而不牵动消息气泡。
+	const CardShadow::Spec kSidebarShadow = { 8, 2, 12 };
+	// 会话列与侧栏阴影外壳之间的空隙。阴影本身已经带来一圈留白
+	// （见 CardShadow::padding），这里只补 2px 让阴影右侧有落脚处。
+	constexpr int kPanelGap = 2;
 }
 
 void DSHHub::buildUi()
@@ -62,10 +74,25 @@ void DSHHub::buildUi()
 	const int windowHeight = qBound(480, kPreferredWindowHeight + kTitleBarHeight,
 		available.height() - 2 * kWindowMargin);
 
-	// 内容居中于窗口内，同样各留 kWindowMargin
-	const int contentWidth = qMax(kSidebarWidth + kMinConversationColumnWidth,
-		windowWidth - 2 * kWindowMargin);
-	const int columnWidth = qMax(kMinConversationColumnWidth, contentWidth - kSidebarWidth);
+	// 窗口内宽：这是"留给内容的总宽"，改造前会话列就是从这里扣掉侧栏本体得到的。
+	const int windowInner = windowWidth - 2 * kWindowMargin;
+
+	// 会话列宽**只从窗口内宽里扣侧栏本体**，不扣阴影留白 ——
+	// 阴影留白属于"装饰"，让窗口自己的留白去承担；一旦从会话列里扣，
+	// 输入卡片与消息列会整体变窄、并且离窗口左右边框更远（一眼就看得出来）。
+	const int columnWidth = qMax(kMinConversationColumnWidth, windowInner - kSidebarWidth);
+
+	// 侧栏外面套了阴影外壳（见 ShadowPanel），外壳比侧栏本体宽一圈，
+	// 所以内容块 = 侧栏外壳 + 空隙 + 会话列，比 windowInner 宽出阴影那部分。
+	// 多出来的宽度从窗口留白里出（下面 bodyRow 的边距只有十几像素，
+	// 而窗口四周的 kWindowMargin 是 24px，够放）。
+	const QMargins sidebarShadowPad = CardShadow::padding(kSidebarShadow);
+	const int sidebarOuterWidth = kSidebarWidth + sidebarShadowPad.left() + sidebarShadowPad.right();
+
+	// 但内容块本身不能超出 bodyRow 给得出的宽度，否则会被裁掉。
+	// bodyRow 左右各留 kContentSideInset，即窗口内可用宽度 = windowWidth - 2*inset。
+	const int contentWidth = qMin(sidebarOuterWidth + kPanelGap + columnWidth,
+		windowWidth - 2 * kContentSideInset);
 
 	auto* central = new QWidget(this);
 	central->setObjectName(QStringLiteral("dshhubCentral"));
@@ -99,7 +126,9 @@ void DSHHub::buildUi()
 	scrollContent->setObjectName(QStringLiteral("chatScrollContent"));
 	scrollContent->setAttribute(Qt::WA_StyledBackground, true);
 	auto* scrollLayout = new QVBoxLayout(scrollContent);
-	scrollLayout->setContentsMargins(10, 0, 0, 0);
+	// 左侧 4px：消息外面套了阴影外壳（见 MessageQuery 的 kMessageShadow），
+	// 外壳自带 6px 左留白，4 + 6 = 原来那 10px，消息的左边缘位置不变。
+	scrollLayout->setContentsMargins(4, 0, 0, 0);
 	scrollLayout->setAlignment(Qt::AlignTop);
 
 	m_messagesLayout = scrollLayout;
@@ -133,9 +162,14 @@ void DSHHub::buildUi()
 	panelLayout->setContentsMargins(0, 0, 0, 0);
 	panelLayout->setSpacing(0);
 
-	// 左侧灰色会话列表
+	// 左侧灰色会话列表。
+	// 外面套一层阴影外壳给它"悬浮"的观感：外壳自己透明，只在四周留白里画阴影，
+	// #sidebar 的 QSS 背景/圆角/会话按钮样式一条都不用改（见 ShadowPanel.h）。
 	m_sidebar = new Sidebar(central);
 	m_sidebar->setFixedWidth(kSidebarWidth);
+	auto* sidebarShadow = new ShadowPanel(QStringLiteral("shadow"), kSidebarShadow, central);
+	sidebarShadow->setRadius(12); // 与 #sidebar 的 QSS 圆角一致，阴影形状才对得上
+	sidebarShadow->setCard(m_sidebar);
 
 	// 消息区左右各留 16px
 	auto* scrollRow = new QHBoxLayout;
@@ -147,25 +181,27 @@ void DSHHub::buildUi()
 
 	// 输入卡片与消息内容左右对齐（同一份 16px 留白）。
 	//
-	// 上下留白里那 14px 是给卡片下方"会话统计小灰字"的
-	// （行高固定 = ChatInputWidget 的 SessionStatsLine::kHeight）：
-	//   改造前： 8 + 卡片 + 8
-	//   现在：   2 + 卡片 + 14(小灰字) + 0
-	// 总高不变（消息区大小不受影响）。
+	// 卡片外面套了阴影外壳（ChatInputWidget::shadowSpec()），外壳本身要吃掉
+	// 四周一圈留白，所以这里的边距 = 原边距 - 外壳留白：
+	// 卡片左右边缘因此仍在原来的位置上，阴影落在被让出来的那圈里。
 	//
-	// 输入区是"贴着面板底边"摆的，所以底部留白决定整块的高度位置：
-	// 底部 2 -> 0 让"卡片 + 小灰字"整块下沉 2px，窗口底边留白
-	// （下面 bodyRow 的 kContentBottomInset 9 -> 7）再下沉 2px，合计 4px。
-	constexpr int kInputTopClearance = 2;
-	constexpr int kInputBottomClearance = 0;
-	static_assert(kInputTopClearance + SessionStatsLine::kHeight + kInputBottomClearance == 8 + 8,
-		"输入区总高必须与改造前一致：改 SessionStatsLine::kHeight 时要同步这三个数");
+	// 纵向：外壳的上下留白是新的高度来源，多出来的部分由消息区让出
+	// （panelLayout 里消息区是 stretch=1，输入区按 sizeHint 贴底）。
+	const QMargins inputShadowPad = CardShadow::padding(ChatInputWidget::shadowSpec());
+	const int kInputTopClearance = 0;
+	// 底部留白 = 侧栏阴影外壳的下留白。
+	// 这样"卡片下方那行小灰字"的底边正好与侧栏卡片的底边齐平
+	// （侧栏卡片底边 = 内容区底边 - 它的外壳下留白；小灰字底边 = 内容区底边 -
+	//   这里的下留白。两者相等就平行了）。
+	// 从 kSidebarShadow 推出来而不是写死数字：改侧栏阴影档位时对齐不会失效。
+	const int kInputBottomClearance = CardShadow::padding(kSidebarShadow).bottom();
 
 	auto* inputLayout = new QHBoxLayout;
 	inputLayout->addWidget(m_chatInput, 1);
 
-	inputLayout->setContentsMargins(kColumnSideClearance, kInputTopClearance,
-		kColumnSideClearance, kInputBottomClearance);
+	inputLayout->setContentsMargins(
+		qMax(0, kColumnSideClearance - inputShadowPad.left()), kInputTopClearance,
+		qMax(0, kColumnSideClearance - inputShadowPad.right()), kInputBottomClearance);
 	inputLayout->setSpacing(0);
 	panelLayout->addLayout(inputLayout);
 
@@ -192,8 +228,9 @@ void DSHHub::buildUi()
 	auto* bodyLayout = new QHBoxLayout;
 	bodyLayout->setSpacing(0);
 
-	bodyLayout->addWidget(m_sidebar);
+	bodyLayout->addWidget(sidebarShadow);
 	bodyLayout->addWidget(rightColumn);
+	bodyLayout->setSpacing(kPanelGap);
 
 	// 内容容器：整体居中（标题栏之下，左右/下侧留白由这一层给）
 	auto* content = new QWidget(central);
@@ -202,11 +239,12 @@ void DSHHub::buildUi()
 	contentLayout->setContentsMargins(0, 0, 0, 0);
 	contentLayout->addLayout(bodyLayout, 1);
 
-	// 底部留白 7（原 9）：从这里再挪 2px 出去，配合输入区底部留白 2 -> 0，
-	// 让"输入卡片 + 小灰字"整块相对窗口底边下沉 4px
-	constexpr int kContentBottomInset = 7;
+	// 底部留白：输入卡片外面套了阴影外壳，外壳自带下留白（CardShadow::padding 的
+	// bottom），所以这里归零 —— 两者的和才是卡片离窗口底边的距离，
+	// 否则"留白 + 留白"会把输入卡片顶得老高。
+	constexpr int kContentBottomInset = 0;
 	auto* bodyRow = new QVBoxLayout;
-	bodyRow->setContentsMargins(9, 0, 9, kContentBottomInset);
+	bodyRow->setContentsMargins(kContentSideInset, 0, kContentSideInset, kContentBottomInset);
 	bodyRow->setSpacing(0);
 	bodyRow->addWidget(content, 0, Qt::AlignHCenter);
 	layout->addLayout(bodyRow, 1);
@@ -270,7 +308,14 @@ void DSHHub::buildUi()
 	cardLayout->addLayout(rowLayout);
 	cardLayout->addStretch(1);
 
-	overlayLayout->addWidget(initCard, 0, Qt::AlignCenter);
+	// 初始化卡片浮在蒙版上，是这一屏最高的一层：用 lv3 档阴影。
+	// 卡片 400x240 的尺寸不变，多出来的只是外壳四周的阴影留白。
+	auto* initPanel = new ShadowPanel(QStringLiteral("shadowFloat"),
+		CardShadow::level3(), m_initOverlay);
+	initPanel->setRadius(20); // 与 #initCard 的 QSS 圆角一致
+	initPanel->setCard(initCard);
+
+	overlayLayout->addWidget(initPanel, 0, Qt::AlignCenter);
 
 	m_initOverlay->setGeometry(rect());
 	m_initOverlay->raise();

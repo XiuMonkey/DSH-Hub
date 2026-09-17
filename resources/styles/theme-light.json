@@ -37,8 +37,9 @@
   "loadingText": "#57606A",
   "loadingBorder": "#E1E4E8",
   "systemMessageText": "#999999",
-  "shadow": "rgba(0,0,0,0.06)",
-  "shadowSubtle": "rgba(0,0,0,0.05)",
+  "shadow": "rgba(0,0,0,0.12)",
+  "shadowSubtle": "rgba(0,0,0,0.07)",
+  "shadowFloat": "rgba(0,0,0,0.18)",
   "textOnAccent": "#FFFFFF",
 
   "composerBorder": "rgba(0,0,0,0.10)",

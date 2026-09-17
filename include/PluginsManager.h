@@ -38,11 +38,12 @@ class PluginMarketInstaller;
 // 打开/关闭统一走 openPlugins() / closePlugins()：
 //   - 主窗口只保留少量调用（把侧边栏 pluginsRequested 信号直接连到
 //     openPlugins()），不再在 DSHHub 里管理遮罩成员；
-//   - 遮罩是本类自建的子控件，宿主 resize 时通过 syncOverlayToHost()
-//     保持铺满（由主窗口 resizeEvent 调用）；
+//   - 遮罩是窗口级的（设置/插件/扩展管理/工具过滤共用同一层，由
+//     WindowFrame::showOverlay/hideOverlay 持有）：打开时申请、关闭时归还，
+//     宿主 resize 时通过 syncOverlayToHost() 保持铺满（由主窗口 resizeEvent 调用）；
 //   - 每次打开时 refreshOnOpen() 重新拉取市场/已安装数据，
 //     避免常驻对象在服务端未就绪时就联网请求；
-//   - 右上角 ✕ 关闭时自动清理遮罩并隐藏（closed -> closePlugins()）。
+//   - 右上角 ✕ 关闭时自动归还遮罩并隐藏（closed -> closePlugins()）。
 // ------------------------------------------------------------------
 class PluginsManager : public StatusPopupWindow
 {
@@ -58,7 +59,7 @@ public:
 	// 打开插件管理窗口（幂等：已打开则直接返回；打开前刷新数据）
 	void openPlugins();
 
-	// 关闭插件管理窗口并清理遮罩（幂等）
+	// 关闭插件管理窗口并归还遮罩（幂等）
 	void closePlugins();
 
 	// 宿主窗口 resize 后调用，让遮罩重新铺满宿主（未打开时为空操作）
@@ -90,7 +91,6 @@ private:
 	QWidget* createInstalledCard(const QString& name, const QString& version);
 
 	QWidget* m_host = nullptr;          // 宿主主窗口（遮罩/居中定位）
-	QWidget* m_overlay = nullptr;       // 本类自管的灰色遮罩
 	PluginMarketClient* m_market = nullptr;
 	PluginMarketInstaller* m_installer = nullptr;
 

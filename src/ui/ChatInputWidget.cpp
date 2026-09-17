@@ -1,6 +1,7 @@
 #include "ChatInputWidget.h"
 
 #include "ModelSelector.h"
+#include "ShadowPanel.h"
 #include "ThemeManager.h"
 
 #include <QAbstractTextDocumentLayout>
@@ -126,21 +127,6 @@ namespace
 	}
 }
 
-bool SessionUsageStats::isEmpty() const
-{
-	if (turns > 0 || steps > 0 || llmMs > 0 || toolMs > 0
-		|| ttftSteps > 0 || decodeMs > 0 || decodeTokens > 0)
-		return false;
-
-	// tokenUsage 没给过（hasUsage=false）就不算数；给过但要全是 0
-	// （例如会话还没有任何一次成功请求）同样什么都不显示
-	if (hasUsage && (uncachedInputTokens > 0 || cacheReadTokens > 0
-		|| cacheWriteTokens > 0 || outputTokens > 0))
-		return false;
-
-	return true;
-}
-
 // ------------------------------------------------------------------
 // SessionStatsLine：卡片下方那行小灰字（本控件只负责画）
 // ------------------------------------------------------------------
@@ -160,6 +146,10 @@ SessionStatsLine::SessionStatsLine(QWidget* parent)
 
 	// 不设 WA_TransparentForMouseEvents：那会让 tooltip（文本被截断时的完整内容）
 	// 也收不到悬停事件。这行本身没有点击语义，收到事件也不做任何事。
+
+	// 初始就摆上"零状态"那一行（0 轮 · 0 步 | 输入 0 tok · 输出 0 tok）：
+	// 新会话在服务端投影送到之前也该显示这一行，而不是先空着再冒出来。
+	m_lineText = formatStats(SessionUsageStats{});
 }
 
 void SessionStatsLine::setStats(const SessionUsageStats& stats)
@@ -179,7 +169,11 @@ void SessionStatsLine::setLineText(const QString& line)
 
 void SessionStatsLine::clearStats()
 {
-	setLineText(QString());
+	// 注意：这里不是"擦成空白"，而是回到零状态。
+	// 换会话时会调用本函数清掉上一会话的数字（见 DSHHub 的切换逻辑），
+	// 而"始终显示"的约定要求新会话下面照样有这一行 —— 于是清成 0，
+	// 等服务端投影到了再变成真实数字。
+	setLineText(formatStats(SessionUsageStats{}));
 }
 
 void SessionStatsLine::paintEvent(QPaintEvent* event)
@@ -223,53 +217,58 @@ void SessionStatsLine::syncToolTip()
 /**
  * 拼整行：组的顺序、分隔符、每组内部显示什么，都与官方 Web 端 StatsLine 一致 ——
  *   轮/步 | LLM 用时 · 工具调用用时 | 首 token 平均 · 吞吐 | 缓存命中 | 输入 · 输出
- * 组之间 " | "，组内 " · "；某一组没有可显示项就整组不出现。
+ * 组之间 " | "，组内 " · "。
+ *
+ * 与官方有一处**有意差异**：官方在没有任何可显示内容时直接 `return null`（整行不渲染），
+ * 于是新会话下面一片空白。这里改成"始终显示"——「轮/步」与「输入/输出」两组无条件出现，
+ * 所以新会话看到的是 `0 轮 · 0 步 | 输入 0 tok · 输出 0 tok`。
+ * 其余组（LLM 用时 / 工具调用 / 首 token / tok/s / 缓存命中）没有有意义的 0 表示，
+ * 维持"为 0 就不出现"，免得拼出一串假的 0s。
  */
 QString SessionStatsLine::formatStats(const SessionUsageStats& stats)
 {
 	QStringList groups;
 
-	if (stats.steps > 0) {
-		groups << tr("%1 轮 · %2 步").arg(stats.turns).arg(stats.steps);
+	// ---- 轮 / 步：始终显示 ----
+	groups << tr("%1 轮 · %2 步").arg(stats.turns).arg(stats.steps);
 
-		QStringList durations;
-		if (stats.llmMs > 0)
-			durations << tr("LLM %1").arg(formatDuration(static_cast<double>(stats.llmMs)));
-		if (stats.toolMs > 0)
-			durations << tr("工具调用 %1").arg(formatDuration(static_cast<double>(stats.toolMs)));
-		if (!durations.isEmpty())
-			groups << durations.join(QStringLiteral(" · "));
+	// ---- 耗时：有值才出现 ----
+	QStringList durations;
+	if (stats.llmMs > 0)
+		durations << tr("LLM %1").arg(formatDuration(static_cast<double>(stats.llmMs)));
+	if (stats.toolMs > 0)
+		durations << tr("工具调用 %1").arg(formatDuration(static_cast<double>(stats.toolMs)));
+	if (!durations.isEmpty())
+		groups << durations.join(QStringLiteral(" · "));
 
-		QStringList speeds;
-		if (stats.ttftSteps > 0) {
-			// 首 token 是"平均"：累计延迟 / 记下首 token 的步数
-			const double averageMs = static_cast<double>(stats.ttftMs) / stats.ttftSteps;
-			speeds << tr("首 token 平均 %1").arg(formatDuration(averageMs));
-		}
-		if (stats.decodeMs > 0) {
-			const double tokensPerSecond = static_cast<double>(stats.decodeTokens)
-				/ (static_cast<double>(stats.decodeMs) / 1000.0);
-			speeds << tr("%1 tok/s").arg(formatThroughput(tokensPerSecond));
-		}
-		if (!speeds.isEmpty())
-			groups << speeds.join(QStringLiteral(" · "));
+	// ---- 速率：有值才出现 ----
+	QStringList speeds;
+	if (stats.ttftSteps > 0) {
+		// 首 token 是"平均"：累计延迟 / 记下首 token 的步数
+		const double averageMs = static_cast<double>(stats.ttftMs) / stats.ttftSteps;
+		speeds << tr("首 token 平均 %1").arg(formatDuration(averageMs));
 	}
-
-	if (stats.hasUsage) {
-		// 计费输入的三个桶是不重叠的：未命中 + 缓存读 + 缓存写
-		const qint64 billedInput = stats.uncachedInputTokens
-			+ stats.cacheReadTokens + stats.cacheWriteTokens;
-
-		if (billedInput > 0 || stats.outputTokens > 0) {
-			const QString cacheHit = formatCacheHitPercent(stats.cacheReadTokens, billedInput);
-			if (!cacheHit.isEmpty())
-				groups << tr("缓存命中 %1%").arg(cacheHit);
-
-			groups << tr("输入 %1 tok · 输出 %2 tok")
-				.arg(formatTokens(billedInput))
-				.arg(formatTokens(stats.outputTokens));
-		}
+	if (stats.decodeMs > 0) {
+		const double tokensPerSecond = static_cast<double>(stats.decodeTokens)
+			/ (static_cast<double>(stats.decodeMs) / 1000.0);
+		speeds << tr("%1 tok/s").arg(formatThroughput(tokensPerSecond));
 	}
+	if (!speeds.isEmpty())
+		groups << speeds.join(QStringLiteral(" · "));
+
+	// ---- 输入 / 输出：始终显示 ----
+	// 计费输入的三个桶是不重叠的：未命中 + 缓存读 + 缓存写
+	const qint64 billedInput = stats.uncachedInputTokens
+		+ stats.cacheReadTokens + stats.cacheWriteTokens;
+
+	// 缓存命中率没有可算的分母（计费输入为 0）时整组不出现
+	const QString cacheHit = formatCacheHitPercent(stats.cacheReadTokens, billedInput);
+	if (!cacheHit.isEmpty())
+		groups << tr("缓存命中 %1%").arg(cacheHit);
+
+	groups << tr("输入 %1 tok · 输出 %2 tok")
+		.arg(formatTokens(billedInput))
+		.arg(formatTokens(stats.outputTokens));
 
 	return groups.join(QStringLiteral(" | "));
 }
@@ -278,6 +277,16 @@ QString SessionStatsLine::formatStats(const SessionUsageStats& stats)
 // ChatInputWidget：卡片本体 + 卡片下方那行小灰字
 // ------------------------------------------------------------------
 
+CardShadow::Spec ChatInputWidget::shadowSpec()
+{
+	// 与原版输入卡片的 --dsw-shadow-lv2（0 4px 12px / 0 2px 8px，两层）同档：
+	// 扩散 12 / 下移 3，圆角跟 #inputCapsule 的 22px 一致。
+	//
+	// 注意：卡片在外壳里"摆哪儿"不在这里调 —— 见构造里的 setPadding。
+	// dy 只管阴影方向，挪位置用留白覆盖值，两件事分开。
+	return CardShadow::Spec{ 12, 3, 22 };
+}
+
 ChatInputWidget::ChatInputWidget(QWidget* parent)
 	: QWidget(parent)
 {
@@ -285,15 +294,33 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 	// #inputCapsule QPlainTextEdit / #inputControlRow）
 	buildCapsule();
 
-	// 卡片下方的小灰字统计（高度固定，没数据时只是不画字）
+	// 卡片外面套阴影外壳（悬浮感）。外壳只画阴影，卡片的 QSS 规则不受影响。
+	// 阴影色用 shadowSubtle（比 shadow 淡一档）：输入卡片是常驻在视线里的，
+	// 给到和消息气泡一样重会显得"压"。
+	auto* capsuleShadow = new ShadowPanel(QStringLiteral("shadowSubtle"), shadowSpec(), this);
+	capsuleShadow->setRadius(shadowSpec().radius);
+	capsuleShadow->setCard(m_capsule);
+
+	// 卡片在外壳里的落位：在外壳"按 spec 推出来的自然位置"上整体下移。
+	//
+	// 只挪位置、外壳总高保持不变（上下留白一增一减、和不变），所以：
+	//   · 卡片自己往下走 kCapsuleDrop 像素；
+	//   · 外壳高度不变 → 下方小灰字的位置不变 → 它与侧栏卡片底边的齐平不受影响。
+	// 阴影的方向与形状仍由 shadowSpec() 决定，不受这里影响。
+	constexpr int kCapsuleDrop = 6;
+	const QMargins pad = CardShadow::padding(shadowSpec());
+	capsuleShadow->setPadding(QMargins(pad.left(), pad.top() + kCapsuleDrop,
+		pad.right(), qMax(0, pad.bottom() - kCapsuleDrop)));
+
+	// 卡片下方的小灰字统计（高度固定，没数据时画的是"零状态"那一行）
 	m_statsLine = new SessionStatsLine(this);
 
 	// 竖排：卡片在上、小灰字在下。两者之间不留间距 —— 上下留白由外层输入区
-	// 的边距给（见 Main.cpp：底部留白 0，整块贴着面板底边摆）
+	// 的边距给（见 Main.cpp）
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
-	layout->addWidget(m_capsule);
+	layout->addWidget(capsuleShadow);
 	layout->addWidget(m_statsLine);
 
 	m_editor->installEventFilter(this);
@@ -311,8 +338,7 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 void ChatInputWidget::buildCapsule()
 {
 	m_capsule = new QWidget(this);
-	m_capsule->setObjectName(QStringLiteral("inputCapsule"));
-	// 让 QWidget 子类真正绘制样式表里的背景和边框
+	m_capsule->setObjectName(QStringLiteral("inputCapsule"));	// 让 QWidget 子类真正绘制样式表里的背景和边框
 	m_capsule->setAttribute(Qt::WA_StyledBackground, true);
 
 	m_editor = new QPlainTextEdit(m_capsule);

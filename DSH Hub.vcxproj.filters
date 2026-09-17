@@ -148,6 +148,12 @@
     <ClCompile Include="src\common\ThemeManager.cpp">
       <Filter>Source Files\Common</Filter>
     </ClCompile>
+    <ClCompile Include="src\common\CardShadow.cpp">
+      <Filter>Source Files\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ui\ShadowPanel.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
     <ClCompile Include="src\common\Logger.cpp">
       <Filter>Source Files\Common</Filter>
     </ClCompile>
@@ -297,6 +303,9 @@
     <QtMoc Include="include\ModelListPanel.h">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="include\ShadowPanel.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
     <QtMoc Include="include\TitleBar.h">
       <Filter>Header Files</Filter>
     </QtMoc>
@@ -324,6 +333,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\ThemeManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\CardShadow.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\Logger.h">

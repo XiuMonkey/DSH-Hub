@@ -7,8 +7,6 @@
 #include "TranslationManager.h"
 
 #include <QComboBox>
-#include <QCoreApplication>
-#include <QEventLoop>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -323,18 +321,10 @@ void Settings::openSettings()
 	if (isVisible())
 		return;
 
-	// 遮罩：宿主主窗口的子控件，铺满内容区并盖住主界面
-	// （不含自绘标题栏，否则窗口按钮会被一起盖住点不动）
-	if (!m_overlay) {
-		m_overlay = new QWidget(m_host);
-		m_overlay->setObjectName(QStringLiteral("settingsOverlay"));
-		m_overlay->setAttribute(Qt::WA_StyledBackground, true);
-	}
-	m_overlay->setGeometry(WindowFrame::overlayRect(m_host));
-	m_overlay->raise();
-	m_overlay->show();
-	// 强制先让遮罩画出来（否则与下方弹窗同一帧才呈现，观感像弹窗先出、遮罩延迟）
-	QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+	// 遮罩：宿主主窗口上那唯一一层半透明控件（铺满内容区、不含自绘标题栏，
+	// 否则窗口按钮会被一起盖住点不动）。showOverlay() 里带一次同步重绘，
+	// 所以下面直接 show() 自己就行，不会再出现"弹窗先出、遮罩后到"。
+	WindowFrame::showOverlay(m_host, this);
 
 	// 打开前刷新数据（API Key / Server 地址 / 预设列表）
 	refreshOnOpen();
@@ -347,17 +337,17 @@ void Settings::openSettings()
 
 void Settings::closeSettings()
 {
-	// 关闭遮罩（常驻复用：只隐藏，不销毁，避免每次开关重新创建全窗半透明控件）
-	if (m_overlay)
-		m_overlay->hide();
+	// 先收遮罩、再隐藏自己：收遮罩那一步会同步重绘一次主窗口，两件事落在
+	// 同一帧上。反过来（或让遮罩等下一帧重绘）观感就是"设置窗口没了、
+	// 遮罩还留一拍"。
+	WindowFrame::hideOverlay(m_host, this);
 	// 隐藏自己（常驻：不销毁，等待下次打开）
 	hide();
 }
 
 void Settings::syncOverlayToHost()
 {
-	if (m_overlay && m_host)
-		m_overlay->setGeometry(WindowFrame::overlayRect(m_host));
+	WindowFrame::syncOverlay(m_host);
 }
 
 void Settings::refreshOnOpen()
