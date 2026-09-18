@@ -60,7 +60,7 @@ SidebarLogo::SidebarLogo(QWidget* parent)
 // ------------------------------------------------------------------
 
 NewWorkspaceButton::NewWorkspaceButton(QWidget* parent)
-	: QPushButton(tr("新建工作区"), parent)
+	: QPushButton(qtTrId("sidebar_new_workspace"), parent)
 {
 	setObjectName(QStringLiteral("newWorkspaceButton"));
 	setCursor(Qt::PointingHandCursor);
@@ -71,7 +71,7 @@ NewWorkspaceButton::NewWorkspaceButton(QWidget* parent)
 // ------------------------------------------------------------------
 
 ClearSessionButton::ClearSessionButton(QWidget* parent)
-	: QPushButton(tr("清空会话"), parent)
+	: QPushButton(qtTrId("sidebar_clear_sessions"), parent)
 {
 	setObjectName(QStringLiteral("clearSessionButton"));
 	setCursor(Qt::PointingHandCursor);
@@ -87,7 +87,7 @@ SidebarSettingsButton::SidebarSettingsButton(QWidget* parent)
 	setObjectName(QStringLiteral("sidebarSettingsButton"));
 	setFixedSize(32, 32);
 	setCursor(Qt::PointingHandCursor);
-	setToolTip(tr("设置"));
+	setToolTip(qtTrId("settings_title"));
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Setting-Icon.png")));
 	setIconSize(QSize(20, 20));
 }
@@ -102,7 +102,7 @@ SidebarPluginsButton::SidebarPluginsButton(QWidget* parent)
 	setObjectName(QStringLiteral("sidebarPluginsButton"));
 	setFixedSize(32, 32);
 	setCursor(Qt::PointingHandCursor);
-	setToolTip(tr("插件"));
+	setToolTip(qtTrId("sidebar_plugins"));
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Plugin-Icon.png")));
 	setIconSize(QSize(20, 20));
 }
@@ -117,7 +117,7 @@ SidebarThemeButton::SidebarThemeButton(QWidget* parent)
 	setObjectName(QStringLiteral("sidebarThemeButton"));
 	setFixedSize(32, 32);
 	setCursor(Qt::PointingHandCursor);
-	setToolTip(tr("切换主题"));
+	setToolTip(qtTrId("sidebar_switch_theme"));
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Theme-Icon.png")));
 	setIconSize(QSize(20, 20));
 }
@@ -132,7 +132,7 @@ SidebarExtensionButton::SidebarExtensionButton(QWidget* parent)
 	setObjectName(QStringLiteral("sidebarExtensionButton"));
 	setFixedSize(32, 32);
 	setCursor(Qt::PointingHandCursor);
-	setToolTip(tr("扩展管理"));
+	setToolTip(qtTrId("ext_manager_title"));
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Extension-Icon.png")));
 	setIconSize(QSize(20, 20));
 }
@@ -201,7 +201,7 @@ void SessionButton::contextMenuEvent(QContextMenuEvent* event)
 	menu.setAttribute(Qt::WA_TranslucentBackground);
 	menu.setAttribute(Qt::WA_StyledBackground, true);
 
-	auto* deleteAction = new QPushButton(tr("删除会话"), &menu);
+	auto* deleteAction = new QPushButton(qtTrId("session_delete_label"), &menu);
 	deleteAction->setObjectName(QStringLiteral("sessionContextDeleteAction"));
 	deleteAction->setCursor(Qt::PointingHandCursor);
 	deleteAction->setStyleSheet(
@@ -400,7 +400,7 @@ WorkspaceList::WorkspaceGroup* WorkspaceList::createWorkspaceGroup(const QString
 WorkspaceList::WorkspaceGroup* WorkspaceList::defaultGroup()
 {
 	if (!m_defaultGroup)
-		m_defaultGroup = createWorkspaceGroup(QString(), tr("未分组"));
+		m_defaultGroup = createWorkspaceGroup(QString(), qtTrId("sidebar_ungrouped"));
 	return m_defaultGroup;
 }
 
@@ -600,9 +600,9 @@ void Sidebar::addCreatedSession(const QString& sessionId, const QString& workspa
 		return;
 
 	if (workspaceId.isEmpty())
-		m_workspaceList->addSession(sessionId, tr("未命名会话"));
+		m_workspaceList->addSession(sessionId, qtTrId("session_untitled"));
 	else
-		m_workspaceList->addSessionToWorkspace(sessionId, tr("未命名会话"), workspaceId);
+		m_workspaceList->addSessionToWorkspace(sessionId, qtTrId("session_untitled"), workspaceId);
 
 	m_workspaceList->setCurrentSession(sessionId);
 }

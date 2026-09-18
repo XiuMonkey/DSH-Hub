@@ -152,6 +152,13 @@ namespace SessionCommands
 	// agentPresets/select -> args { agentId, agentPreset }
 	// 注意：这不是 `request` 包装，而是两个平铺的 wire 名；agentId 就是 sessionId
 	// （服务端用 agent lookup 把 SessionId 解析成活的 Agent）。
+	//
+	// 语义是"改这个会话当前跑的预设"，且**只在空白期可用**（会话跑过任一轮就
+	// 永久锁定，服务端回 agent-preset/locked）。原版 web 用它承载"新建会话 chip
+	// 的暂存选择"（用完即清、刻意不写默认值）。
+	//
+	// Hub 目前没有调用点：设置页改的是**默认值**（走 settings/update），
+	// 不该顺手改当前会话。这里保留是作为协议收录，将来要做"临时换模式"时用得上。
 	inline QJsonObject agentPresetSelect(const QString& sessionId, const QString& presetId)
 	{
 		QJsonObject args;
@@ -185,6 +192,22 @@ namespace SessionCommands
 		QJsonObject args;
 		args.insert(QStringLiteral("ns"), ns);
 		args.insert(QStringLiteral("ops"), ops);
+		return args;
+	}
+
+	// settings/update -> args { ns, patch, expectedRevision? }
+	//
+	// 与 mutate 的区别：这条是"把 patch 并进该命名空间的 user 段"（浅合并），
+	// 不是按路径寻址的增删改。原版 web 客户端写默认预设用的就是这条：
+	//   settings.update("agent-presets", { default: id }, undefined)
+	//
+	// expectedRevision 描述符里标了 acceptsUndefined，整条省掉即"无条件写"
+	// （不做乐观并发校验）—— 与原版传 undefined 等价。
+	inline QJsonObject settingsUpdate(const QString& ns, const QJsonObject& patch)
+	{
+		QJsonObject args;
+		args.insert(QStringLiteral("ns"), ns);
+		args.insert(QStringLiteral("patch"), patch);
 		return args;
 	}
 

@@ -189,7 +189,7 @@ namespace
 			LOCALE_USER_DEFAULT, &dispId);
 		if (FAILED(hr) || dispId == DISPID_UNKNOWN) {
 			if (error)
-				*error = QCoreApplication::translate("ComCaller", "COM 成员不存在: %1 (hr=%2)").arg(name, hrText(hr));
+				*error = qtTrId("com_member_not_found_fmt").arg(name, hrText(hr));
 			return DISPID_UNKNOWN;
 		}
 		return dispId;
@@ -210,7 +210,7 @@ namespace
 			DISPATCH_PROPERTYGET, &params, &result, nullptr, &argErr);
 		if (FAILED(hr)) {
 			if (error)
-				*error = QCoreApplication::translate("ComCaller", "读取 COM 属性失败: %1 (hr=%2)").arg(name, hrText(hr));
+				*error = qtTrId("com_get_property_failed_fmt").arg(name, hrText(hr));
 			return false;
 		}
 		if (out) {
@@ -244,10 +244,10 @@ namespace
 			DISPATCH_METHOD, &params, &result, nullptr, &argErr);
 		if (FAILED(hr)) {
 			if (error) {
-				QString reason = QCoreApplication::translate("ComCaller", "调用 COM 方法失败: %1 (hr=%2")
+				QString reason = qtTrId("com_invoke_method_failed_fmt")
 					.arg(name, hrText(hr));
 				if (argErr < args.size())
-					reason += QCoreApplication::translate("ComCaller", ", 参数 %1 类型不匹配").arg(argErr);
+					reason += qtTrId("com_arg_type_mismatch_fmt").arg(argErr);
 				reason += QLatin1Char(')');
 				*error = reason;
 			}
@@ -283,7 +283,7 @@ namespace
 		VariantClear(&value);
 		if (FAILED(hr)) {
 			if (error)
-				*error = QCoreApplication::translate("ComCaller", "写入 COM 属性失败: %1 (hr=%2)").arg(name, hrText(hr));
+				*error = qtTrId("com_put_property_failed_fmt").arg(name, hrText(hr));
 			return false;
 		}
 		return true;
@@ -335,21 +335,21 @@ namespace comcall
 		// 1. ProgId 白名单：只允许 regulation "Com" 段声明的组件
 		const QString progId = comConfig.value(QStringLiteral("ProgId")).toString();
 		if (progId.isEmpty()) {
-			error = QCoreApplication::translate("ComCaller", "该工具缺少 \"Com\": { \"ProgId\": ... } 配置");
+			error = qtTrId("com_missing_config");
 			return false;
 		}
 
 		// 2. 解析调用意图
 		const QString member = args.value(QStringLiteral("member")).toString();
 		if (member.isEmpty()) {
-			error = QCoreApplication::translate("ComCaller", "缺少必填参数 member（要调用的 COM 属性或方法名）");
+			error = qtTrId("com_missing_member_arg");
 			return false;
 		}
 		QString kind = args.value(QStringLiteral("kind")).toString();
 		if (kind.isEmpty())
 			kind = QStringLiteral("method");
 		if (kind != QStringLiteral("method") && kind != QStringLiteral("get") && kind != QStringLiteral("put")) {
-			error = QCoreApplication::translate("ComCaller", "kind 仅支持 method / get / put");
+			error = qtTrId("com_kind_unsupported");
 			return false;
 		}
 
@@ -357,14 +357,14 @@ namespace comcall
 		CLSID clsid;
 		HRESULT hr = CLSIDFromProgID(reinterpret_cast<const wchar_t*>(progId.utf16()), &clsid);
 		if (FAILED(hr)) {
-			error = QCoreApplication::translate("ComCaller", "ProgID 无效或未注册: %1 (hr=%2)").arg(progId, hrText(hr));
+			error = qtTrId("com_progid_invalid_fmt").arg(progId, hrText(hr));
 			return false;
 		}
 		IDispatch* root = nullptr;
 		hr = CoCreateInstance(clsid, nullptr,
 			CLSCTX_LOCAL_SERVER | CLSCTX_INPROC_SERVER, IID_IDispatch, (void**)&root);
 		if (FAILED(hr) || !root) {
-			error = QCoreApplication::translate("ComCaller", "创建 COM 组件失败: %1 (hr=%2)").arg(progId, hrText(hr));
+			error = qtTrId("com_create_failed_fmt").arg(progId, hrText(hr));
 			return false;
 		}
 
@@ -383,13 +383,13 @@ namespace comcall
 			VariantInit(&v);
 			QString stepError;
 			if (!getMemberValue(current, prop, &v, &stepError)) {
-				error = QCoreApplication::translate("ComCaller", "属性链下行失败 (%1.%2): %3")
+				error = qtTrId("com_property_chain_failed_fmt")
 					.arg(currentOwner, prop, stepError);
 				root->Release();
 				return false;
 			}
 			if (v.vt != VT_DISPATCH || !v.pdispVal) {
-				error = QCoreApplication::translate("ComCaller", "属性 %1.%2 不是对象，无法继续下钻")
+				error = qtTrId("com_property_not_object_fmt")
 					.arg(currentOwner, prop);
 				VariantClear(&v);
 				root->Release();
@@ -414,7 +414,7 @@ namespace comcall
 				VARIANT v;
 				VariantInit(&v);
 				if (!jsonToVariant(pv, v)) {
-					error = QCoreApplication::translate("ComCaller", "params 仅支持字符串/数字/布尔/null（第 %1 项不合法）")
+					error = qtTrId("com_params_type_unsupported_fmt")
 						.arg(argsList.size());
 					clearVariants(argsList);
 					if (current != root) current->Release();
@@ -440,7 +440,7 @@ namespace comcall
 			VARIANT v;
 			VariantInit(&v);
 			if (!jsonToVariant(value, v)) {
-				error = QCoreApplication::translate("ComCaller", "value 仅支持字符串/数字/布尔/null");
+				error = qtTrId("com_value_type_unsupported");
 				if (current != root) current->Release();
 				root->Release();
 				return false;
@@ -457,7 +457,7 @@ namespace comcall
 				result.insert(QStringLiteral("value"), summarizeObject(out.pdispVal));
 				result.insert(QStringLiteral("object"), true);
 				result.insert(QStringLiteral("note"),
-					QCoreApplication::translate("ComCaller", "返回的是 COM 对象，当前版本仅提供摘要；如需继续调用请使用返回标量的成员"));
+					qtTrId("com_returned_object_summary_only"));
 			}
 			else {
 				QJsonValue jv = variantToJson(out);

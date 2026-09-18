@@ -24,6 +24,7 @@
 #include "TestDshApiClient.h"
 #include "TestSessionPrefetcher.h"
 #include "TestSettingsStore.h"
+#include "TestClientSettings.h"
 #include "TestLogger.h"
 #include "TestTranslationManager.h"
 #include "TestServerManager.h"
@@ -116,6 +117,11 @@ int main(int argc, char* argv[])
 	{
 		TestSettingsStore test;
 		runClass(&test, "TestSettingsStore");
+	}
+
+	{
+		TestClientSettings test;
+		runClass(&test, "TestClientSettings");
 	}
 
 	{

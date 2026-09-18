@@ -71,7 +71,7 @@ ModelSelectorRow::ModelSelectorRow(
 	setFocusPolicy(Qt::NoFocus);
 	setAccessibleName(subtitle.isEmpty()
 		? title
-		: QStringLiteral("%1：%2").arg(title, subtitle));
+		: qtTrId("common_accessible_pair_fmt").arg(title, subtitle));
 
 	auto* layout = new QHBoxLayout(this);
 	layout->setContentsMargins(8, 6, 8, 6);
@@ -189,8 +189,8 @@ public:
 		// 两节各自包一层容器。行的 autoExclusive 是按「同一父控件」分组的，
 		// 如果把模型行与档位行都挂在 m_content 下，两部分会互相取消勾选——
 		// 那样菜单里只能剩一个 ✓。分容器后，每节内部各自单选。
-		m_modelSection = makeSection(tr("模型"));
-		m_levelSection = makeSection(tr("思考深度"));
+		m_modelSection = makeSection(qtTrId("model_label"));
+		m_levelSection = makeSection(qtTrId("model_think_depth"));
 
 		layout->addWidget(m_scroll);
 	}
@@ -332,7 +332,7 @@ ModelSelector::ModelSelector(QWidget* parent)
 	// 样式表按 #inputCapsule QPushButton#modelSelectorChip 给出，压过 defaults.qss 的通用按钮规则
 	setCursor(Qt::PointingHandCursor);
 	setFixedHeight(kChipHeight);
-	setToolTip(tr("选择模型与思考深度"));
+	setToolTip(qtTrId("model_select_title"));
 	setFlat(true);
 	// 不参与焦点链：这是个鼠标/无障碍驱动的 chip，按钮一旦拿到焦点就会一直显示
 	// 焦点态样式，而点击消息区、侧边栏等“不接收焦点”的地方并不会把焦点带走，
@@ -515,8 +515,8 @@ void ModelSelector::updateChip()
 	m_value->setVisible(!level.isEmpty());
 
 	setAccessibleName(level.isEmpty()
-		? tr("模型 %1").arg(model)
-		: tr("模型 %1 思考深度 %2").arg(model, level));
+		? qtTrId("model_name_fmt").arg(model)
+		: qtTrId("model_name_think_fmt").arg(model, level));
 
 	setVisible(available);
 	if (available)
@@ -560,14 +560,14 @@ void ModelSelector::buildMenu(int maxListHeight)
 
 	// 目录里没有任何分组时也要给一句说明，否则弹出来是空框
 	if (m_directory.groups.isEmpty())
-		m_menu->addGroupLabel(tr("服务端没有公布任何模型"));
+		m_menu->addGroupLabel(qtTrId("model_none_published"));
 
 	// ---------------- 思考深度 ----------------
 	// 适配器没公布档位时也用通用四档兜底，所以这里总能给出可选项；
 	// 只是要注明它是通用档位，别让用户以为那是适配器公布的能力。
 	const QVector<ReasoningLevel> levels = m_directory.selectableLevels();
 	if (m_directory.usesFallbackLevels())
-		m_menu->addLevelHint(tr("该模型未公布思考档位，以下为通用档位。"));
+		m_menu->addLevelHint(qtTrId("model_think_generic_note"));
 
 	// 当前档位：显式选择的，否则回退到适配器默认档位
 	const QString selectedId = currentLevelId();
@@ -721,7 +721,7 @@ void ModelSelector::chooseLevel(const QString& levelId)
 	submitSelection(selection, /*reloadDirectory=*/false, [this](const ModelSelection& selected) {
 		qInfo().noquote() << QStringLiteral("[ModelSelector] %1/%2 -> %3")
 			.arg(selected.provider, selected.model,
-				selected.reasoningEffort.isEmpty() ? tr("(默认)") : selected.reasoningEffort);
+				selected.reasoningEffort.isEmpty() ? qtTrId("common_default_suffix") : selected.reasoningEffort);
 		emit levelChanged(selected.reasoningEffort);
 		});
 }

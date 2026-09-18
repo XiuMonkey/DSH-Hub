@@ -412,8 +412,7 @@ bool DllCaller::callTool(const QString& tool,
 		}
 
 		qWarning().noquote() << "[DllCaller] com tool lacks Com config, tool=" << tool;
-		recordError(errOut, QCoreApplication::translate("DllCaller",
-			"com 工具缺少 \"Com\": { \"ProgId\": ... } 描述"));
+		recordError(errOut, qtTrId("com_missing_description"));
 		return false;
 	}
 
@@ -490,7 +489,7 @@ bool DllCaller::parseDescriptor(const QByteArray& json5,
 		// com 等接口没有 DLL 导出函数名。
 		if (fn.tool.isEmpty()
 			|| (fn.interfaceType == QStringLiteral("default") && fn.function.isEmpty())) {
-			*error = QCoreApplication::translate("DllCaller", "每个 Function 需要 'Tool'；default 接口还需要 'Func'");
+			*error = qtTrId("com_function_requires_tool");
 			return false;
 		}
 

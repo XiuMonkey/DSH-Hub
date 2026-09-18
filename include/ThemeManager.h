@@ -24,6 +24,8 @@ namespace Theme
 
 	// 应用启动期（QApplication 创建之后、主窗口创建之前）调用：
 	// 释放默认模板 -> 按 mode 读取调色板 -> 合成 QSS 并安装到 QApplication。
+	// mode 由调用方（main）决定：优先用 ClientSetting/AppearanceSetting.json 里的显式
+	// 选择，未设置（System）才跟随系统颜色模式 —— 见 ClientSettings.h。
 	void init(const QString& stylesDir, Mode mode);
 
 	// 切换主题：换调色板并重装全局样式（现有窗口外观即时更新）
@@ -63,6 +65,8 @@ namespace Theme
 	// 的滚动区都要在设完名字后调一次本函数。
 	void repolishScrollArea(QWidget* widget);
 
-	// 切换主题：显示过渡弹窗，后台创建新主窗口，完成后自动切换
+	// 切换主题：显示过渡弹窗，后台创建新主窗口，完成后自动切换。
+	// 这是"用户显式选定主题"的唯一入口，会把新主题写进
+	// ClientSetting/AppearanceSetting.json —— 之后启动不再跟随系统。
 	void switchTheme(QWidget* currentWindow);
 }

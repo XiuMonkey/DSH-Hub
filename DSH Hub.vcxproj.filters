@@ -136,6 +136,9 @@
     <ClCompile Include="src\ui\PopupWindow.cpp">
       <Filter>Source Files\UI</Filter>
     </ClCompile>
+    <ClCompile Include="src\ui\Tooltip.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
     <ClCompile Include="src\ui\Settings.cpp">
       <Filter>Source Files\UI</Filter>
     </ClCompile>
@@ -191,6 +194,9 @@
       <Filter>Source Files\Common</Filter>
     </ClCompile>
     <ClCompile Include="src\common\SettingsStore.cpp">
+      <Filter>Source Files\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="src\common\ClientSettings.cpp">
       <Filter>Source Files\Common</Filter>
     </ClCompile>
     <ClCompile Include="src\common\AgentPresetService.cpp">
@@ -348,6 +354,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\SettingsStore.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Tooltip.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ClientSettings.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\AgentPresetService.h">

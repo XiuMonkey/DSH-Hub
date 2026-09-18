@@ -131,14 +131,14 @@ bool ExtensionRegistry::removeExtensionDirectory(const QString& name, QString* e
 	QDir dir(nodeModulesPath() + QStringLiteral("/") + name);
 	if (dir.exists() && !dir.removeRecursively()) {
 		if (error)
-			*error = QCoreApplication::translate("ExtensionRegistry", "无法删除扩展目录: %1").arg(dir.absolutePath());
+			*error = qtTrId("ext_delete_dir_failed_fmt").arg(dir.absolutePath());
 		return false;
 	}
 
 	QDir extDir(extensionsDir() + QStringLiteral("/") + name);
 	if (extDir.exists() && !extDir.removeRecursively()) {
 		if (error)
-			*error = QCoreApplication::translate("ExtensionRegistry", "无法删除扩展资源目录: %1").arg(extDir.absolutePath());
+			*error = qtTrId("ext_delete_resource_dir_failed_fmt").arg(extDir.absolutePath());
 		return false;
 	}
 

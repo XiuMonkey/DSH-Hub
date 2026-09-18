@@ -1,4 +1,4 @@
-		#include "SessionCatalog.h"
+#include "SessionCatalog.h"
 
 #include <QCoreApplication>
 
@@ -253,7 +253,7 @@ QString SessionCatalog::projectionTitle(const QJsonObject& session)
 QString SessionCatalog::sessionTitle(const QJsonObject& session)
 {
 	const QString label = projectionTitle(session);
-	return label.isEmpty() ? QCoreApplication::translate("SessionCatalog", "未命名会话") : label;
+	return label.isEmpty() ? qtTrId("session_untitled") : label;
 }
 
 QSet<QString> SessionCatalog::parseArchivedSessionIds(const QJsonObject& workspaceListValue)

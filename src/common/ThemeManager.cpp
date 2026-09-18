@@ -1,5 +1,6 @@
 #include "ThemeManager.h"
 
+#include "ClientSettings.h"
 #include "DSHHub.h"
 #include "ShadowPanel.h"
 #include "SpinnerWidget.h"
@@ -50,6 +51,7 @@ namespace Theme
 			QStringLiteral("chat.qss"),             // 对话列
 			QStringLiteral("sidebar.qss"),          // 左侧会话栏
 			QStringLiteral("popups.qss"),           // 浮层与各窗口遮罩、弹窗外壳
+			QStringLiteral("tooltip.qss"),          // 悬浮提示气泡（同为浮层，紧跟弹窗外壳）
 			QStringLiteral("extension-manager.qss"),// 扩展管理窗口
 			QStringLiteral("topbar.qss"),           // 对话顶栏与工具过滤窗口
 			QStringLiteral("settings.qss"),         // 设置窗口
@@ -325,26 +327,26 @@ namespace Theme
 	// （repolishScrollArea 的声明在头文件里，所以这里定义在它之前也没问题。）
 	namespace
 	{
-	class ScrollAreaShowFilter : public QObject
-	{
-	public:
-		using QObject::QObject;
-
-	protected:
-		bool eventFilter(QObject* watched, QEvent* event) override
+		class ScrollAreaShowFilter : public QObject
 		{
-			if (event->type() == QEvent::Show) {
-				if (auto* area = qobject_cast<QAbstractScrollArea*>(watched)) {
-					// Show 派发期间重新解析会搅乱事件流：排到本轮之后；以控件自身为
-					// 上下文，控件先销毁时这次调用自动作废。
-					// repolishScrollArea 自带"每个控件只挂一次补丁"的标记，重复调用无害。
-					QMetaObject::invokeMethod(area, [area]() { repolishScrollArea(area); },
-						Qt::QueuedConnection);
+		public:
+			using QObject::QObject;
+
+		protected:
+			bool eventFilter(QObject* watched, QEvent* event) override
+			{
+				if (event->type() == QEvent::Show) {
+					if (auto* area = qobject_cast<QAbstractScrollArea*>(watched)) {
+						// Show 派发期间重新解析会搅乱事件流：排到本轮之后；以控件自身为
+						// 上下文，控件先销毁时这次调用自动作废。
+						// repolishScrollArea 自带"每个控件只挂一次补丁"的标记，重复调用无害。
+						QMetaObject::invokeMethod(area, [area]() { repolishScrollArea(area); },
+							Qt::QueuedConnection);
+					}
 				}
+				return QObject::eventFilter(watched, event);
 			}
-			return QObject::eventFilter(watched, event);
-		}
-	};
+		};
 	} // namespace
 
 	void init(const QString& stylesDir, Mode mode)
@@ -461,64 +463,64 @@ namespace Theme
 	// 它让控件在第一次绘制之前就已经是对的样子。
 	namespace
 	{
-	class ScrollBarRepolisher : public QObject
-	{
-	public:
-		explicit ScrollBarRepolisher(QAbstractScrollArea* area)
-			: QObject(area)
-			, m_area(area)
+		class ScrollBarRepolisher : public QObject
 		{
-			area->installEventFilter(this);
-			for (QScrollBar* bar : bars()) {
-				if (!bar)
-					continue;
-				m_connections.append(connect(bar, &QScrollBar::rangeChanged, this, [this, bar]() {
-					if (m_ranged || bar->maximum() <= bar->minimum())
-						return;
-					m_ranged = true;
-					repolishScrollArea(m_area);
-					retireIfDone();
-				}));
+		public:
+			explicit ScrollBarRepolisher(QAbstractScrollArea* area)
+				: QObject(area)
+				, m_area(area)
+			{
+				area->installEventFilter(this);
+				for (QScrollBar* bar : bars()) {
+					if (!bar)
+						continue;
+					m_connections.append(connect(bar, &QScrollBar::rangeChanged, this, [this, bar]() {
+						if (m_ranged || bar->maximum() <= bar->minimum())
+							return;
+						m_ranged = true;
+						repolishScrollArea(m_area);
+						retireIfDone();
+						}));
+				}
 			}
-		}
 
-	protected:
-		bool eventFilter(QObject* watched, QEvent* event) override
-		{
-			if (event->type() == QEvent::Show && !m_shown) {
-				m_shown = true;
-				// Show 期间重新解析会把正在派发的事件搅乱，挪到本轮事件之后
-				QMetaObject::invokeMethod(this, [this]() {
-					repolishScrollArea(m_area);
-					retireIfDone();
-				}, Qt::QueuedConnection);
+		protected:
+			bool eventFilter(QObject* watched, QEvent* event) override
+			{
+				if (event->type() == QEvent::Show && !m_shown) {
+					m_shown = true;
+					// Show 期间重新解析会把正在派发的事件搅乱，挪到本轮事件之后
+					QMetaObject::invokeMethod(this, [this]() {
+						repolishScrollArea(m_area);
+						retireIfDone();
+						}, Qt::QueuedConnection);
+				}
+				return QObject::eventFilter(watched, event);
 			}
-			return QObject::eventFilter(watched, event);
-		}
 
-	private:
-		QList<QScrollBar*> bars() const
-		{
-			return { m_area->horizontalScrollBar(), m_area->verticalScrollBar() };
-		}
+		private:
+			QList<QScrollBar*> bars() const
+			{
+				return { m_area->horizontalScrollBar(), m_area->verticalScrollBar() };
+			}
 
-		void retireIfDone()
-		{
-			// 两个触发都见过就不再需要自己了（只挂一次的补丁）
-			if (!m_shown || !m_ranged)
-				return;
-			for (const QMetaObject::Connection& connection : m_connections)
-				disconnect(connection);
-			m_connections.clear();
-			m_area->removeEventFilter(this);
-			deleteLater();
-		}
+			void retireIfDone()
+			{
+				// 两个触发都见过就不再需要自己了（只挂一次的补丁）
+				if (!m_shown || !m_ranged)
+					return;
+				for (const QMetaObject::Connection& connection : m_connections)
+					disconnect(connection);
+				m_connections.clear();
+				m_area->removeEventFilter(this);
+				deleteLater();
+			}
 
-		QAbstractScrollArea* m_area = nullptr;
-		QList<QMetaObject::Connection> m_connections;
-		bool m_shown = false;
-		bool m_ranged = false;
-	};
+			QAbstractScrollArea* m_area = nullptr;
+			QList<QMetaObject::Connection> m_connections;
+			bool m_shown = false;
+			bool m_ranged = false;
+		};
 	} // namespace
 
 	void repolishScrollArea(QWidget* widget)
@@ -588,7 +590,7 @@ namespace Theme
 		spinner->start();
 		layout->addWidget(spinner, 0, Qt::AlignHCenter);
 
-		auto* label = new QLabel(QCoreApplication::translate("Theme", "正在切换主题..."), body);
+		auto* label = new QLabel(qtTrId("theme_switching"), body);
 		label->setObjectName(QStringLiteral("themeSwitchLabel"));
 		label->setAlignment(Qt::AlignCenter);
 		layout->addWidget(label);
@@ -606,7 +608,16 @@ namespace Theme
 			currentWindow->hide();
 
 		// 再切换主题：预合成缓存命中，主线程只做缓存取用，不再重建字符串
-		setMode(isDark() ? Mode::Light : Mode::Dark);
+		const Mode nextMode = isDark() ? Mode::Light : Mode::Dark;
+
+		// 记进 AppearanceSetting.json：用户已经显式选过主题了，下次启动就照它，
+		// 不再跟随系统（把 system 固化成明确的 light/dark）。写在 setMode 之前，
+		// 免得后面重建窗口若出岔子，用户的选择反而丢了。
+		AppearanceSetting::setThemeMode(nextMode == Mode::Dark
+			? AppearanceSetting::ThemeMode::Dark
+			: AppearanceSetting::ThemeMode::Light);
+
+		setMode(nextMode);
 		// 让过渡卡立刻换上新主题
 		applyToWindow(popup);
 

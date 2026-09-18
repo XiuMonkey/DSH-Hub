@@ -1,6 +1,6 @@
 #include "TranslationManager.h"
 
-#include "SettingsStore.h"
+#include "ClientSettings.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -95,13 +95,23 @@ namespace
 		}
 	}
 
+	// 随程序内置的语言包基名（必须与 resources/DSHHub.qrc 里的条目一致）
+	const char* const kBuiltinPacks[] = { "dshhub_zh_CN", "dshhub_en" };
+
+	// 释放全部内置语言包：内置保底，外部可覆盖（已存在的文件不动）
+	void releaseBuiltinPacks(const QString& dir)
+	{
+		for (const char* base : kBuiltinPacks)
+			releaseBuiltinPack(QString::fromLatin1(base), dir);
+	}
+
 	// 目标代码的候选顺序：en_US -> en（交给 QTranslator 自己的 fallback 也能处理，
 	// 这里显式列出是为了「找回退语言」时能给出准确名字）
 	QString resolvedCodeFor(const QString& languageCode, const QString& systemCode)
 	{
 		if (!languageCode.isEmpty())
 			return languageCode;
-		return systemCode.isEmpty() ? Translation::sourceLanguageCode() : systemCode;
+		return systemCode.isEmpty() ? Translation::defaultLanguageCode() : systemCode;
 	}
 }
 
@@ -133,12 +143,13 @@ namespace Translation
 {
 	QString savedLanguageCode()
 	{
-		return SettingsStore::loadLanguageCode();
+		// 语言存运行目录的 ClientSetting/AppearanceSetting.json（不是注册表）
+		return AppearanceSetting::languageCode();
 	}
 
 	void setSavedLanguageCode(const QString& code)
 	{
-		SettingsStore::saveLanguageCode(code);
+		AppearanceSetting::setLanguageCode(code);
 	}
 
 	QString activeLanguageCode()
@@ -159,12 +170,13 @@ namespace Translation
 		return QString::fromLatin1(kFileBase) + QLatin1Char('_') + languageCode;
 	}
 
-	bool isSourceLanguage(const QString& languageCode)
+	bool isDefaultLanguage(const QString& languageCode)
 	{
 		if (languageCode.isEmpty())
-			return true; // 没指定 = 原文
+			return true; // 没指定 = 默认语言
 
-		// 中文的任意变体（zh / zh_CN / zh_TW）在源码里就是原文，不需要 .qm
+		// 中文的任意变体（zh / zh_CN / zh_TW）都归入默认语言这一个槽位。
+		// 注意这只影响语言列表的去重，不代表中文"不需要语言包"。
 		return QLocale(languageCode).language() == QLocale::Chinese;
 	}
 
@@ -206,23 +218,36 @@ namespace Translation
 	{
 		QVector<LanguageInfo> languages;
 
-		// 源语言永远可选（它就是代码里的原文）
-		LanguageInfo source;
-		source.code = sourceLanguageCode();
-		source.name = QLocale(source.code).nativeLanguageName();
-		if (source.name.isEmpty())
-			source.name = QStringLiteral("中文");
-		source.isSource = true;
-		languages.append(source);
+		// 默认语言（中文）永远可选：它由 qrc 内置包保底，外部包被删也会自动释放回来
+		LanguageInfo fallback;
+		fallback.code = defaultLanguageCode();
+		fallback.name = QLocale(fallback.code).nativeLanguageName();
+		// 源码里唯一保留的自然语言字面量。它不是界面文案（文案全在语言包里），
+		// 而是"语言下拉里这一项的显示名"，且仅在 Qt 取不到系统语言名时才用到；
+		// 若改成从语言包取，包一旦缺失这一项就会显示成代号，反而更糟。
+		if (fallback.name.isEmpty())
+			fallback.name = QStringLiteral("中文");
+		languages.append(fallback);
 
-		// 再看 translations/ 里有哪些 .qm（没装语言包时这里就是空的）
-		const QDir dir(translationsDir());
-		const QVector<LanguageInfo> found =
-			parseAvailableLanguages(dir.entryList(QDir::Files, QDir::Name));
+		// 候选语言 = qrc 内置包 ∪ 外部 translations/ 里的 .qm。
+		// 内置包必须一起算进来：它们是在本次 init() 里刚被释放到外部目录的，
+		// 而 Windows 的目录项更新有延迟 —— 同一进程内紧接着 entryList 可能还看不到，
+		// 只扫外部目录会导致"首次启动时英文不出现在语言列表里，重启才出现"。
+		// 只认 qrc 里确实存在的包（资源是内存数据，没有上面那个时序问题）；
+		// parseAvailableLanguages 会去重，重复加入无妨。
+		QStringList candidates;
+		for (const char* base : kBuiltinPacks) {
+			const QString name = QString::fromLatin1(base) + QStringLiteral(".qm");
+			if (QFile::exists(QString::fromLatin1(kResourcePrefix) + name))
+				candidates.append(name);
+		}
+		candidates += QDir(translationsDir()).entryList(QDir::Files, QDir::Name);
+
+		const QVector<LanguageInfo> found = parseAvailableLanguages(candidates);
 
 		for (const LanguageInfo& info : found) {
-			if (isSourceLanguage(info.code))
-				continue; // 中文变体不必单列
+			if (isDefaultLanguage(info.code))
+				continue; // 中文变体归入上面那一槽，不单列
 			languages.append(info);
 		}
 
@@ -244,23 +269,24 @@ namespace Translation
 				continue;
 			}
 
-			// .ts 结构：<context><name>类名</name><message><source>原文</source>…
-			// 这里只取 (context, source) —— 目标译文由 QTranslator 现算，不读文件。
+			// .ts 结构（ID-based）：<message id="topbar_settings"><source>原文</source>…
+			// 查表主键是 <message> 的 id 属性，"就地换文案"必须按 id 查；
+			// <source> 只用来给人看原文，不参与查表。
 			QXmlStreamReader xml(&file);
-			QString context;
-			QString source;      // 正在收集的 <source>
+			QString id;     // 当前 <message> 的 id 属性
+			QString source; // 正在收集的 <source>
 			bool inSource = false;
+			const int before = sources.size();
 
 			while (!xml.atEnd()) {
 				xml.readNext();
 
 				if (xml.isStartElement()) {
 					const QStringView name = xml.name();
-					if (name == QLatin1String("context")) {
-						context.clear();
-					}
-					else if (name == QLatin1String("name") && context.isEmpty()) {
-						context = xml.readElementText();
+					if (name == QLatin1String("message")) {
+						id = xml.attributes().value(QLatin1String("id")).toString();
+						source.clear();
+						inSource = false;
 					}
 					else if (name == QLatin1String("source")) {
 						inSource = true;
@@ -268,17 +294,20 @@ namespace Translation
 					}
 				}
 				else if (xml.isCharacters() && inSource) {
-					// 源串可能被拆成多段字符（转义、换行），逐段拼起来
+					// 原文可能被拆成多段字符（转义、换行），逐段拼起来
 					source += xml.text().toString();
 				}
 				else if (xml.isEndElement() && xml.name() == QLatin1String("source")) {
 					inSource = false;
-					if (!source.isEmpty()) {
+				}
+				else if (xml.isEndElement() && xml.name() == QLatin1String("message")) {
+					if (!id.isEmpty()) {
 						TranslationSource entry;
-						entry.context = context;
-						entry.source = source;
+						entry.id = id;
+						entry.text = source;
 						sources.append(entry);
 					}
+					id.clear();
 					source.clear();
 				}
 			}
@@ -286,6 +315,12 @@ namespace Translation
 			if (xml.hasError()) {
 				qWarning().noquote() << QStringLiteral("[Translation] manifest parse error:")
 					<< file.fileName() << xml.errorString();
+			}
+			else if (sources.size() == before) {
+				// 多半是份老式的 tr() 清单（<message> 没有 id 属性）：换文案会整个降级
+				qWarning().noquote() << QStringLiteral("[Translation] manifest has no id-based messages:")
+					<< file.fileName()
+					<< QStringLiteral("-> in-place retranslate will do nothing for it");
 			}
 		}
 
@@ -303,16 +338,16 @@ namespace Translation
 		QDir().mkpath(dir);
 
 		// 先把内置默认语言包释放出来，用户可以就地改（存在则不覆盖）
-		releaseBuiltinPack(translationFileBase(sourceLanguageCode()), dir);
+		releaseBuiltinPack(translationFileBase(defaultLanguageCode()), dir);
 
-		if (isSourceLanguage(wanted)) {
-			// 源语言（中文）也走语言包：这样默认显示同样来自数据文件，
-			// 改文案不必重编译。包里缺这条时 QTranslator 会回退到代码里的原文，
-			// 所以即使内置包缺失，界面也不会变成空白。
+		if (isDefaultLanguage(wanted)) {
+			// 默认语言（中文）同样依赖语言包：文案只存在于数据文件里，改文案不必重编译。
+			// 注意兜底变成了 **key 本身**（qtTrId 对未知 id 原样返回），不再是中文原文，
+			// 所以内置包缺失会让界面露出 topbar_settings 这类代号。
 			const QString origin = installFrom(translationFileBase(wanted), dir);
 			if (origin.isEmpty()) {
-				qInfo().noquote() << QStringLiteral("[Translation] default pack for")
-					<< wanted << QStringLiteral("unavailable -> showing source text as-is");
+				qWarning().noquote() << QStringLiteral("[Translation] default pack for")
+					<< wanted << QStringLiteral("unavailable -> UI will show raw ids");
 			}
 			return;
 		}
@@ -322,13 +357,13 @@ namespace Translation
 		if (!origin.isEmpty())
 			return;
 
-		// 找不到对应语言包：退回源语言的语言包（再退回代码原文），原因写进日志
+		// 找不到对应语言包：退回默认语言的语言包（再退回 key），原因写进日志
 		qInfo().noquote() << QStringLiteral("[Translation] no language pack for")
 			<< wanted << QStringLiteral("under") << dir
 			<< QStringLiteral("-> falling back to the default language");
-		g_activeCode = sourceLanguageCode();
+		g_activeCode = defaultLanguageCode();
 		uninstall();
-		installFrom(translationFileBase(sourceLanguageCode()), dir);
+		installFrom(translationFileBase(defaultLanguageCode()), dir);
 	}
 
 	bool apply(const QString& languageCode)
@@ -342,7 +377,7 @@ namespace Translation
 
 		const QString dir = translationsDir();
 		QDir().mkpath(dir);
-		releaseBuiltinPack(translationFileBase(sourceLanguageCode()), dir);
+		releaseBuiltinPacks(dir);
 
 		// 源语言与其它语言走同一条路径：能装上语言包就用它，装不上就退回代码原文
 		const QString origin = installFrom(translationFileBase(wanted), dir);
@@ -353,10 +388,10 @@ namespace Translation
 				<< wanted << QStringLiteral("under") << dir
 				<< QStringLiteral("-> falling back to the default language");
 			uninstall();
-			installFrom(translationFileBase(sourceLanguageCode()), dir);
+			installFrom(translationFileBase(defaultLanguageCode()), dir);
 		}
 
-		const QString active = switched ? wanted : sourceLanguageCode();
+		const QString active = switched ? wanted : defaultLanguageCode();
 		const bool changed = (active != g_activeCode);
 		g_activeCode = active;
 

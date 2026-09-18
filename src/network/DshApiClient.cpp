@@ -221,9 +221,9 @@ void DshApiClient::startAuthHandshake()
 
 			// 服务端真的答了却没有 Set-Cookie（404/500 之类）：这是配置问题，照旧报出来
 			failAuthQueue(QStringLiteral("auth"),
-				QStringLiteral("DSH 认证失败：服务端未返回 Set-Cookie（HTTP %1）").arg(status));
+				qtTrId("server_auth_failed_fmt").arg(status));
 			emit transportError(QStringLiteral("auth"),
-				QStringLiteral("DSH 认证失败：服务端未返回 Set-Cookie（HTTP %1）").arg(status));
+				qtTrId("server_auth_failed_fmt").arg(status));
 			return;
 		}
 
@@ -544,7 +544,7 @@ void DshApiClient::respond(
 		if (onError) {
 			RpcError error;
 			error.code = QStringLiteral("stream-not-ready");
-			error.message = QStringLiteral("事件流尚未就绪，无法回执审批/提问");
+			error.message = qtTrId("server_stream_not_ready");
 			onError(error);
 		}
 		return;
@@ -603,7 +603,7 @@ void DshApiClient::post(
 		if (m_authQueue.size() >= kMaxQueuedCalls) {
 			if (onError)
 				onError(RpcError{ QStringLiteral("auth"),
-					QStringLiteral("认证未就绪，等待中的请求过多（%1）").arg(kMaxQueuedCalls), {} });
+					qtTrId("server_auth_queue_full_fmt").arg(kMaxQueuedCalls), {} });
 			return;
 		}
 

@@ -35,4 +35,11 @@ private slots:
 	void presetSelectionFallsBackToServerDefault();
 	void presetSelectionFallsBackToFirstWhenSavedMissing();
 	void presetSelectionEmptyList();
+
+	// Agent 预设“设为默认”的写入载荷与守卫
+	// （settings/update 的参数形状是 strict，写错就静默失效，所以逐键断言）
+	void presetDefaultPatchShape();
+	void settingsUpdateArgsShape();
+	void presetPersistRejectsEmptyId();
+	void presetPersistRejectsMissingClient();
 };

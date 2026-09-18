@@ -153,7 +153,7 @@ void DSHHub::buildUi()
 	m_chatInput = new ChatInputWidget(rightPanel);
 
 	// 底部“没有更多了”提示
-	m_toastLabel = new QLabel(tr("啊哦，没有更多了"), this);
+	m_toastLabel = new QLabel(qtTrId("common_no_more_items"), this);
 	m_toastLabel->setObjectName(QStringLiteral("toastLabel"));
 	m_toastLabel->setAlignment(Qt::AlignCenter);
 	m_toastLabel->hide();
@@ -299,7 +299,7 @@ void DSHHub::buildUi()
 	rowLayout->addStretch(1);
 	rowLayout->addWidget(spinner, 0, Qt::AlignVCenter);
 
-	m_initLabel = new QLabel(tr("DSH Hub 正在初始化..."), initCard);
+	m_initLabel = new QLabel(qtTrId("app_initializing"), initCard);
 	m_initLabel->setObjectName(QStringLiteral("initLabel"));
 	m_initLabel->setAlignment(Qt::AlignCenter);
 	rowLayout->addWidget(m_initLabel, 0, Qt::AlignVCenter);

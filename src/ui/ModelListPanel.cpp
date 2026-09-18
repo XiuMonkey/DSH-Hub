@@ -122,9 +122,9 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 	// 只在“不是随附默认”时打标：用户自己加/改的，或只在 settings 里声明的
 	QString badge;
 	if (info.userDeclared)
-		badge = tr("已自定义");
+		badge = qtTrId("model_source_custom");
 	else if (!info.declared)
-		badge = tr("适配器内置");
+		badge = qtTrId("model_source_adapter_builtin");
 	if (!badge.isEmpty()) {
 		auto* badgeLabel = new QLabel(badge, m_header);
 		badgeLabel->setObjectName(QStringLiteral("modelListEntryBadge"));
@@ -146,21 +146,21 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 	detailLayout->setContentsMargins(10, 0, 10, 10);
 	detailLayout->setSpacing(2);
 
-	addDetailRow(detailLayout, m_detail, tr("提供方路由"), info.provider);
-	addDetailRow(detailLayout, m_detail, tr("模型 ID"), info.id);
-	addDetailRow(detailLayout, m_detail, tr("显示名称"), info.name);
+	addDetailRow(detailLayout, m_detail, qtTrId("model_provider_route"), info.provider);
+	addDetailRow(detailLayout, m_detail, qtTrId("model_id_label"), info.id);
+	addDetailRow(detailLayout, m_detail, qtTrId("model_display_name"), info.name);
 
 	if (!info.description.isEmpty())
-		addDetailRow(detailLayout, m_detail, tr("说明"), info.description);
+		addDetailRow(detailLayout, m_detail, qtTrId("model_description_label"), info.description);
 
-	addDetailRow(detailLayout, m_detail, tr("上下文窗口"),
+	addDetailRow(detailLayout, m_detail, qtTrId("model_context_window"),
 		info.hasContextWindow ? formatCount(info.contextWindow) : QString());
-	addDetailRow(detailLayout, m_detail, tr("最大输出"),
+	addDetailRow(detailLayout, m_detail, qtTrId("model_max_output"),
 		info.hasMaxTokens ? formatCount(info.maxTokens) : QString());
 
 	if (info.reasoningDisabled) {
-		addDetailRow(detailLayout, m_detail, tr("思考档位"),
-			tr("已声明不提供"));
+		addDetailRow(detailLayout, m_detail, qtTrId("model_think_level"),
+			qtTrId("model_think_not_offered"));
 	}
 	else if (info.hasReasoning) {
 		QStringList names;
@@ -168,8 +168,8 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 			names.append(level.name);
 		QString value = names.join(QStringLiteral(" / "));
 		if (!info.defaultLevelId.isEmpty())
-			value += tr("（默认 %1）").arg(info.defaultLevelId);
-		addDetailRow(detailLayout, m_detail, tr("思考档位"), value);
+			value += qtTrId("model_default_value_fmt").arg(info.defaultLevelId);
+		addDetailRow(detailLayout, m_detail, qtTrId("model_think_level"), value);
 	}
 	else {
 		// 与输入框底的选择器保持一致：未公布时那里给的是通用四档，这里也写明
@@ -177,17 +177,17 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 		for (const ReasoningLevel& level : fallbackReasoningLevels())
 			fallback.append(level.name);
 
-		addDetailRow(detailLayout, m_detail, tr("思考档位"),
-			tr("该模型未公布（界面按通用档位提供：%1）")
+		addDetailRow(detailLayout, m_detail, qtTrId("model_think_level"),
+			qtTrId("model_think_undeclared_fmt")
 			.arg(fallback.join(QStringLiteral(" / "))));
 	}
 
-	addDetailRow(detailLayout, m_detail, tr("配置来源"),
+	addDetailRow(detailLayout, m_detail, qtTrId("model_config_source"),
 		info.declared
 		? (info.userDeclared
-			? tr("settings 用户层")
-			: tr("settings 随附配置"))
-		: tr("适配器公布，未在 settings 中声明"));
+			? qtTrId("model_source_settings_user")
+			: qtTrId("model_source_settings_bundled"))
+		: qtTrId("model_source_adapter_only"));
 
 	if (!info.settingsNs.isEmpty()) {
 		QStringList path = info.settingsPath;
@@ -195,8 +195,8 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 
 		QString where = QStringLiteral("%1 · %2").arg(info.settingsNs, path.join(QLatin1Char('.')));
 		if (!info.settingsWritable)
-			where += tr("（设置只读）");
-		addDetailRow(detailLayout, m_detail, tr("写回地址"), where);
+			where += qtTrId("model_settings_readonly_suffix");
+		addDetailRow(detailLayout, m_detail, qtTrId("model_writeback_target"), where);
 	}
 
 	layout->addWidget(m_detail);
@@ -304,7 +304,7 @@ public:
 		clear();
 		m_chosen = false;
 
-		auto* remove = new QPushButton(tr("删除"), m_body);
+		auto* remove = new QPushButton(qtTrId("common_delete"), m_body);
 		remove->setObjectName(QStringLiteral("modelListContextAction"));
 		remove->setFlat(true);
 		remove->setCursor(Qt::PointingHandCursor);
@@ -365,14 +365,13 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	// 顶部三行说明文字之间贴紧些（原来 6px 偏松）
 	layout->setSpacing(3);
 
-	auto* title = new QLabel(tr("模型列表"), this);
+	auto* title = new QLabel(qtTrId("model_list_title"), this);
 	title->setObjectName(QStringLiteral("modelListTitle"));
 	// 纵向 Fixed：这些说明文字只占自己一行的高度，不被布局拉长
 	title->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
 	auto* hint = new QLabel(
-		tr("模型目录由服务端适配器公布；新增的模型会写进服务端的 settings 文档，"
-			"新会话与当前会话都会立即使用。点击任一成员可展开查看详情。"),
+		qtTrId("model_list_desc"),
 		this);
 	hint->setWordWrap(true);
 	hint->setObjectName(QStringLiteral("modelListHint"));
@@ -425,7 +424,7 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	m_scroll->setWidget(m_listContent);
 
 	// ---------------- 添加模型 ----------------
-	m_addButton = new QPushButton(tr("添加模型"), this);
+	m_addButton = new QPushButton(qtTrId("model_add"), this);
 	m_addButton->setObjectName(QStringLiteral("modelListAddButton"));
 	m_addButton->setCursor(Qt::PointingHandCursor);
 
@@ -452,12 +451,12 @@ void ModelListPanel::refresh()
 {
 	if (!m_api) {
 		if (m_status)
-			m_status->setText(tr("服务端未就绪，暂时无法读取模型目录。"));
+			m_status->setText(qtTrId("model_server_not_ready"));
 		return;
 	}
 
 	if (m_status)
-		m_status->setText(tr("正在读取服务端模型目录…"));
+		m_status->setText(qtTrId("model_loading_catalog"));
 
 	// 面板是常驻对象，请求可能在关闭设置后才回来
 	QPointer<ModelListPanel> self(this);
@@ -474,7 +473,7 @@ void ModelListPanel::refresh()
 				<< error.code << error.message;
 			if (self->m_status) {
 				self->m_status->setText(
-					tr("读取模型目录失败：%1 %2").arg(error.code, error.message));
+					qtTrId("model_catalog_load_failed_fmt").arg(error.code, error.message));
 			}
 		});
 }
@@ -549,7 +548,7 @@ void ModelListPanel::populateRows()
 
 	if (m_rows.isEmpty()) {
 		auto* empty = new QLabel(
-			tr("服务端没有公布任何模型。可先用下面的“添加模型”写一个到 settings。"),
+			qtTrId("model_catalog_empty"),
 			m_listContent);
 		empty->setWordWrap(true);
 		empty->setObjectName(QStringLiteral("modelListEmpty"));
@@ -565,16 +564,16 @@ void ModelListPanel::updateStatus()
 		return;
 
 	QStringList notes;
-	notes.append(tr("共 %1 个模型，%2 个提供方。")
+	notes.append(qtTrId("model_catalog_summary_fmt")
 		.arg(m_rows.size())
 		.arg(m_view.groups.size()));
 
 	// 写不了就直说，别让用户填完表单才被拒
 	if (!m_view.settingsWritable)
-		notes.append(tr("服务端设置只读，无法新增模型。"));
+		notes.append(qtTrId("model_add_readonly"));
 
 	for (const ModelCatalogFailure& failure : m_view.failures) {
-		notes.append(tr("提供方 %1 的目录加载失败：%2")
+		notes.append(qtTrId("model_provider_load_failed_fmt")
 			.arg(failure.name, failure.message));
 	}
 
@@ -585,7 +584,7 @@ void ModelListPanel::updateStatus()
 		m_addButton->setEnabled(canWrite);
 		m_addButton->setToolTip(canWrite
 			? QString()
-			: tr("需要 llm/listConfigurableProviders 与可写的设置文档才能新增模型"));
+			: qtTrId("model_add_requires_api"));
 	}
 }
 
@@ -604,7 +603,7 @@ void ModelListPanel::buildForm(QWidget* parent)
 	layout->setContentsMargins(10, 10, 10, 10);
 	layout->setSpacing(6);
 
-	auto* formTitle = new QLabel(tr("新增模型"), m_form);
+	auto* formTitle = new QLabel(qtTrId("model_add_title"), m_form);
 	formTitle->setObjectName(QStringLiteral("modelListFormTitle"));
 	layout->addWidget(formTitle);
 
@@ -624,48 +623,48 @@ void ModelListPanel::buildForm(QWidget* parent)
 
 	m_providerCombo = new QComboBox(m_form);
 	m_providerCombo->setObjectName(QStringLiteral("modelListField"));
-	addField(tr("提供方路由"), m_providerCombo);
+	addField(qtTrId("model_provider_route"), m_providerCombo);
 
 	m_idEdit = new QLineEdit(m_form);
 	m_idEdit->setObjectName(QStringLiteral("modelListField"));
-	m_idEdit->setPlaceholderText(tr("必填，服务端协议里的 model 字符串"));
-	addField(tr("模型 ID"), m_idEdit);
+	m_idEdit->setPlaceholderText(qtTrId("model_id_hint"));
+	addField(qtTrId("model_id_label"), m_idEdit);
 
 	m_nameEdit = new QLineEdit(m_form);
 	m_nameEdit->setObjectName(QStringLiteral("modelListField"));
-	m_nameEdit->setPlaceholderText(tr("可空，界面展示名（默认用模型 ID）"));
-	addField(tr("显示名称"), m_nameEdit);
+	m_nameEdit->setPlaceholderText(qtTrId("model_display_name_hint"));
+	addField(qtTrId("model_display_name"), m_nameEdit);
 
 	m_contextEdit = new QLineEdit(m_form);
 	m_contextEdit->setObjectName(QStringLiteral("modelListField"));
-	m_contextEdit->setPlaceholderText(tr("可空，例如 1000000"));
+	m_contextEdit->setPlaceholderText(qtTrId("model_context_window_hint"));
 	m_contextEdit->setValidator(new QIntValidator(1, 100000000, m_contextEdit));
-	addField(tr("上下文窗口"), m_contextEdit);
+	addField(qtTrId("model_context_window"), m_contextEdit);
 
 	m_maxTokensEdit = new QLineEdit(m_form);
 	m_maxTokensEdit->setObjectName(QStringLiteral("modelListField"));
-	m_maxTokensEdit->setPlaceholderText(tr("可空，例如 384000"));
+	m_maxTokensEdit->setPlaceholderText(qtTrId("model_max_output_hint"));
 	m_maxTokensEdit->setValidator(new QIntValidator(1, 100000000, m_maxTokensEdit));
-	addField(tr("最大输出"), m_maxTokensEdit);
+	addField(qtTrId("model_max_output"), m_maxTokensEdit);
 
 	// 下面是按适配器族二选一的字段，切路由时整对显隐
 	// （QGridLayout 的行只含隐藏控件时高度归零，所以直接隐藏标签与控件即可）
-	m_effortsLabel = new QLabel(tr("思考档位"), m_form);
+	m_effortsLabel = new QLabel(qtTrId("model_think_level"), m_form);
 	m_effortsLabel->setObjectName(QStringLiteral("modelListFieldLabel"));
 	grid->addWidget(m_effortsLabel, row, 0, Qt::AlignRight | Qt::AlignVCenter);
 
 	m_effortsEdit = new QLineEdit(m_form);
 	m_effortsEdit->setObjectName(QStringLiteral("modelListField"));
 	m_effortsEdit->setPlaceholderText(
-		tr("可空，逗号分隔：off/low/high/max；留空则由适配器决定"));
+		qtTrId("model_think_level_hint"));
 	grid->addWidget(m_effortsEdit, row, 1);
 	++row;
 
-	m_modalitiesLabel = new QLabel(tr("输入模态"), m_form);
+	m_modalitiesLabel = new QLabel(qtTrId("model_input_modality"), m_form);
 	m_modalitiesLabel->setObjectName(QStringLiteral("modelListFieldLabel"));
 	grid->addWidget(m_modalitiesLabel, row, 0, Qt::AlignRight | Qt::AlignVCenter);
 
-	m_imageInputBox = new QCheckBox(tr("支持图片输入"), m_form);
+	m_imageInputBox = new QCheckBox(qtTrId("model_supports_image"), m_form);
 	m_imageInputBox->setObjectName(QStringLiteral("modelListField"));
 	grid->addWidget(m_imageInputBox, row, 1);
 	++row;
@@ -679,7 +678,7 @@ void ModelListPanel::buildForm(QWidget* parent)
 	m_apiKeyEdit = new QLineEdit(m_form);
 	m_apiKeyEdit->setObjectName(QStringLiteral("modelListField"));
 	m_apiKeyEdit->setEchoMode(QLineEdit::Password);
-	m_apiKeyEdit->setPlaceholderText(tr("可空；填写则写入该路由的凭据引用"));
+	m_apiKeyEdit->setPlaceholderText(qtTrId("model_credential_ref_hint"));
 	grid->addWidget(m_apiKeyEdit, row, 1);
 	++row;
 
@@ -707,11 +706,11 @@ void ModelListPanel::buildForm(QWidget* parent)
 	actions->setSpacing(6);
 	actions->addStretch(1);
 
-	auto* cancelButton = new QPushButton(tr("取消"), m_form);
+	auto* cancelButton = new QPushButton(qtTrId("common_cancel"), m_form);
 	cancelButton->setObjectName(QStringLiteral("modelListCancelButton"));
 	cancelButton->setCursor(Qt::PointingHandCursor);
 
-	m_submitButton = new QPushButton(tr("添加"), m_form);
+	m_submitButton = new QPushButton(qtTrId("common_add"), m_form);
 	m_submitButton->setObjectName(QStringLiteral("modelListSubmitButton"));
 	m_submitButton->setCursor(Qt::PointingHandCursor);
 
@@ -765,7 +764,7 @@ void ModelListPanel::showRowMenu(
 	// 写不了服务端就没法删，直接把原因写在菜单里
 	const QString blocked = m_view.settingsWritable
 		? QString()
-		: tr("服务端设置只读，无法删除模型。");
+		: qtTrId("model_delete_readonly");
 	m_rowMenu->build(m_view.settingsWritable, blocked);
 	m_rowMenu->adjustSize();
 
@@ -793,7 +792,7 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 	if (!entry || !ns) {
 		qWarning().noquote() << QStringLiteral("[ModelList] cannot locate settings for")
 			<< provider << modelId;
-		setNotice(tr("读不到 %1 的 settings 位置，无法删除。").arg(provider));
+		setNotice(qtTrId("model_settings_path_missing_fmt").arg(provider));
 		return;
 	}
 
@@ -831,7 +830,7 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 
 			qInfo().noquote() << QStringLiteral("[ModelList] removed %1 -> %2/%3")
 				.arg(settingsNs, provider, modelId);
-			self->setNotice(tr("已删除模型 %1。").arg(modelId));
+			self->setNotice(qtTrId("model_deleted_fmt").arg(modelId));
 		},
 		[self, modelId](const DshApiClient::RpcError& error) {
 			if (!self)
@@ -840,7 +839,7 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 			qWarning().noquote() << QStringLiteral("[ModelList] settings/mutate (remove) failed:")
 				<< error.code << error.message;
 			self->setNotice(
-				tr("删除模型 %1 失败：%2 %3").arg(modelId, error.code, error.message));
+				qtTrId("model_delete_failed_fmt").arg(modelId, error.code, error.message));
 		});
 }
 
@@ -895,7 +894,7 @@ QString ModelListPanel::routeHint(const ConfigurableProvider& provider) const
 
 	const SettingsNamespace* ns = m_view.findNamespace(provider.settingsNs);
 	if (!ns) {
-		parts.append(tr("读不到 settings 命名空间 %1，暂时无法写入。")
+		parts.append(qtTrId("model_namespace_missing_fmt")
 			.arg(provider.settingsNs));
 		return parts.join(QLatin1Char(' '));
 	}
@@ -903,7 +902,7 @@ QString ModelListPanel::routeHint(const ConfigurableProvider& provider) const
 	const QJsonArray models = ModelSelectionService::configuredModels(*ns, provider.settingsPath);
 	const bool userDeclared = ModelSelectionService::userDeclaresModels(*ns, provider.settingsPath);
 
-	parts.append(tr("写入 %1.%2（当前 %3 个条目）。")
+	parts.append(qtTrId("model_write_progress_fmt")
 		.arg(provider.settingsNs,
 			ModelSelectionService::modelsPath(provider).join(QLatin1Char('.')),
 			QString::number(models.size())));
@@ -912,15 +911,14 @@ QString ModelListPanel::routeHint(const ConfigurableProvider& provider) const
 		// pi-ai 的 models 是整体替换：路由自带适配器随附目录时，
 		// 第一次写成显式列表会收窄公布范围（随附的其余模型不再出现）。
 		if (!userDeclared)
-			parts.append(tr("注意：该路由目前沿用适配器随附目录，"
-				"写入后本路由只公布这份列表，其余模型将不再出现在模型列表中。"));
+			parts.append(qtTrId("model_write_warning_desc"));
 	}
 	else {
-		parts.append(tr("deepseek 适配器：整份 models 列表会被本次写入替换。"));
+		parts.append(qtTrId("model_write_deepseek_warning"));
 	}
 
 	if (!m_view.settingsWritable)
-		parts.append(tr("服务端设置只读，写入会被拒绝。"));
+		parts.append(qtTrId("model_write_readonly"));
 
 	return parts.join(QLatin1Char(' '));
 }
@@ -939,9 +937,9 @@ void ModelListPanel::syncFormToRoute()
 	for (const ConfigurableProvider& provider : m_view.providers) {
 		QString label = provider.displayName;
 		if (label != provider.provider)
-			label += QStringLiteral("（%1）").arg(provider.provider);
+			label += qtTrId("model_provider_route_suffix_fmt").arg(provider.provider);
 		if (!provider.active)
-			label += tr(" · 未启用");
+			label += qtTrId("model_disabled_suffix");
 
 		m_providerCombo->addItem(label, provider.provider);
 	}
@@ -969,7 +967,7 @@ void ModelListPanel::syncFormToRoute()
 	if (m_routeHint) {
 		m_routeHint->setText(provider
 			? routeHint(*provider)
-			: tr("服务端没有提供可配置的提供方路由，无法新增模型。"));
+			: qtTrId("model_no_configurable_provider"));
 	}
 
 	refreshCredentialRow();
@@ -987,7 +985,7 @@ void ModelListPanel::refreshCredentialRow()
 	m_credential = CredentialStatus();
 	if (m_apiKeyEdit) {
 		m_apiKeyEdit->clear();
-		m_apiKeyEdit->setPlaceholderText(tr("可空；填写则写入该路由的凭据引用"));
+		m_apiKeyEdit->setPlaceholderText(qtTrId("model_credential_ref_hint"));
 	}
 
 	if (!provider) {
@@ -1015,8 +1013,8 @@ void ModelListPanel::refreshCredentialRow()
 		: declared;
 
 	m_apiKeyRefBase = declared.isEmpty()
-		? tr("凭据引用 %1（profile 未点名 apiKeyEnv，按约定派生并记入配置）").arg(m_keyRef)
-		: tr("凭据引用 %1（由该路由 profile 的 apiKeyEnv 指定）").arg(m_keyRef);
+		? qtTrId("model_credential_derived_fmt").arg(m_keyRef)
+		: qtTrId("model_credential_from_profile_fmt").arg(m_keyRef);
 	refreshCredentialRowText();
 
 	// 服务端才是凭据状态的权威：问一次该引用是否已配置、是否可写
@@ -1072,28 +1070,28 @@ void ModelListPanel::refreshCredentialRowText()
 
 	QString state;
 	if (!m_credential.known) {
-		state = tr("；状态未知，可直接填写（写入时由服务端校验）");
+		state = qtTrId("model_credential_unknown_suffix");
 	}
 	else if (!m_credential.writable) {
 		// 部署把该引用交给环境变量管理：表单不该假装能改它
-		state = tr("；服务端标记为只读（该凭据由部署管理，请在环境里设置它）");
+		state = qtTrId("model_credential_readonly_suffix");
 	}
 	else if (m_credential.configured) {
-		state = tr("；服务端已配置%1")
+		state = qtTrId("model_credential_configured_fmt")
 			.arg(m_credential.source.isEmpty()
 				? QString()
-				: tr("（来源 %1）").arg(m_credential.source));
+				: qtTrId("model_credential_source_fmt").arg(m_credential.source));
 	}
 	else {
-		state = tr("；服务端尚未配置");
+		state = qtTrId("model_credential_unconfigured_suffix");
 	}
 
 	m_apiKeyRefLabel->setText(m_apiKeyRefBase + state);
 
 	if (m_apiKeyEdit) {
 		m_apiKeyEdit->setPlaceholderText(readOnly
-			? tr("该凭据为只读，留空即可")
-			: tr("可空；填写则写入该路由的凭据引用"));
+			? qtTrId("model_credential_readonly_hint")
+			: qtTrId("model_credential_ref_hint"));
 	}
 }
 
@@ -1126,13 +1124,13 @@ void ModelListPanel::submitForm()
 
 	const ConfigurableProvider* provider = selectedProvider();
 	if (!provider) {
-		setFeedback(tr("请先选择一个提供方路由。"));
+		setFeedback(qtTrId("model_select_provider_first"));
 		return;
 	}
 
 	const SettingsNamespace* ns = m_view.findNamespace(provider->settingsNs);
 	if (!ns) {
-		setFeedback(tr("读不到 settings 命名空间 %1，无法写入。")
+		setFeedback(qtTrId("model_write_namespace_missing_fmt")
 			.arg(provider->settingsNs));
 		return;
 	}
@@ -1143,13 +1141,13 @@ void ModelListPanel::submitForm()
 	request.name = m_nameEdit ? m_nameEdit->text().trimmed() : QString();
 
 	if (request.id.isEmpty()) {
-		setFeedback(tr("模型 ID 不能为空。"));
+		setFeedback(qtTrId("model_id_required"));
 		return;
 	}
 
 	if (!parseOptionalInt(m_contextEdit, &request.hasContextWindow, &request.contextWindow)
 		|| !parseOptionalInt(m_maxTokensEdit, &request.hasMaxTokens, &request.maxTokens)) {
-		setFeedback(tr("上下文窗口与最大输出需要是正整数，或留空。"));
+		setFeedback(qtTrId("model_numeric_invalid"));
 		return;
 	}
 
@@ -1172,7 +1170,7 @@ void ModelListPanel::submitForm()
 			}
 
 			if (!unknown.isEmpty()) {
-				setFeedback(tr("未知的思考档位：%1（可用：%2）")
+				setFeedback(qtTrId("model_think_level_unknown_fmt")
 					.arg(unknown.join(QStringLiteral(", ")), thinkingLevelList()));
 				return;
 			}
@@ -1193,8 +1191,8 @@ void ModelListPanel::submitForm()
 	if (m_submitButton)
 		m_submitButton->setEnabled(false);
 	setFeedback(apiKey.isEmpty()
-		? tr("正在写入服务端…")
-		: tr("正在写入凭据与模型…"));
+		? qtTrId("model_writing")
+		: qtTrId("model_writing_credential"));
 
 	// 按提供方路由复制一份，供异步回调使用（provider/ns 指向 m_view 内部，刷新会失效）
 	const ConfigurableProvider providerCopy = *provider;
@@ -1226,7 +1224,7 @@ void ModelListPanel::submitForm()
 			qWarning().noquote() << QStringLiteral("[ModelList] credentials/set failed:")
 				<< error.code << error.message;
 
-			self->setFeedback(tr("写入凭据 %1 失败：%2 %3（模型未新增）")
+			self->setFeedback(qtTrId("model_credential_write_failed_fmt")
 				.arg(ref, error.code, error.message));
 		});
 }
@@ -1283,8 +1281,8 @@ void ModelListPanel::writeModel(const ConfigurableProvider& provider, const Sett
 					settingsNs, providerId, modelId);
 
 			self->setFeedback(replacing
-				? tr("已更新模型 %1（覆盖同 ID 条目）。").arg(modelId)
-				: tr("已新增模型 %1。").arg(modelId));
+				? qtTrId("model_updated_fmt").arg(modelId)
+				: qtTrId("model_added_fmt").arg(modelId));
 
 			if (self->m_idEdit)
 				self->m_idEdit->clear();
@@ -1311,6 +1309,6 @@ void ModelListPanel::writeModel(const ConfigurableProvider& provider, const Sett
 				<< error.code << error.message;
 
 			self->setFeedback(
-				tr("新增失败：%1 %2").arg(error.code, error.message));
+				qtTrId("model_add_failed_fmt").arg(error.code, error.message));
 		});
 }

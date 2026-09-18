@@ -80,9 +80,9 @@ void PopupWindow::retranslateUi()
 {
 	// 标题栏左侧文案 + 关闭按钮的无障碍名/提示都随语言走
 	if (m_titleLabel)
-		m_titleLabel->setText(m_title.isEmpty() ? tr("弹窗") : m_title);
+		m_titleLabel->setText(m_title.isEmpty() ? qtTrId("popup_title") : m_title);
 	if (m_closeButton)
-		m_closeButton->setToolTip(tr("关闭"));
+		m_closeButton->setToolTip(qtTrId("common_close"));
 }
 
 void PopupWindow::changeEvent(QEvent* event)

@@ -168,7 +168,6 @@ private:
 	void handlePipeRequest(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket);
 
 	QString m_sessionId;
-	QString m_defaultAgentPreset;
 
 	// 当前会话里见过的最新事件 seq：缓存快照带上它，恢复缓存时用来判断
 	// 缓存内容是否已被后来的事件超越（超越就得重建，没超越就秒开）。

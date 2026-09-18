@@ -105,7 +105,10 @@ void TestSessionCatalog::sessionsWithoutTitleUsePlaceholder()
 
 	catalog.setSessions(items);
 
-	QCOMPARE(catalog.titleFor(QStringLiteral("s1")), QStringLiteral("未命名会话"));
+	// 没有标题的会话回落到"未命名会话"占位文案。key 化之后文案只存在于语言包里，
+	// 而单元测试不装 translator（qtTrId 对未知 id 原样返回），
+	// 所以这里断言的是"用的是哪个 key"，不是它的译文。
+	QCOMPARE(catalog.titleFor(QStringLiteral("s1")), qtTrId("session_untitled"));
 	QCOMPARE(catalog.titleFor(QStringLiteral("s2")), QStringLiteral("紧凑标题"));
 }
 

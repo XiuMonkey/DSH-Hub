@@ -64,7 +64,8 @@ public:
 	void syncOverlayToHost();
 
 signals:
-	// 用户选择了一个 Agent 预设
+	// 用户把某个 Agent 预设设为了默认，且**服务端已经写入成功**。
+	// 生效范围由服务端定：只影响此后新建的会话，已有会话不受影响。
 	void agentPresetChanged(const QString& presetId);
 
 	// 服务端新增（或覆盖）了一个模型条目

@@ -37,7 +37,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	, m_installer(new PluginMarketInstaller(this))
 {
 	m_market->setBaseUrl(baseUrl);
-	setTitle(tr("插件市场"));
+	setTitle(qtTrId("plugin_market_title"));
 
 	auto* content = new QWidget(this);
 	auto* rootLayout = new QVBoxLayout(content);
@@ -49,13 +49,13 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	toolbar->setSpacing(8);
 
 	m_searchEdit = new QLineEdit(content);
-	m_searchEdit->setPlaceholderText(tr("搜索插件..."));
+	m_searchEdit->setPlaceholderText(qtTrId("plugin_search_placeholder"));
 	m_searchEdit->setClearButtonEnabled(true);
 	m_searchEdit->setObjectName(QStringLiteral("pluginSearchEdit"));
 
-	auto* refreshButton = new QPushButton(tr("刷新"), content);
+	auto* refreshButton = new QPushButton(qtTrId("common_refresh"), content);
 	refreshButton->setObjectName(QStringLiteral("pluginRefreshButton"));
-	m_restartButton = new QPushButton(tr("重启服务"), content);
+	m_restartButton = new QPushButton(qtTrId("plugin_restart_server"), content);
 	m_restartButton->setObjectName(QStringLiteral("pluginRestartButton"));
 
 	for (QPushButton* button : { refreshButton, m_restartButton }) {
@@ -97,11 +97,11 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 
 	// 分页栏
 	auto* pageBar = new QHBoxLayout;
-	m_prevButton = new QPushButton(tr("上一页"), marketPage);
+	m_prevButton = new QPushButton(qtTrId("common_prev_page"), marketPage);
 	m_prevButton->setObjectName(QStringLiteral("pluginPrevPageButton"));
-	m_nextButton = new QPushButton(tr("下一页"), marketPage);
+	m_nextButton = new QPushButton(qtTrId("common_next_page"), marketPage);
 	m_nextButton->setObjectName(QStringLiteral("pluginNextPageButton"));
-	m_pageLabel = new QLabel(tr("第 1 / 1 页"), marketPage);
+	m_pageLabel = new QLabel(qtTrId("plugin_page_initial"), marketPage);
 	m_pageLabel->setObjectName(QStringLiteral("pluginPageLabel"));
 	m_pageLabel->setAlignment(Qt::AlignCenter);
 
@@ -117,7 +117,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 
 	marketLayout->addLayout(pageBar);
 
-	m_tabs->addTab(marketPage, tr("插件市场"));
+	m_tabs->addTab(marketPage, qtTrId("plugin_market_title"));
 
 	// ========== 已安装页 ==========
 	auto* installedPage = new QWidget(content);
@@ -141,7 +141,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 
 	installedLayout->addWidget(m_installedScroll, 1);
 
-	m_tabs->addTab(installedPage, tr("已安装"));
+	m_tabs->addTab(installedPage, qtTrId("plugin_installed"));
 
 	// 安装进度
 	m_progressBar = new QProgressBar(content);
@@ -164,7 +164,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	m_statusLabel = new QLabel(content);
 	m_statusLabel->setObjectName(QStringLiteral("pluginStatusLabel"));
 	attachStatusLabel(m_statusLabel); // 宽度布局生效后重排状态文案
-	setStatus(tr("正在加载插件市场..."));
+	setStatus(qtTrId("plugin_loading"));
 	rootLayout->addWidget(m_statusLabel);
 
 	setContent(content);
@@ -192,21 +192,21 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 			// 快照不是最新数据，轮询直到后台刷新完成，让市场自动切换到最新列表
 			if (m_registryRefreshTimer && !m_registryRefreshTimer->isActive())
 				m_registryRefreshTimer->start();
-			setStatus(tr("插件市场已加载（离线快照），正在等待最新数据..."));
+			setStatus(qtTrId("plugin_loaded_offline"));
 		}
 		else {
 			if (m_registryRefreshTimer)
 				m_registryRefreshTimer->stop();
 			if (source == QStringLiteral("cache")) {
-				setStatus(tr("插件市场已加载（缓存），共 %1 个插件").arg(m_plugins.size()));
+				setStatus(qtTrId("plugin_loaded_cached_fmt").arg(m_plugins.size()));
 			}
 			else {
-				setStatus(tr("插件市场已加载，共 %1 个插件").arg(m_plugins.size()));
+				setStatus(qtTrId("plugin_loaded_fmt").arg(m_plugins.size()));
 			}
 		}
 		});
 	connect(m_market, &PluginMarketClient::registryFailed, this, [this](const QString& error, int) {
-		setStatus(tr("加载插件市场失败: %1").arg(error));
+		setStatus(qtTrId("plugin_load_failed_fmt").arg(error));
 		});
 	connect(m_market, &PluginMarketClient::installedLoaded, this, &PluginsManager::onInstalledLoaded);
 	connect(m_market, &PluginMarketClient::operationCompleted, this, &PluginsManager::onMarketOperationCompleted);
@@ -215,18 +215,18 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	// 市场包自动安装的进度与结果
 	connect(m_installer, &PluginMarketInstaller::installStarted, this, [this]() {
 		m_progressBar->show();
-		setStatus(tr("未检测到插件市场，正在自动安装..."));
+		setStatus(qtTrId("plugin_auto_installing"));
 		});
 	connect(m_installer, &PluginMarketInstaller::installOutput, this, [this](const QString& line) {
-		setStatus(tr("正在安装插件市场: %1").arg(line.left(60)));
+		setStatus(qtTrId("plugin_installing_fmt").arg(line.left(60)));
 		});
 	connect(m_installer, &PluginMarketInstaller::installFinished, this, [this](bool ok) {
 		m_progressBar->hide();
 		if (!ok) {
-			setStatus(tr("插件市场安装失败，请检查网络或稍后重试"));
+			setStatus(qtTrId("plugin_install_failed"));
 			return;
 		}
-		setStatus(tr("插件市场安装完成，正在重启服务..."));
+		setStatus(qtTrId("plugin_install_done_restarting"));
 		emit serverRestartRequested();
 		retryRefreshAfterInstall(0);
 		});
@@ -311,7 +311,7 @@ void PluginsManager::retryRefreshAfterInstall(int attempt)
 void PluginsManager::refresh()
 {
 	m_registryLoaded = false;
-	setStatus(tr("正在加载插件市场..."));
+	setStatus(qtTrId("plugin_loading"));
 	m_market->fetchRegistry();
 	m_market->fetchInstalled();
 }
@@ -330,7 +330,7 @@ void PluginsManager::onMarketOperationCompleted(const QString& path)
 {
 	Q_UNUSED(path);
 
-	setStatus(tr("操作已提交，正在刷新..."));
+	setStatus(qtTrId("plugin_action_submitted"));
 	refresh();
 }
 
@@ -340,7 +340,7 @@ void PluginsManager::onMarketOperationFailed(const QString& path, const QString&
 	Q_UNUSED(path);
 	Q_UNUSED(status);
 
-	setStatus(tr("操作失败: %1").arg(error));
+	setStatus(qtTrId("plugin_action_failed_fmt").arg(error));
 }
 
 // ------------------------------------------------------------------
@@ -368,7 +368,7 @@ void PluginsManager::renderMarketPage()
 
 	m_marketCardsLayout->addStretch(1);
 
-	m_pageLabel->setText(tr("第 %1 / %2 页").arg(m_currentPage + 1).arg(page.count));
+	m_pageLabel->setText(qtTrId("plugin_page_fmt").arg(m_currentPage + 1).arg(page.count));
 	m_prevButton->setEnabled(m_currentPage > 0);
 	m_nextButton->setEnabled(m_currentPage + 1 < page.count);
 }
@@ -428,7 +428,7 @@ QWidget* PluginsManager::createMarketCard(const MarketPlugin& plugin)
 
 	layout->addLayout(infoLayout, 1);
 
-	auto* installButton = new QPushButton(tr("安装"), card);
+	auto* installButton = new QPushButton(qtTrId("plugin_install_action"), card);
 	installButton->setObjectName(QStringLiteral("pluginCardInstallButton"));
 	installButton->setCursor(Qt::PointingHandCursor);
 	const QString url = plugin.url;
@@ -457,9 +457,9 @@ QWidget* PluginsManager::createInstalledCard(const QString& name, const QString&
 
 	layout->addWidget(nameLabel, 1);
 
-	auto* updateButton = new QPushButton(tr("更新"), card);
+	auto* updateButton = new QPushButton(qtTrId("plugin_update_action"), card);
 	updateButton->setObjectName(QStringLiteral("pluginCardUpdateButton"));
-	auto* uninstallButton = new QPushButton(tr("卸载"), card);
+	auto* uninstallButton = new QPushButton(qtTrId("plugin_uninstall_action"), card);
 	uninstallButton->setObjectName(QStringLiteral("pluginCardUninstallButton"));
 
 	for (QPushButton* button : { updateButton, uninstallButton }) {

@@ -4,36 +4,85 @@
 // TopBar.h
 // ------------------------------------------------------------------
 // 对话顶部栏（左：会话标题；右：工具过滤入口）。
-//   · TopBar            —— 白色圆角 + 细边框的那条栏，右侧多一个"工具过滤"按钮
-//   · ToolsFilterPopup  —— 该按钮打开的窗口（继承 StatusPopupWindow = PopupWindow
-//                          + 两行省略的状态栏）；灰色蒙版由 TopBar 负责铺（同
-//                          PluginsManager / ExtensionManagerPopup 的做法）
+//   · TopBar                    —— 白色圆角 + 细边框的那条栏，右侧多一个"工具过滤"按钮
+//   · ToolsFilterPopup          —— 该按钮打开的窗口（继承 StatusPopupWindow = PopupWindow
+//                                  + 两行省略的状态栏）；灰色蒙版由 TopBar 负责铺（同
+//                                  PluginsManager / ExtensionManagerPopup 的做法）
+//   · ToolsFilterDirectoryEntry —— 窗口里的一个目录：表头是一枚按钮，点开/收回该目录
+//                                  名下的工具行（纯显示，不改筛选语义）
 //
 // 与界面无关的功能（HTTP / JSON / 配置形状）都在 include/TopBarTools.h 的
 // ToolsFilter 里，这里只管控件与交互。
+//
+// 窗口的形状：每个目录一枚按钮（DirectoryName），点一下展开它名下的工具行、再点收回；
+// 工具行仍是勾选框（勾上 = 会出现在发给模型的清单里）。展开/收起只是**显示**，
+// 与配置里的 IsExpanded（那儿 "False" 表示整组隐藏）没有关系。
 // ------------------------------------------------------------------
 
 #include "StatusPopupWindow.h"
 
 #include "TopBarTools.h"
 
+#include <QSet>
 #include <QString>
 #include <QVector>
 #include <QWidget>
 
 #include <functional>
 
+class QCheckBox;
 class QEvent;
 class QLabel;
-class QListWidget;
-class QListWidgetItem;
 class QPushButton;
+class QScrollArea;
 class QUrl;
+class QVBoxLayout;
+
+// ------------------------------------------------------------------
+// 窗口里的一个目录
+// ------------------------------------------------------------------
+// 表头（目录名 + 计数）整行可点的按钮：点一下展开/收回下面的工具行。
+// 表头右侧的箭头 ▾ / ▸ 表示当前是展开还是收回。
+class ToolsFilterDirectoryEntry : public QWidget
+{
+	Q_OBJECT
+
+public:
+	explicit ToolsFilterDirectoryEntry(const ToolFilterDirectory& directory, QWidget* parent = nullptr);
+
+	QString directoryName() const;
+	bool isExpanded() const;
+	void setExpanded(bool expanded);
+	// 按当前的勾选状态刷新表头计数（"N 个工具 · 已隐藏 M 个"）
+	void refreshMeta();
+
+signals:
+	// 表头被点：展开状态变了（只是显示，不写配置）
+	void expandedChanged(const QString& directoryName, bool expanded);
+	// 某个工具行的勾选变了（调用方据此回写配置）
+	void toolVisibilityChanged(const QString& directoryName, const QString& toolName, bool visible);
+
+private:
+	QString m_name;
+	QString m_description;
+	bool m_groupHidden = false;   // 配置里的 IsExpanded == "False"：插件层面整组隐藏
+	// 展开状态自己记着，不用 m_body->isVisible() 反推：窗口还没显示时（重建发生在
+	// 打开之前那种情况）子控件的 isVisible() 一律是 false，反推会让"第一次点击"被吞掉
+	bool m_expanded = true;
+	QPushButton* m_header = nullptr;
+	QLabel* m_chevron = nullptr;
+	QLabel* m_nameLabel = nullptr;
+	QLabel* m_metaLabel = nullptr;
+	QWidget* m_body = nullptr;
+	// 与 m_body 里的勾选框一一对应（下标即工具行号）
+	QVector<QCheckBox*> m_boxes;
+	QVector<QString> m_toolNames;
+};
 
 // ------------------------------------------------------------------
 // 工具过滤窗口
 // ------------------------------------------------------------------
-// 一个扁平的勾选列表：勾上 = 该工具会出现在发给模型的清单里，取消 = 隐藏。
+// 按目录分组的勾选列表：勾上 = 该工具会出现在发给模型的清单里，取消 = 隐藏。
 // 隐藏只影响提示词（省 token），工具仍然可以被调用；描述与参数只用来做提示，
 // 不写进配置文件。
 class ToolsFilterPopup : public StatusPopupWindow
@@ -62,25 +111,32 @@ protected:
 
 private:
 	void retranslateStaticText();
-	void onItemChanged(QListWidgetItem* item);
+	// 目录表 → 控件（重建全部目录行；展开状态按 m_collapsed 还原）
+	void rebuild();
+	void onDirectoryExpandedChanged(const QString& directoryName, bool expanded);
+	void onToolVisibilityChanged(const QString& directoryName, const QString& toolName, bool visible);
 	void setAllVisible(bool visible);
 	void saveNow();
-	// 从列表控件回收当前勾选状态
-	QVector<ToolFilterEntry> collectEntries() const;
+	// 当前目录表（含每行的勾选状态）
+	QVector<ToolFilterDirectory> collectDirectories() const;
 	void updateStatus();
-	void populate();
 
 	ToolsFilter* m_filter = nullptr;   // 不持有所有权（TopBar 持有）
 	QString m_sessionId;
 	bool m_dropGuidance = true;
 	QStringList m_hideContexts;        // 原样带回（UI 保存是整份替换）
-	bool m_updating = false;           // 抑制 populate/setCheckState 引发的回写
+	bool m_updating = false;           // 抑制 rebuild 期间的信号
 	bool m_degraded = false;           // 服务端只答出全局层时给个提示
-	QVector<ToolFilterEntry> m_tools;  // 当前会话的工具表（描述/参数只在内存里）
+	// 当前会话的目录表（描述/参数只在内存里）
+	QVector<ToolFilterDirectory> m_directories;
+	// 被用户收起的目录名。存"收起"而不是"展开"：默认全展开，换会话时清空即可复原
+	QSet<QString> m_collapsed;
 
 	QLabel* m_hint = nullptr;
 	QLabel* m_statusLabel = nullptr;
-	QListWidget* m_list = nullptr;
+	QScrollArea* m_scroll = nullptr;
+	QWidget* m_listContent = nullptr;
+	QVBoxLayout* m_listLayout = nullptr;   // 只装目录行（重建时整体清空）
 	QPushButton* m_showAllButton = nullptr;
 	QPushButton* m_hideAllButton = nullptr;
 	QPushButton* m_refreshButton = nullptr;

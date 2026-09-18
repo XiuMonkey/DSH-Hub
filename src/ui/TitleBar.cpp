@@ -91,11 +91,11 @@ TitleBar::TitleBar(QWidget* parent)
 
 	// 右侧：最小化 / 最大化（还原）/ 关闭（外观见 main-window.qss）
 	m_minimizeButton = makeWindowButton(QStringLiteral("windowMinButton"),
-		minimizeGlyph(), tr("最小化"), this);
+		minimizeGlyph(), qtTrId("titlebar_minimize"), this);
 	m_maximizeButton = makeWindowButton(QStringLiteral("windowMaxButton"),
-		maximizeGlyph(), tr("最大化"), this);
+		maximizeGlyph(), qtTrId("titlebar_maximize"), this);
 	m_closeButton = makeWindowButton(QStringLiteral("windowCloseButton"),
-		closeGlyph(), tr("关闭"), this);
+		closeGlyph(), qtTrId("common_close"), this);
 	layout->addWidget(m_minimizeButton, 0, Qt::AlignTop);
 	layout->addWidget(m_maximizeButton, 0, Qt::AlignTop);
 	layout->addWidget(m_closeButton, 0, Qt::AlignTop);
@@ -117,15 +117,15 @@ void TitleBar::setMaximizedState(bool maximized)
 		return;
 
 	m_maximizeButton->setText(maximized ? restoreGlyph() : maximizeGlyph());
-	m_maximizeButton->setToolTip(maximized ? tr("还原") : tr("最大化"));
+	m_maximizeButton->setToolTip(maximized ? qtTrId("titlebar_restore") : qtTrId("titlebar_maximize"));
 }
 
 void TitleBar::retranslateUi()
 {
 	if (m_minimizeButton)
-		m_minimizeButton->setToolTip(tr("最小化"));
+		m_minimizeButton->setToolTip(qtTrId("titlebar_minimize"));
 	if (m_closeButton)
-		m_closeButton->setToolTip(tr("关闭"));
+		m_closeButton->setToolTip(qtTrId("common_close"));
 
 	// 最大化按钮的提示与字形都跟状态有关，交给同一个入口重设
 	setMaximizedState(m_maximized);

@@ -7,11 +7,14 @@
 #include "TestPluginMarketModel.h"
 
 #include "AgentPresetService.h"
+#include "DshApiClient.h"
 #include "PluginMarketModel.h"
+#include "SessionCommands.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStringList>
 #include <QTest>
 
 namespace
@@ -199,4 +202,72 @@ void TestPluginMarketModel::presetSelectionEmptyList()
 {
 	QVERIFY(AgentPresetService::resolveSelectedId({}, QStringLiteral("p1")).isEmpty());
 	QVERIFY(AgentPresetService::parsePresets(parseObject(R"({ "presets": [] })")).isEmpty());
+}
+
+// ------------------------------------------------------------------
+// Agent 预设“设为默认”的写入载荷与守卫
+// ------------------------------------------------------------------
+// 这一段守的是最容易静默失效的地方：wire 参数形状。
+// 原版 web 写的是 settings.update("agent-presets", { default: id }, undefined)，
+// 参数名/必填性由服务端描述符定死（ns 与 patch 是 strict，expectedRevision 才可省），
+// 所以这里逐键断言，多一个键或少一个键都要在单测里炸出来。
+
+void TestPluginMarketModel::presetDefaultPatchShape()
+{
+	const QJsonObject patch = AgentPresetService::defaultPatch(QStringLiteral("ptc"));
+
+	// 只并 default 这一个字段，绝不能顺手带上别的（settings/update 是浅合并）
+	QCOMPARE(patch.keys(), QStringList{ QStringLiteral("default") });
+	QCOMPARE(patch.value(QStringLiteral("default")).toString(), QStringLiteral("ptc"));
+}
+
+void TestPluginMarketModel::settingsUpdateArgsShape()
+{
+	const QJsonObject args = SessionCommands::settingsUpdate(
+		QLatin1String(AgentPresetService::kSettingsNamespace),
+		AgentPresetService::defaultPatch(QStringLiteral("minimal")));
+
+	// 恰好两个键：ns + patch。expectedRevision 整条省掉（描述符里标了 acceptsUndefined），
+	// 所以这里也断言“没有它”；ops 是 settings/mutate 的参数，更不该出现。
+	QCOMPARE(args.keys(), QStringList({ QStringLiteral("ns"), QStringLiteral("patch") }));
+	QCOMPARE(args.value(QStringLiteral("ns")).toString(), QStringLiteral("agent-presets"));
+
+	const QJsonObject patch = args.value(QStringLiteral("patch")).toObject();
+	QCOMPARE(patch.keys(), QStringList{ QStringLiteral("default") });
+	QCOMPARE(patch.value(QStringLiteral("default")).toString(), QStringLiteral("minimal"));
+}
+
+void TestPluginMarketModel::presetPersistRejectsEmptyId()
+{
+	// 空 id 必须在发请求之前就被挡下：服务端不校验 id 是否存在，
+	// 写进去会让此后每一次新建会话都以 agent-preset/not-found 失败。
+	DshApiClient client;
+	bool savedCalled = false;
+	bool errorCalled = false;
+	QString errorCode;
+
+	AgentPresetService::persistDefault(&client, QString(),
+		[&savedCalled](const QString&) { savedCalled = true; },
+		[&errorCalled, &errorCode](const DshApiClient::RpcError& error) {
+			errorCalled = true;
+			errorCode = error.code;
+		});
+
+	QVERIFY(errorCalled);
+	QVERIFY(!savedCalled);
+	QCOMPARE(errorCode, QStringLiteral("invalid-request"));
+}
+
+void TestPluginMarketModel::presetPersistRejectsMissingClient()
+{
+	bool savedCalled = false;
+	bool errorCalled = false;
+
+	AgentPresetService::persistDefault(nullptr, QStringLiteral("ptc"),
+		[&savedCalled](const QString&) { savedCalled = true; },
+		[&errorCalled](const DshApiClient::RpcError&) { errorCalled = true; });
+
+	// 没有客户端也必须给出失败信号，否则调用方（设置页）会把按钮停在乐观显示上
+	QVERIFY(errorCalled);
+	QVERIFY(!savedCalled);
 }

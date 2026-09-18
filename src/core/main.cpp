@@ -1,6 +1,8 @@
+#include "ClientSettings.h"
 #include "DSHHub.h"
 #include "Logger.h"
 #include "ThemeManager.h"
+#include "Tooltip.h"
 #include "TranslationManager.h"
 
 #include <QCoreApplication>
@@ -15,13 +17,21 @@ int main(int argc, char* argv[])
 	Logger::init();
 	TimingLogger::mark(QStringLiteral("Logger init (baseline)"));
 
-	// 界面语言：按保存的设置 -> 系统语言 -> 源码语言（中文）的顺序装 QTranslator。
-	// 必须在创建任何窗口之前：窗口构造时的 tr() 就要按目标语言取文案。
+	// 运行目录的外观设置文件（ClientSetting/AppearanceSetting.json）：
+	// 首次运行落一份带默认值的模板，用户才找得到也改得动；已存在则一个字都不动。
+	AppearanceSetting::ensureFile();
+
+	// 界面语言：按保存的设置 -> 系统语言 -> 默认语言（中文）的顺序装 QTranslator。
+	// 必须在创建任何窗口之前：窗口构造时的 qtTrId("...") 就要按目标语言取文案。
 	Translation::init();
 	TimingLogger::mark(QStringLiteral("translation init"));
 
-	// 根据系统颜色模式自动切换亮色/暗色主题
-	const bool dark = app.styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+	// 主题：设置文件里明确写了 light/dark 就照它（用户在标题栏切过主题），
+	// 没写或写 system 才跟随系统颜色模式。
+	const AppearanceSetting::ThemeMode savedThemeMode = AppearanceSetting::themeMode();
+	const bool dark = savedThemeMode == AppearanceSetting::ThemeMode::System
+		? app.styleHints()->colorScheme() == Qt::ColorScheme::Dark
+		: savedThemeMode == AppearanceSetting::ThemeMode::Dark;
 
 	// 先加载样式表，再创建主窗口：
 	// 默认样式模板缺失时从 qrc 释放到 exe 同目录 styles/（已存在不覆盖），
@@ -30,6 +40,12 @@ int main(int argc, char* argv[])
 		+ QStringLiteral("/styles");
 	Theme::init(stylesDir, dark ? Theme::Mode::Dark : Theme::Mode::Light);
 	TimingLogger::mark(QStringLiteral("theme styles init"));
+
+	// 悬浮提示：装应用级事件过滤器，接管所有 QEvent::ToolTip，换成自绘气泡。
+	// 必须在主题之后 —— 它要把当前样式表挂到气泡窗口上（见 Tooltip.h）。
+	// 既有的 setToolTip(...) 调用点一个都不用改，文案仍从 widget->toolTip() 取。
+	Tooltip::install();
+	TimingLogger::mark(QStringLiteral("tooltip install"));
 
 	// 更现代的标准字体：Windows 下优先使用 Microsoft YaHei UI
 	QFont font(QStringLiteral("Microsoft YaHei UI"));

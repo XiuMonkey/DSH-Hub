@@ -63,7 +63,7 @@ namespace
 	QPushButton* makeCopyButton(QWidget* widget)
 	{
 		auto* button = new QPushButton(QString(QChar(0x29C9))); // ⧉ 复制图标
-		button->setToolTip(QCoreApplication::translate("MessageQuery", "复制"));
+		button->setToolTip(qtTrId("common_copy"));
 		button->setFixedSize(28, 24);
 		button->setCursor(Qt::PointingHandCursor);
 		button->setObjectName(QStringLiteral("msgCopyButton")); // 外观规则见 resources/styles/chat.qss（#chatScrollContent QPushButton#msgCopyButton）
@@ -692,7 +692,7 @@ void HistoryLoader::load(const QString& sessionId)
 				m_loading = false;
 				emit loadingChanged(false);
 				emit historyError(QStringLiteral("stream-timeout"),
-					QStringLiteral("等待会话事件流超时，历史暂时无法加载"));
+					qtTrId("chat_history_timeout"));
 				});
 		}
 		m_cursorWatchdog->start(2500);

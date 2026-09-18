@@ -180,8 +180,8 @@ void SessionStatsLine::paintEvent(QPaintEvent* event)
 {
 	Q_UNUSED(event)
 
-	if (m_lineText.isEmpty())
-		return;
+		if (m_lineText.isEmpty())
+			return;
 
 	QPainter painter(this);
 	painter.setFont(font());
@@ -230,14 +230,14 @@ QString SessionStatsLine::formatStats(const SessionUsageStats& stats)
 	QStringList groups;
 
 	// ---- 轮 / 步：始终显示 ----
-	groups << tr("%1 轮 · %2 步").arg(stats.turns).arg(stats.steps);
+	groups << qtTrId("chat_turn_step_fmt").arg(stats.turns).arg(stats.steps);
 
 	// ---- 耗时：有值才出现 ----
 	QStringList durations;
 	if (stats.llmMs > 0)
-		durations << tr("LLM %1").arg(formatDuration(static_cast<double>(stats.llmMs)));
+		durations << qtTrId("chat_llm_label_fmt").arg(formatDuration(static_cast<double>(stats.llmMs)));
 	if (stats.toolMs > 0)
-		durations << tr("工具调用 %1").arg(formatDuration(static_cast<double>(stats.toolMs)));
+		durations << qtTrId("chat_tool_call_count_fmt").arg(formatDuration(static_cast<double>(stats.toolMs)));
 	if (!durations.isEmpty())
 		groups << durations.join(QStringLiteral(" · "));
 
@@ -246,12 +246,12 @@ QString SessionStatsLine::formatStats(const SessionUsageStats& stats)
 	if (stats.ttftSteps > 0) {
 		// 首 token 是"平均"：累计延迟 / 记下首 token 的步数
 		const double averageMs = static_cast<double>(stats.ttftMs) / stats.ttftSteps;
-		speeds << tr("首 token 平均 %1").arg(formatDuration(averageMs));
+		speeds << qtTrId("chat_first_token_avg_fmt").arg(formatDuration(averageMs));
 	}
 	if (stats.decodeMs > 0) {
 		const double tokensPerSecond = static_cast<double>(stats.decodeTokens)
 			/ (static_cast<double>(stats.decodeMs) / 1000.0);
-		speeds << tr("%1 tok/s").arg(formatThroughput(tokensPerSecond));
+		speeds << qtTrId("chat_tok_per_sec_fmt").arg(formatThroughput(tokensPerSecond));
 	}
 	if (!speeds.isEmpty())
 		groups << speeds.join(QStringLiteral(" · "));
@@ -264,9 +264,9 @@ QString SessionStatsLine::formatStats(const SessionUsageStats& stats)
 	// 缓存命中率没有可算的分母（计费输入为 0）时整组不出现
 	const QString cacheHit = formatCacheHitPercent(stats.cacheReadTokens, billedInput);
 	if (!cacheHit.isEmpty())
-		groups << tr("缓存命中 %1%").arg(cacheHit);
+		groups << qtTrId("chat_cache_hit_fmt").arg(cacheHit);
 
-	groups << tr("输入 %1 tok · 输出 %2 tok")
+	groups << qtTrId("chat_token_usage_fmt")
 		.arg(formatTokens(billedInput))
 		.arg(formatTokens(stats.outputTokens));
 
@@ -365,11 +365,11 @@ void ChatInputWidget::buildCapsule()
 void ChatInputWidget::retranslateUi()
 {
 	if (m_editor)
-		m_editor->setPlaceholderText(tr("输入消息，Enter 发送，Shift+Enter 换行"));
+		m_editor->setPlaceholderText(qtTrId("chat_input_placeholder"));
 
 	// 发送键的提示跟输出状态绑定：交给同一个入口按当前状态重设
 	if (m_sendButton)
-		m_sendButton->setToolTip(m_streaming ? tr("中止输出") : tr("发送"));
+		m_sendButton->setToolTip(m_streaming ? qtTrId("chat_stop_output") : qtTrId("common_send"));
 }
 
 void ChatInputWidget::changeEvent(QEvent* event)
@@ -413,7 +413,7 @@ void ChatInputWidget::buildControlRow()
 	m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/EnterBtn.png")));
 	m_sendButton->setIconSize(QSize(32, 32));
 	m_sendButton->setCursor(Qt::PointingHandCursor);
-	m_sendButton->setToolTip(tr("发送"));
+	m_sendButton->setToolTip(qtTrId("common_send"));
 	m_sendButton->setFixedSize(32, 32);
 
 	// 真正的“蒙版”是盖在图标上方的子控件；QSS background 会被图标遮住
@@ -490,11 +490,11 @@ void ChatInputWidget::setStreaming(bool streaming)
 
 	if (m_streaming) {
 		m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/StopBtn.png")));
-		m_sendButton->setToolTip(tr("中止输出"));
+		m_sendButton->setToolTip(qtTrId("chat_stop_output"));
 	}
 	else {
 		m_sendButton->setIcon(QIcon(QStringLiteral(":/DSHHub/EnterBtn.png")));
-		m_sendButton->setToolTip(tr("发送"));
+		m_sendButton->setToolTip(qtTrId("common_send"));
 	}
 }
 

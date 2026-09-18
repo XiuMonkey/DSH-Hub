@@ -3,13 +3,15 @@
 #include "ThemeManager.h"
 #include "WindowFrame.h"
 
+#include <QCheckBox>
 #include <QDebug>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QListWidget>
+#include <QLayoutItem>
 #include <QPainter>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -77,9 +79,175 @@ namespace
 		}
 	};
 
-	// 列表项里存的角色：行号（勾选变化时按下标回写模型）
-	constexpr int kRowIndexRole = Qt::UserRole + 1;
+	// 目录表头的箭头，字形与 ModelListEntry 的成员行同一套（U+25BE / U+25B8）。
+	//
+	// 这里刻意用 QChar(码点) 而不是别的写法：
+	//   * QLatin1String("\u25BE")：窄字面量先按执行字符集编码（本项目 /utf-8）
+	//     变成 E2 96 BE 三个字节，QLatin1String 再把这些字节逐字节当成 Latin-1，
+	//     界面上就是三个乱码字形（本次要修的现场）。
+	//   * 直接写字面量：依赖源文件一定被当成 UTF-8 读（本机是 CP936 时整条字符串
+	//     还可能被截断）。
+	// QChar(0x25BE) 源码全 ASCII，与源文件编码、执行字符集都无关。
+	const QString kChevronExpanded(QChar(0x25BE));
+	const QString kChevronCollapsed(QChar(0x25B8));
+
+	// 目录表头的最小高度：两行文字（目录名 + 计数）+ 上下内边距。不显式给下限时
+	// QPushButton 会按"一行文本 + 按钮内边距"算高度，第二行会被压掉
+	// （ModelListEntry 踩过同一个坑）。
+	constexpr int kDirectoryHeaderMinHeight = 44;
+	constexpr int kDirectoryHeaderPadding = 6;
 } // namespace
+
+// ------------------------------------------------------------------
+// ToolsFilterDirectoryEntry
+// ------------------------------------------------------------------
+
+ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& directory, QWidget* parent)
+	: QWidget(parent)
+	, m_name(directory.name)
+	, m_description(directory.description)
+	, m_groupHidden(!directory.expanded)
+{
+	setObjectName(QStringLiteral("toolsFilterDirectory"));
+	setAttribute(Qt::WA_StyledBackground, true);
+
+	auto* layout = new QVBoxLayout(this);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(0);
+
+	// 表头就是一枚按钮：整行可点，语义与列表项一致
+	m_header = new QPushButton(this);
+	m_header->setObjectName(QStringLiteral("toolsFilterDirectoryHeader"));
+	m_header->setFlat(true);
+	m_header->setCursor(Qt::PointingHandCursor);
+	m_header->setFocusPolicy(Qt::NoFocus);
+	m_header->setMinimumHeight(kDirectoryHeaderMinHeight);
+
+	auto* headerLayout = new QHBoxLayout(m_header);
+	headerLayout->setContentsMargins(10, kDirectoryHeaderPadding, 10, kDirectoryHeaderPadding);
+	headerLayout->setSpacing(8);
+
+	m_chevron = new QLabel(kChevronExpanded, m_header);
+	m_chevron->setObjectName(QStringLiteral("toolsFilterDirectoryChevron"));
+	m_chevron->setAlignment(Qt::AlignCenter);
+	headerLayout->addWidget(m_chevron, 0, Qt::AlignVCenter);
+
+	m_nameLabel = new QLabel(m_name, m_header);
+	m_nameLabel->setObjectName(QStringLiteral("toolsFilterDirectoryName"));
+	m_nameLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+	headerLayout->addWidget(m_nameLabel, 1, Qt::AlignVCenter);
+
+	m_metaLabel = new QLabel(m_header);
+	m_metaLabel->setObjectName(QStringLiteral("toolsFilterDirectoryMeta"));
+	m_metaLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+	headerLayout->addWidget(m_metaLabel, 0, Qt::AlignVCenter);
+
+	layout->addWidget(m_header);
+
+	// ---------------- 工具行 ----------------
+	m_body = new QWidget(this);
+	m_body->setObjectName(QStringLiteral("toolsFilterDirectoryBody"));
+
+	auto* bodyLayout = new QVBoxLayout(m_body);
+	bodyLayout->setContentsMargins(10, 0, 10, 8);
+	bodyLayout->setSpacing(2);
+
+	if (directory.tools.isEmpty()) {
+		// 目录底下什么都没有时也得说一句：否则展开后是一片空白，
+		// 看起来像"点坏了"（Default 目录在配置认领了全部工具之外的工具时才空）
+		auto* empty = new QLabel(qtTrId("toolfilter_dir_empty"), m_body);
+		empty->setObjectName(QStringLiteral("toolsFilterDirectoryEmpty"));
+		empty->setWordWrap(true);
+		bodyLayout->addWidget(empty);
+	}
+
+	for (int index = 0; index < directory.tools.size(); ++index) {
+		const ToolFilterEntry& tool = directory.tools.at(index);
+
+		auto* box = new QCheckBox(tool.name, m_body);
+		box->setObjectName(QStringLiteral("toolsFilterToolRow"));
+		box->setCursor(Qt::PointingHandCursor);
+		// 先设好初始勾选状态再接线：否则重建列表会被当成"用户改了勾选"写回配置
+		box->setChecked(tool.visible);
+
+		// 描述与参数只在这里出现（不写进配置文件）
+		QString tip = tool.description;
+		if (!tool.parameters.isEmpty() && tool.parameters != QStringLiteral("{}"))
+			tip += QStringLiteral("\n\n%1 %2").arg(qtTrId("toolfilter_params_label"), tool.parameters);
+		if (!tip.isEmpty())
+			box->setToolTip(tip);
+
+		connect(box, &QCheckBox::toggled, this, [this, index](bool checked) {
+			refreshMeta();
+			emit toolVisibilityChanged(m_name, m_toolNames.at(index), checked);
+			});
+
+		m_boxes.append(box);
+		m_toolNames.append(tool.name);
+		bodyLayout->addWidget(box);
+	}
+
+	layout->addWidget(m_body);
+
+	refreshMeta();
+	setExpanded(true);
+
+	connect(m_header, &QPushButton::clicked, this, [this]() {
+		setExpanded(!isExpanded());
+		});
+}
+
+QString ToolsFilterDirectoryEntry::directoryName() const
+{
+	return m_name;
+}
+
+bool ToolsFilterDirectoryEntry::isExpanded() const
+{
+	return m_expanded;
+}
+
+void ToolsFilterDirectoryEntry::setExpanded(bool expanded)
+{
+	if (!m_body)
+		return;
+
+	m_expanded = expanded;
+	m_body->setVisible(expanded);
+	if (m_chevron)
+		m_chevron->setText(expanded ? kChevronExpanded : kChevronCollapsed);
+
+	emit expandedChanged(m_name, expanded);
+}
+
+void ToolsFilterDirectoryEntry::refreshMeta()
+{
+	if (!m_metaLabel)
+		return;
+
+	int hidden = 0;
+	for (const QCheckBox* box : m_boxes) {
+		if (box->checkState() != Qt::Checked)
+			++hidden;
+	}
+
+	QString text = m_boxes.isEmpty()
+		? qtTrId("toolfilter_no_tools")
+		: qtTrId("toolfilter_summary_fmt").arg(m_boxes.size()).arg(hidden);
+	// 配置里写了 IsExpanded:"False"（插件层面整组隐藏）时要说明白：
+	// 那时候下面的勾选状态其实不起作用，不说的话界面在撒谎
+	if (m_groupHidden)
+		text += qtTrId("toolfilter_group_hidden_suffix");
+	m_metaLabel->setText(text);
+
+	if (m_header) {
+		QString tip = m_description;
+		if (!tip.isEmpty())
+			tip += QStringLiteral("\n\n");
+		tip += qtTrId("toolfilter_dir_toggle_tip");
+		m_header->setToolTip(tip);
+	}
+}
 
 // ------------------------------------------------------------------
 // ToolsFilterPopup
@@ -89,7 +257,7 @@ ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 	: StatusPopupWindow(parent)
 {
 	setObjectName(QStringLiteral("toolsFilterPopup"));
-	setTitle(tr("工具过滤"));
+	setTitle(qtTrId("toolfilter_title"));
 	setFixedSize(460, 560);
 
 	auto* content = new QWidget(this);
@@ -102,28 +270,38 @@ ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 	m_hint->setWordWrap(true);
 	layout->addWidget(m_hint);
 
-	m_list = new QListWidget(content);
-	m_list->setObjectName(QStringLiteral("toolsFilterList"));
-	m_list->setSelectionMode(QAbstractItemView::NoSelection);
-	m_list->setUniformItemSizes(false);
-	// 滚动条是 QListWidget 基类构造时建好的，那时 objectName 还没设 —— 见头文件里
+	// 列表区：一个可滚动的容器，里面每个目录是一行（表头按钮 + 工具行）
+	m_scroll = new QScrollArea(content);
+	m_scroll->setObjectName(QStringLiteral("toolsFilterScroll"));
+	m_scroll->setFrameShape(QFrame::NoFrame);
+	m_scroll->setWidgetResizable(true);
+	m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	// 滚动条在基类构造时就建好了，那时 objectName 还没设 —— 见 ThemeManager.h 里
 	// Theme::repolishScrollArea 的说明（下面这句顺带把"首次显示/首次真出现"也补上）
-	Theme::repolishScrollArea(m_list);
-	layout->addWidget(m_list, 1);
+	Theme::repolishScrollArea(m_scroll);
+	layout->addWidget(m_scroll, 1);
+
+	m_listContent = new QWidget(m_scroll);
+	m_listContent->setObjectName(QStringLiteral("toolsFilterListContent"));
+	m_listLayout = new QVBoxLayout(m_listContent);
+	m_listLayout->setContentsMargins(0, 0, 0, 0);
+	m_listLayout->setSpacing(6);
+	m_listLayout->addStretch(1);
+	m_scroll->setWidget(m_listContent);
 
 	auto* buttonRow = new QHBoxLayout;
 	buttonRow->setContentsMargins(0, 0, 0, 0);
 	buttonRow->setSpacing(8);
 
-	m_showAllButton = new QPushButton(tr("全部显示"), content);
+	m_showAllButton = new QPushButton(qtTrId("toolfilter_show_all"), content);
 	m_showAllButton->setObjectName(QStringLiteral("toolsFilterShowAllButton"));
 	m_showAllButton->setCursor(Qt::PointingHandCursor);
 
-	m_hideAllButton = new QPushButton(tr("全部隐藏"), content);
+	m_hideAllButton = new QPushButton(qtTrId("toolfilter_hide_all"), content);
 	m_hideAllButton->setObjectName(QStringLiteral("toolsFilterHideAllButton"));
 	m_hideAllButton->setCursor(Qt::PointingHandCursor);
 
-	m_refreshButton = new QPushButton(tr("刷新"), content);
+	m_refreshButton = new QPushButton(qtTrId("common_refresh"), content);
 	m_refreshButton->setObjectName(QStringLiteral("toolsFilterRefreshButton"));
 	m_refreshButton->setCursor(Qt::PointingHandCursor);
 
@@ -141,7 +319,6 @@ ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 
 	setContent(content);
 
-	connect(m_list, &QListWidget::itemChanged, this, &ToolsFilterPopup::onItemChanged);
 	connect(m_showAllButton, &QPushButton::clicked, this, [this]() { setAllVisible(true); });
 	connect(m_hideAllButton, &QPushButton::clicked, this, [this]() { setAllVisible(false); });
 	connect(m_refreshButton, &QPushButton::clicked, this, [this]() { emit refreshRequested(); });
@@ -153,15 +330,14 @@ ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 void ToolsFilterPopup::retranslateStaticText()
 {
 	if (m_hint) {
-		m_hint->setText(tr("取消勾选 = 该工具不再出现在发给模型的清单里（省 token），但它仍然可以被调用。"
-			"没有工具描述与参数写进配置文件，那些只在这里做提示。"));
+		m_hint->setText(qtTrId("toolfilter_help_desc"));
 	}
 	if (m_showAllButton)
-		m_showAllButton->setText(tr("全部显示"));
+		m_showAllButton->setText(qtTrId("toolfilter_show_all"));
 	if (m_hideAllButton)
-		m_hideAllButton->setText(tr("全部隐藏"));
+		m_hideAllButton->setText(qtTrId("toolfilter_hide_all"));
 	if (m_refreshButton)
-		m_refreshButton->setText(tr("刷新"));
+		m_refreshButton->setText(qtTrId("common_refresh"));
 }
 
 void ToolsFilterPopup::setContext(ToolsFilter* filter, const QString& sessionId, bool dropGuidance,
@@ -176,79 +352,129 @@ void ToolsFilterPopup::setContext(ToolsFilter* filter, const QString& sessionId,
 void ToolsFilterPopup::setBusy(bool busy)
 {
 	if (busy)
-		setStatus(tr("正在读取该会话的工具目录…"));
+		setStatus(qtTrId("toolfilter_loading"));
 }
 
 void ToolsFilterPopup::applyCatalog(const ToolFilterCatalog& catalog)
 {
 	if (!catalog.ok) {
-		m_tools.clear();
-		populate();
+		m_directories.clear();
+		rebuild();
 		m_degraded = false;
-		setStatus(catalog.error.isEmpty() ? tr("读取工具目录失败") : catalog.error);
+		setStatus(catalog.error.isEmpty() ? qtTrId("toolfilter_load_failed") : catalog.error);
 		return;
 	}
+
+	// 换会话：展开状态是"这一次翻看"的状态，不带去别的会话（默认全展开）
+	const bool sameSession = catalog.sessionId == m_sessionId;
+	if (!sameSession)
+		m_collapsed.clear();
 
 	m_sessionId = catalog.sessionId;
 	m_dropGuidance = catalog.dropGuidance;
 	m_hideContexts = catalog.hideContexts;
 	m_degraded = catalog.degraded;
-	m_tools = catalog.tools;
-	populate();
+	m_directories = catalog.directories;
+	rebuild();
 	updateStatus();
 }
 
-void ToolsFilterPopup::populate()
+void ToolsFilterPopup::rebuild()
 {
+	if (!m_listLayout)
+		return;
+
 	m_updating = true;
-	m_list->clear();
 
-	for (int row = 0; row < m_tools.size(); ++row) {
-		const ToolFilterEntry& tool = m_tools.at(row);
-		auto* item = new QListWidgetItem(tool.name, m_list);
-		item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
-		item->setCheckState(tool.visible ? Qt::Checked : Qt::Unchecked);
-		item->setData(kRowIndexRole, row);
-
-		// 描述与参数只在这里出现（不写进配置文件）
-		QString tip = tool.description;
-		if (!tool.parameters.isEmpty() && tool.parameters != QStringLiteral("{}"))
-			tip += QStringLiteral("\n\n%1 %2").arg(tr("参数："), tool.parameters);
-		if (!tip.isEmpty())
-			item->setToolTip(tip);
+	// 只 deleteLater() 的话旧行在真正销毁前仍是子控件，会被一并显示出来，
+	// 于是列表里出现重复目录 —— 这里立刻从控件树上摘下来（同 ModelListPanel）。
+	while (QLayoutItem* item = m_listLayout->takeAt(0)) {
+		if (QWidget* widget = item->widget()) {
+			widget->hide();
+			widget->setParent(nullptr);
+			widget->deleteLater();
+		}
+		delete item;
 	}
+
+	for (const ToolFilterDirectory& directory : m_directories) {
+		auto* entry = new ToolsFilterDirectoryEntry(directory, m_listContent);
+		// 先摆好展开状态再接线：setExpanded() 会发信号，接线在前等于自己写回自己
+		entry->setExpanded(!m_collapsed.contains(directory.name));
+
+		connect(entry, &ToolsFilterDirectoryEntry::expandedChanged,
+			this, &ToolsFilterPopup::onDirectoryExpandedChanged);
+		connect(entry, &ToolsFilterDirectoryEntry::toolVisibilityChanged,
+			this, &ToolsFilterPopup::onToolVisibilityChanged);
+
+		m_listLayout->addWidget(entry);
+	}
+
+	if (m_directories.isEmpty()) {
+		auto* empty = new QLabel(qtTrId("toolfilter_no_filterable_tools"), m_listContent);
+		empty->setObjectName(QStringLiteral("toolsFilterEmpty"));
+		empty->setWordWrap(true);
+		m_listLayout->addWidget(empty);
+	}
+
+	m_listLayout->addStretch(1);
 
 	m_updating = false;
 }
 
-QVector<ToolFilterEntry> ToolsFilterPopup::collectEntries() const
+QVector<ToolFilterDirectory> ToolsFilterPopup::collectDirectories() const
 {
-	return m_tools;
+	return m_directories;
 }
 
-void ToolsFilterPopup::onItemChanged(QListWidgetItem* item)
+void ToolsFilterPopup::onDirectoryExpandedChanged(const QString& directoryName, bool expanded)
 {
-	if (m_updating || !item)
+	// 只记"这一次翻看"的显示状态，不写回配置：配置里的 IsExpanded 是筛选语义
+	// （"False" = 整组隐藏），与这里的展开/收起不是一回事。
+	if (m_updating)
 		return;
 
-	const int row = item->data(kRowIndexRole).toInt();
-	if (row < 0 || row >= m_tools.size())
+	if (expanded)
+		m_collapsed.remove(directoryName);
+	else
+		m_collapsed.insert(directoryName);
+}
+
+void ToolsFilterPopup::onToolVisibilityChanged(const QString& directoryName, const QString& toolName,
+	bool visible)
+{
+	if (m_updating)
 		return;
 
-	m_tools[row].visible = item->checkState() == Qt::Checked;
-	saveNow();
-	updateStatus();
+	for (ToolFilterDirectory& directory : m_directories) {
+		if (directory.name != directoryName)
+			continue;
+		for (ToolFilterEntry& tool : directory.tools) {
+			if (tool.name != toolName)
+				continue;
+			if (tool.visible == visible)
+				return;
+			tool.visible = visible;
+			saveNow();
+			updateStatus();
+			return;
+		}
+		return;
+	}
 }
 
 void ToolsFilterPopup::setAllVisible(bool visible)
 {
-	if (m_tools.isEmpty())
+	if (m_directories.isEmpty())
 		return;
 
-	for (ToolFilterEntry& tool : m_tools)
-		tool.visible = visible;
+	for (ToolFilterDirectory& directory : m_directories) {
+		for (ToolFilterEntry& tool : directory.tools)
+			tool.visible = visible;
+	}
 
-	populate();
+	// 重建而不是逐个改勾选框：逐个改会触发一串 toggled，写回一次配置就够了
+	rebuild();
 	saveNow();
 	updateStatus();
 }
@@ -256,23 +482,23 @@ void ToolsFilterPopup::setAllVisible(bool visible)
 void ToolsFilterPopup::saveNow()
 {
 	if (!m_filter || m_sessionId.isEmpty()) {
-		setStatus(tr("还没有打开的会话"));
+		setStatus(qtTrId("toolfilter_no_session"));
 		return;
 	}
 
-	setStatus(tr("正在保存…"));
+	setStatus(qtTrId("toolfilter_saving"));
 	const QString sessionId = m_sessionId;
-	const QVector<ToolFilterEntry> tools = collectEntries();
+	const QVector<ToolFilterDirectory> directories = collectDirectories();
 	const bool dropGuidance = m_dropGuidance;
 	const QStringList hideContexts = m_hideContexts;
 
 	// 异步写回：回调里再更新状态，绝不阻塞界面
-	m_filter->save(sessionId, tools, dropGuidance, hideContexts,
+	m_filter->save(sessionId, directories, dropGuidance, hideContexts,
 		[this, sessionId](bool ok, const QString& error) {
 			if (sessionId != m_sessionId)
 				return; // 会话已经切走，这次结果作废
 			if (!ok) {
-				setStatus(error.isEmpty() ? tr("保存失败") : error);
+				setStatus(error.isEmpty() ? qtTrId("toolfilter_save_failed") : error);
 				return;
 			}
 			updateStatus();
@@ -281,16 +507,18 @@ void ToolsFilterPopup::saveNow()
 
 void ToolsFilterPopup::updateStatus()
 {
-	if (m_tools.isEmpty()) {
-		setStatus(tr("该会话没有可过滤的工具"));
+	const int count = ToolsFilter::toolCount(m_directories);
+	if (count == 0) {
+		setStatus(qtTrId("toolfilter_no_filterable_tools"));
 		return;
 	}
 
-	QString text = tr("共 %1 个工具，已隐藏 %2 个（隐藏只影响提示词）")
-		.arg(m_tools.size())
-		.arg(ToolsFilter::hiddenCount(m_tools));
+	QString text = qtTrId("toolfilter_summary_full_fmt")
+		.arg(count)
+		.arg(m_directories.size())
+		.arg(ToolsFilter::hiddenCount(m_directories));
 	if (m_degraded)
-		text += tr(" · 服务端只答出了全局层，目录可能不完整");
+		text += qtTrId("toolfilter_global_layer_only_suffix");
 	setStatus(text);
 }
 
@@ -300,6 +528,9 @@ void ToolsFilterPopup::changeEvent(QEvent* event)
 
 	if (event->type() == QEvent::LanguageChange) {
 		retranslateStaticText();
+		// 目录行里也有可翻译文案（计数、空目录提示、表头提示）：整排重建最省事，
+		// 展开状态与勾选状态都在模型里，重建不丢
+		rebuild();
 		updateStatus();
 	}
 }
@@ -373,7 +604,7 @@ void TopBar::loadTools(bool pushToPopup)
 
 	if (m_sessionId.isEmpty()) {
 		if (pushToPopup && m_toolsPopup)
-			m_toolsPopup->setStatus(tr("还没有打开的会话"));
+			m_toolsPopup->setStatus(qtTrId("toolfilter_no_session"));
 		return;
 	}
 	if (m_loading)
@@ -402,7 +633,7 @@ void TopBar::loadTools(bool pushToPopup)
 
 			if (created)
 				qInfo().noquote() << "[ToolsFilter] 已为该会话建立初始过滤配置 session=" << requested
-					<< "tools=" << catalog.tools.size();
+				<< "tools=" << ToolsFilter::toolCount(catalog.directories);
 
 			// 窗口开着（或正要打开）时把目录推给它
 			if (m_toolsPopup && (pushToPopup || m_toolsPopup->isVisible())) {
@@ -467,9 +698,9 @@ void TopBar::syncOverlayToHost()
 void TopBar::retranslateUi()
 {
 	if (m_titleLabel)
-		m_titleLabel->setText(m_title.isEmpty() ? tr("未命名会话") : m_title);
+		m_titleLabel->setText(m_title.isEmpty() ? qtTrId("session_untitled") : m_title);
 	if (m_toolsButton)
-		m_toolsButton->setToolTip(tr("工具过滤"));
+		m_toolsButton->setToolTip(qtTrId("toolfilter_title"));
 }
 
 void TopBar::changeEvent(QEvent* event)

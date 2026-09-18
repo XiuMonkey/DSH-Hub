@@ -254,7 +254,7 @@ namespace ModelSelectionService
 			if (onError) {
 				DshApiClient::RpcError error;
 				error.code = QStringLiteral("invalid-request");
-				error.message = QCoreApplication::translate("ModelSelectionService", "缺少提供方或模型 id");
+				error.message = qtTrId("model_missing_provider_or_id");
 				onError(error);
 			}
 			return;
@@ -299,7 +299,7 @@ namespace ModelSelectionService
 			if (onError) {
 				DshApiClient::RpcError error;
 				error.code = QStringLiteral("invalid-request");
-				error.message = QCoreApplication::translate("ModelSelectionService", "缺少提供方或模型 id");
+				error.message = qtTrId("model_missing_provider_or_id");
 				onError(error);
 			}
 			return;
@@ -357,7 +357,7 @@ namespace ModelSelectionService
 			if (onError) {
 				DshApiClient::RpcError error;
 				error.code = QStringLiteral("invalid-request");
-				error.message = QCoreApplication::translate("ModelSelectionService", "凭据引用或取值缺失");
+				error.message = qtTrId("model_credential_missing");
 				onError(error);
 			}
 			return;

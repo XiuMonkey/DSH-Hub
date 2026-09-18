@@ -673,7 +673,7 @@ void ServerManager::handleServerOutput()
 			if (!hasToken) {
 				qWarning().noquote() << QStringLiteral("[ServerManager] 服务端未提供认证令牌（不是 dsh 0.1.5？）: %1")
 					.arg(printed);
-				emit errorLine(QStringLiteral("服务端未提供认证令牌，无法通过 /api 认证"));
+				emit errorLine(qtTrId("server_auth_token_missing"));
 				return;
 			}
 

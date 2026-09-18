@@ -132,7 +132,7 @@ void PluginMarketClient::fetchRegistry()
 		// 过去只能靠猜，这里把状态码/字节数/响应开头都打出来
 		if (plugins.isEmpty())
 			qWarning().noquote() << "[PluginMarketClient] registry payload unexpected"
-				<< "status=" << status << "bytes=" << raw.size() << "body=" << bodyPreview(raw);
+			<< "status=" << status << "bytes=" << raw.size() << "body=" << bodyPreview(raw);
 
 		qInfo().noquote() << "[PluginMarketClient] registry loaded"
 			<< "source=" << source

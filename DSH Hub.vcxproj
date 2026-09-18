@@ -141,6 +141,7 @@
     <ClCompile Include="src\common\SessionCatalog.cpp" />
     <ClCompile Include="src\common\SessionService.cpp" />
     <ClCompile Include="src\common\SettingsStore.cpp" />
+    <ClCompile Include="src\common\ClientSettings.cpp" />
     <ClCompile Include="src\common\AgentPresetService.cpp" />
     <ClCompile Include="src\common\PluginMarketClient.cpp" />
     <ClCompile Include="src\common\PluginMarketModel.cpp" />
@@ -160,6 +161,7 @@
     <ClCompile Include="src\chat\CacheHistoryManager.cpp" />
     <ClCompile Include="src\network\SessionPrefetcher.cpp" />
     <ClCompile Include="src\ui\PopupWindow.cpp" />
+    <ClCompile Include="src\ui\Tooltip.cpp" />
     <ClCompile Include="src\ui\Settings.cpp" />
     <ClCompile Include="src\common\ThemeManager.cpp" />
     <ClCompile Include="src\common\CardShadow.cpp" />
@@ -221,6 +223,8 @@
     <ClInclude Include="include\SessionCatalog.h" />
     <ClInclude Include="include\SessionService.h" />
     <ClInclude Include="include\SettingsStore.h" />
+    <ClInclude Include="include\Tooltip.h" />
+    <ClInclude Include="include\ClientSettings.h" />
     <ClInclude Include="include\AgentPresetService.h" />
     <ClInclude Include="include\PluginMarketModel.h" />
     <ClInclude Include="include\ExtensionRegistry.h" />
@@ -229,11 +233,19 @@
     <QtMoc Include="include\TranslationManager.h" />
     <QtTranslation Include="translations\dshhub_en.ts" />
   </ItemGroup>
-  <!-- 让翻译条目真正参与构建：Qt VS Tools 里 QtTranslation 的 BuildAction 默认 false，
-       打开后才会在构建时跑 lupdate/lrelease 生成 .qm（见 QtMsBuild\translation\*.targets） -->
+  <!-- QtTranslation 的 BuildAction **必须保持 false**（即不参与构建）。
+       合法取值只有 lupdate / lrelease / lupdate_lrelease / false
+       （见 QtMsBuild\translation\qttranslation.xml），而 qttranslation.targets 的判据是
+       "BuildAction 字面包含 lupdate / lrelease"。所以写成 true 是无效值，它**什么都不触发**
+       —— 之前那句"设成 true 就会跑 lupdate/lrelease"是误解。
+       ⚠️ 绝不能改成 lupdate / lupdate_lrelease：本项目是 ID-based（qtTrId），
+       语言包由 tools\release-translations.ps1 生成，.ts 里的 <source> 和译文都是手写的；
+       跑一次 lupdate 会清空这些 <source>、并把译文回标成 type="unfinished"，
+       lrelease 随即把它们丢弃 —— 结果是语言包整片失效、界面满屏 key。
+       下面的 <QtTranslation> 条目只用于在 IDE 里能打开这份 .ts，不产生任何构建动作。 -->
   <ItemDefinitionGroup>
     <QtTranslation>
-      <BuildAction>true</BuildAction>
+      <BuildAction>false</BuildAction>
     </QtTranslation>
   </ItemDefinitionGroup>
   <!-- .qm 的发布不走 PostBuildEvent：Qt VS Tools 的 QtTranslation 目标不负责拷贝产物，

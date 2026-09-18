@@ -109,6 +109,7 @@
     <ClCompile Include="unit_test\TestDshApiClient.cpp" />
     <ClCompile Include="unit_test\TestSessionPrefetcher.cpp" />
     <ClCompile Include="unit_test\TestSettingsStore.cpp" />
+    <ClCompile Include="unit_test\TestClientSettings.cpp" />
     <ClCompile Include="unit_test\TestLogger.cpp" />
     <ClCompile Include="unit_test\TestTranslationManager.cpp" />
     <ClCompile Include="unit_test\TestServerManager.cpp" />
@@ -123,6 +124,8 @@
     <ClCompile Include="src\network\DshApiClient.cpp" />
     <ClCompile Include="src\network\SessionPrefetcher.cpp" />
     <ClCompile Include="src\common\SettingsStore.cpp" />
+    <ClCompile Include="src\common\AgentPresetService.cpp" />
+    <ClCompile Include="src\common\ClientSettings.cpp" />
     <ClCompile Include="src\common\Logger.cpp" />
     <ClCompile Include="src\common\TranslationManager.cpp" />
     <ClCompile Include="src\ui\TranslationUi.cpp" />
@@ -141,6 +144,7 @@
     <QtMoc Include="unit_test\TestDshApiClient.h" />
     <QtMoc Include="unit_test\TestSessionPrefetcher.h" />
     <QtMoc Include="unit_test\TestSettingsStore.h" />
+    <QtMoc Include="unit_test\TestClientSettings.h" />
     <QtMoc Include="unit_test\TestLogger.h" />
     <QtMoc Include="unit_test\TestTranslationManager.h" />
     <QtMoc Include="unit_test\TestServerManager.h" />

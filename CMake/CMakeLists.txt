@@ -28,8 +28,9 @@
 #      避免新增 .cpp 时「只加了一边」。反过来说，新增文件时 .vcxproj 仍需手工补。
 #   2) Qt 定位：.vcxproj 里硬编码 D:\Qt\...；这里走 find_package + CMAKE_PREFIX_PATH
 #      （QTDIR 环境变量优先，约定与 tools/release-translations.ps1 一致）。
-#   3) 翻译（<QtTranslation> / tools/release-translations.ps1）暂未接入 CMake：
-#      .qm 已经进了 qrc，这个 CMake 目标照样能拿到内置默认语言包。
+#   3) 翻译（tools/release-translations.ps1）未接入 CMake：.qm 已进 qrc，
+#      这个 CMake 目标照样能拿到内置的中英语言包。跑 CMake 构建时若改了
+#      translations/*.ts，需要手动跑一次那个脚本再重新构建（qrc 才会带上新包）。
 # ==================================================================
 
 cmake_minimum_required(VERSION 3.21)
@@ -171,6 +172,7 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/unit_test/TestDshApiClient.cpp"
 		"${DSHHUB_ROOT}/unit_test/TestSessionPrefetcher.cpp"
 		"${DSHHUB_ROOT}/unit_test/TestSettingsStore.cpp"
+		"${DSHHUB_ROOT}/unit_test/TestClientSettings.cpp"
 		"${DSHHUB_ROOT}/unit_test/TestLogger.cpp"
 		"${DSHHUB_ROOT}/unit_test/TestTranslationManager.cpp"
 		"${DSHHUB_ROOT}/unit_test/TestServerManager.cpp"
@@ -185,6 +187,8 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/src/network/DshApiClient.cpp"
 		"${DSHHUB_ROOT}/src/network/SessionPrefetcher.cpp"
 		"${DSHHUB_ROOT}/src/common/SettingsStore.cpp"
+		"${DSHHUB_ROOT}/src/common/AgentPresetService.cpp"
+		"${DSHHUB_ROOT}/src/common/ClientSettings.cpp"
 		"${DSHHUB_ROOT}/src/common/Logger.cpp"
 		"${DSHHUB_ROOT}/src/common/TranslationManager.cpp"
 		"${DSHHUB_ROOT}/src/ui/TranslationUi.cpp"

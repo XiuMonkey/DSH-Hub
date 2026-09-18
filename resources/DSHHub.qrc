@@ -21,15 +21,19 @@
         <file alias="styles/chat.qss">styles/chat.qss</file>
         <file alias="styles/sidebar.qss">styles/sidebar.qss</file>
         <file alias="styles/popups.qss">styles/popups.qss</file>
+        <file alias="styles/tooltip.qss">styles/tooltip.qss</file>
         <file alias="styles/extension-manager.qss">styles/extension-manager.qss</file>
         <file alias="styles/topbar.qss">styles/topbar.qss</file>
         <file alias="styles/settings.qss">styles/settings.qss</file>
         <file alias="styles/model-list.qss">styles/model-list.qss</file>
         <file alias="styles/plugin-market.qss">styles/plugin-market.qss</file>
-        <!-- 默认语言包（源语言=中文）：随程序内置，启动时从资源加载。
-             由 tools\release-translations.ps1 从 translations\dshhub_zh_CN.ts 生成，
-             外部 translations\ 里同名文件可覆盖（见 TranslationManager.cpp）。 -->
+        <!-- 内置语言包：随程序内置，启动时释放到外部 translations\ 目录
+             （存在则不覆盖），用户可就地改而无需重新编译。
+             由 tools\release-translations.ps1 从 translations\dshhub_*.ts 生成。
+             源码里只有 key（qtTrId），没有任何语言"免翻译"，内置这两份
+             只是保证开箱即有中英可用；其它语言从外部目录补充即可。 -->
         <file alias="translations/dshhub_zh_CN.qm">translations/dshhub_zh_CN.qm</file>
+        <file alias="translations/dshhub_en.qm">translations/dshhub_en.qm</file>
         <!-- 内置插件：工具过滤器（按会话隐藏模型可见的工具，见
              resources/ToolsFilterPlugin/）。编译进 exe 是为了让内置插件不依赖
              发布目录里的散装文件；首次启动服务端时由

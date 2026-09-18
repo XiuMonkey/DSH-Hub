@@ -55,8 +55,6 @@
 #include <QLocalSocket>
 #include <QThreadPool>
 
-#include "SettingsStore.h"
-
 DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialServerProcess)
 	: QMainWindow(parent)
 	, m_api(new DshApiClient(this))
@@ -84,7 +82,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		});
 	connect(m_serverManager, &ServerManager::errorLine, this, [this](const QString& line) {
 		if (m_messageHost && m_messageHost->current())
-			m_messageHost->addSystemMessage(tr("DSH 服务端: %1").arg(line));
+			m_messageHost->addSystemMessage(qtTrId("server_status_fmt").arg(line));
 		// 移除扩展后服务端启动失败时，自动清理 cordis.patch.yml 残留
 		if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
 			m_cleanupResidualsAfterServerError = false;
@@ -116,7 +114,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 
 		if (m_api && !m_api->isConnected()) {
 			if (m_messageHost && m_messageHost->current())
-				m_messageHost->addSystemMessage(tr("DSH 服务端已退出，代码: %1").arg(exitCode));
+				m_messageHost->addSystemMessage(qtTrId("server_exited_fmt").arg(exitCode));
 			if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
 				m_cleanupResidualsAfterServerError = false;
 				m_extensionPopup->cleanupResiduals();
@@ -145,8 +143,6 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	Theme::applyToWindow(this);
 	setWindowTitle(QStringLiteral("DSH Hub"));
 	setAttribute(Qt::WA_DeleteOnClose);
-
-	m_defaultAgentPreset = SettingsStore::defaultAgentPresetId();
 
 	// 启动命名管道桥接服务，供 Node/DSh server 调用 DLL 工具
 	m_pipeBridge = new DshNamedPipeBridge(this);
@@ -240,7 +236,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		});
 	connect(m_chatInput, &ChatInputWidget::thinkingDepthChanged, this, [](const QString& levelId) {
 		qInfo().noquote() << QStringLiteral("[DSH Hub] thinking depth ->")
-			<< (levelId.isEmpty() ? tr("(默认)") : levelId);
+			<< (levelId.isEmpty() ? qtTrId("common_default_suffix") : levelId);
 		});
 
 	connect(m_sidebar, &Sidebar::newWorkspaceRequested,
@@ -342,15 +338,15 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	// 常驻“设置系统”：随主窗口存在，自管设置窗口的开关/遮罩/居中。
 	// 放在 start() 之后创建，因Settings 构造需dshHome
 	// （由 ServerManager::start 填充）。这里只做一次业务信号接线：
-	// 预设变更同步给当前会话、新增模型后刷新选择器
+	// 预设变更只记日志、新增模型后刷新选择器
 	// ------------------------------------------------------------------
 	m_settings = new Settings(m_api, this);
-	connect(m_settings, &Settings::agentPresetChanged, this, [this](const QString& presetId) {
-		m_defaultAgentPreset = presetId;
-		if (!m_sessionId.isEmpty() && m_api) {
-			m_api->callMethod(QStringLiteral("agentPresets/select"),
-				SessionCommands::agentPresetSelect(m_sessionId, presetId), {}, {});
-		}
+	// 用户在设置里改了默认预设：那次服务端写入（settings/update）已经在
+	// Settings 里完成，这里不需要跟着改任何本地状态或当前会话 ——
+	// 客户端不再自己存一份默认值，新建会话时也不带 agentPreset，
+	// 由服务端按它自己的设置文档组装（“默认值只影响新建会话”是服务端的语义）。
+	connect(m_settings, &Settings::agentPresetChanged, this, [](const QString& presetId) {
+		qInfo().noquote() << QStringLiteral("[DSH Hub] default agent preset ->") << presetId;
 		});
 	connect(m_settings, &Settings::serverSettingsSaved, this, [this]() {
 		if (m_serverManager)
@@ -551,7 +547,6 @@ DSHHub::~DSHHub()
 	m_cacheManager.clearAll();
 }
 
-
 void DSHHub::syncComposerSession()
 {
 	// 输入区底部的“模型 / 思考深度”控件按当前会话的模型目录刷新；
@@ -559,7 +554,7 @@ void DSHHub::syncComposerSession()
 	if (m_chatInput)
 		m_chatInput->setModelSession(m_api, m_sessionId);
 
-	// 0.1.5：modelCatalog 只给部署默认值，会话自己的选择session/list 
+	// 0.1.5：modelCatalog 只给部署默认值，会话自己的选择session/list
 	// projections.values.modelSelection 里（已随会话行进SessionCatalog），
 	// 这里把它推给 chip，避chip 显示成默认模型
 	if (m_chatInput && m_sidebar && !m_sessionId.isEmpty()) {
@@ -663,7 +658,7 @@ void DSHHub::onNewWorkspaceClicked()
 {
 	const QString path = QFileDialog::getExistingDirectory(
 		this,
-		tr("选择要加入工作区的目录"));
+		qtTrId("workdir_choose_dir_title"));
 
 	if (path.isEmpty())
 		return;
@@ -677,7 +672,7 @@ void DSHHub::onNewWorkspaceClicked()
 		},
 		[this](const DshApiClient::RpcError& error) {
 			if (m_messageHost->current()) {
-				m_messageHost->addSystemMessage(tr("新建工作区失败: %1 %2").arg(error.code, error.message));
+				m_messageHost->addSystemMessage(qtTrId("workdir_create_failed_fmt").arg(error.code, error.message));
 			}
 		});
 }
@@ -686,21 +681,21 @@ void DSHHub::onCreateSessionInWorkspace(const QString& workspaceId)
 {
 	m_api->callMethod(
 		QStringLiteral("session/create"),
-		SessionCommands::sessionCreate(workspaceId, m_defaultAgentPreset),
+		SessionCommands::sessionCreate(workspaceId),
 		[this, workspaceId](const QJsonObject& value) {
 			const QString newSessionId = value.value(QStringLiteral("sessionId")).toString();
 			if (newSessionId.isEmpty())
 				return;
 
-			switchToFreshSession(newSessionId, tr("未命名会话"), /*loadHistory=*/true);
+			switchToFreshSession(newSessionId, qtTrId("session_untitled"), /*loadHistory=*/true);
 			if (m_sidebar) {
-				m_sidebar->workspaceList()->addSessionToWorkspace(newSessionId, tr("未命名会话"), workspaceId);
+				m_sidebar->workspaceList()->addSessionToWorkspace(newSessionId, qtTrId("session_untitled"), workspaceId);
 				m_sidebar->workspaceList()->setCurrentSession(newSessionId);
 			}
 		},
 		[this](const DshApiClient::RpcError& error) {
 			if (m_messageHost->current()) {
-				m_messageHost->addSystemMessage(tr("新建会话失败: %1 %2").arg(error.code, error.message));
+				m_messageHost->addSystemMessage(qtTrId("session_new_failed_fmt").arg(error.code, error.message));
 			}
 		});
 }
@@ -712,17 +707,17 @@ void DSHHub::createSessionAndSend(const QString& text)
 
 	m_api->callMethod(
 		QStringLiteral("session/create"),
-		SessionCommands::sessionCreate(QString(), m_defaultAgentPreset),
+		SessionCommands::sessionCreate(),
 		[this, text](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
 			if (sid.isEmpty())
 				return;
 
-			// load 历史：等首条 prompt mux 事件即可；adoptSession 
+			// load 历史：等首条 prompt mux 事件即可；adoptSession
 			// loader 绑定新会话，之后"加载更多"不会误用旧会id
-			switchToFreshSession(sid, tr("未命名会话"), /*loadHistory=*/false);
+			switchToFreshSession(sid, qtTrId("session_untitled"), /*loadHistory=*/false);
 			if (m_sidebar) {
-				m_sidebar->workspaceList()->addSession(sid, tr("未命名会话"));
+				m_sidebar->workspaceList()->addSession(sid, qtTrId("session_untitled"));
 				m_sidebar->workspaceList()->setCurrentSession(sid);
 			}
 
@@ -730,7 +725,7 @@ void DSHHub::createSessionAndSend(const QString& text)
 		},
 		[this](const DshApiClient::RpcError& error) {
 			if (m_messageHost->current()) {
-				m_messageHost->addSystemMessage(tr("创建会话失败: %1 %2").arg(error.code, error.message));
+				m_messageHost->addSystemMessage(qtTrId("session_create_failed_fmt").arg(error.code, error.message));
 			}
 		});
 }
@@ -847,8 +842,8 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 
 	const auto ret = QMessageBox::question(
 		this,
-		tr("删除会话"),
-		tr("确定要删除这个会话吗？此操作无法撤销。"),
+		qtTrId("session_delete_label"),
+		qtTrId("session_delete_confirm"),
 		QMessageBox::Yes | QMessageBox::No,
 		QMessageBox::No);
 	if (ret != QMessageBox::Yes)
@@ -917,7 +912,7 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 			qWarning().noquote() << "[DSH Hub] delete session failed:"
 				<< error.code << error.message;
 			if (m_messageHost->current()) {
-				m_messageHost->addSystemMessage(tr("删除会话失败: %1 %2").arg(error.code, error.message));
+				m_messageHost->addSystemMessage(qtTrId("session_delete_failed_fmt").arg(error.code, error.message));
 			}
 		});
 }
@@ -950,22 +945,22 @@ void DSHHub::callSessionCreate()
 
 	m_api->callMethod(
 		QStringLiteral("session/create"),
-		SessionCommands::sessionCreate(QString(), m_defaultAgentPreset),
+		SessionCommands::sessionCreate(),
 		[this](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
 			if (sid.isEmpty())
 				return;
 
-			switchToFreshSession(sid, tr("未命名会话"), /*loadHistory=*/true);
+			switchToFreshSession(sid, qtTrId("session_untitled"), /*loadHistory=*/true);
 			if (m_sidebar) {
-				m_sidebar->workspaceList()->addSession(sid, tr("未命名会话"));
+				m_sidebar->workspaceList()->addSession(sid, qtTrId("session_untitled"));
 				m_sidebar->workspaceList()->setCurrentSession(sid);
 			}
 		},
 		[this](const DshApiClient::RpcError& error) {
 			finishInitialization();
 			if (m_messageHost->current())
-				m_messageHost->addSystemMessage(tr("创建会话失败: %1 %2").arg(error.code, error.message));
+				m_messageHost->addSystemMessage(qtTrId("session_create_failed_fmt").arg(error.code, error.message));
 		});
 }
 
@@ -986,11 +981,11 @@ void DSHHub::onInitialSessionReady(const QString& sessionId, const QString& titl
 void DSHHub::onSessionCreated(const QString& sessionId, const QString& workspaceId)
 {
 	// 统一入口：取消旧构建/停流式/缓存当前会话/换空列表/绑定并加载新会话
-	switchToFreshSession(sessionId, tr("未命名会话"), /*loadHistory=*/true);
-	if (!m_defaultAgentPreset.isEmpty() && m_api) {
-		m_api->callMethod(QStringLiteral("agentPresets/select"),
-			SessionCommands::agentPresetSelect(sessionId, m_defaultAgentPreset), {}, {});
-	}
+	//
+	// 这里不再补一次 agentPresets/select：会话的预设由服务端在建会话那一刻定死
+	// （默认会话按 settings 文档里的默认值组装，并写进会话头），客户端没有
+	// “想让它用哪个”的额外主张 —— 与原版一致，也不会有客户端默认值覆盖服务端的问题。
+	switchToFreshSession(sessionId, qtTrId("session_untitled"), /*loadHistory=*/true);
 
 	if (m_sidebar)
 		m_sidebar->addCreatedSession(sessionId, workspaceId);
@@ -1328,7 +1323,7 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 				});
 		}
 		else if (m_messageHost->current()) {
-				m_messageHost->addSystemMessage(tr("收到提问请求，但无法创建内联面板。"));
+			m_messageHost->addSystemMessage(qtTrId("ask_panel_create_failed"));
 		}
 	}
 	else if (type == QStringLiteral("approval/requested")) {
@@ -1341,7 +1336,7 @@ void DSHHub::handleMuxFrame(const QJsonObject& frame)
 				});
 		}
 		else if (m_messageHost->current()) {
-				m_messageHost->addSystemMessage(tr("收到审批请求，但无法创建内联面板。"));
+			m_messageHost->addSystemMessage(qtTrId("ask_approval_panel_create_failed"));
 		}
 	}
 }
@@ -1352,5 +1347,5 @@ void DSHHub::handleTransportError(const QString& context, const QString& message
 	if (m_serverManager && m_serverManager->isRestarting())
 		return;
 
-	m_messageHost->addSystemMessage(tr("传输错误 [%1]: %2").arg(context, message));
+	m_messageHost->addSystemMessage(qtTrId("chat_transport_error_fmt").arg(context, message));
 }

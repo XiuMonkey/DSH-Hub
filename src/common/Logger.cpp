@@ -223,7 +223,7 @@ QElapsedTimer& TimingLogger::timer()
 		QElapsedTimer tm;
 		tm.start();
 		return tm;
-	}();
+		}();
 	return t;
 }
 
