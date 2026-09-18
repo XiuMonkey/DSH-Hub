@@ -15,8 +15,10 @@
 // ToolsFilter 里，这里只管控件与交互。
 //
 // 窗口的形状：每个目录一枚按钮（DirectoryName），点一下展开它名下的工具行、再点收回；
-// 工具行仍是勾选框（勾上 = 会出现在发给模型的清单里）。展开/收起只是**显示**，
-// 与配置里的 IsExpanded（那儿 "False" 表示整组隐藏）没有关系。
+// 工具行仍是勾选框（勾上 = 会出现在发给模型的清单里）。目录**默认全折叠**，
+// 展开状态是"这一次翻看"的状态；配置里的 IsExpanded（"False" = 整组隐藏）是另一回事。
+// 每个目录的工具行底部另有一枚「折叠/可见」开关 —— 写的就是该目录自己的
+// IsExpanded（筛选语义：折叠 = 整组对模型隐藏）。
 // ------------------------------------------------------------------
 
 #include "StatusPopupWindow.h"
@@ -30,6 +32,7 @@
 
 #include <functional>
 
+class QAbstractButton;
 class QCheckBox;
 class QEvent;
 class QLabel;
@@ -43,6 +46,9 @@ class QVBoxLayout;
 // ------------------------------------------------------------------
 // 表头（目录名 + 计数）整行可点的按钮：点一下展开/收回下面的工具行。
 // 表头右侧的箭头 ▾ / ▸ 表示当前是展开还是收回。
+// 工具行底部有一枚「折叠/可见」胶囊开关（左文案右滑块，与勾选框样式区分）：
+// 写配置里该目录的 IsExpanded（筛选语义，折叠 = 整组对模型隐藏）—— 与表头
+// 那个纯显示的展开/收起不同。
 class ToolsFilterDirectoryEntry : public QWidget
 {
 	Q_OBJECT
@@ -61,8 +67,13 @@ signals:
 	void expandedChanged(const QString& directoryName, bool expanded);
 	// 某个工具行的勾选变了（调用方据此回写配置）
 	void toolVisibilityChanged(const QString& directoryName, const QString& toolName, bool visible);
+	// 底部「折叠/可见」开关变了：collapsed 即勾选状态（勾上 = 折叠 = 整组隐藏）
+	void groupHiddenChanged(const QString& directoryName, bool collapsed);
 
 private:
+	// 按整组隐藏状态同步开关文案与各行勾选框的可用性
+	void applyGroupHiddenVisuals();
+
 	QString m_name;
 	QString m_description;
 	bool m_groupHidden = false;   // 配置里的 IsExpanded == "False"：插件层面整组隐藏
@@ -77,6 +88,10 @@ private:
 	// 与 m_body 里的勾选框一一对应（下标即工具行号）
 	QVector<QCheckBox*> m_boxes;
 	QVector<QString> m_toolNames;
+	// 工具行底部的「折叠/可见」开关：左文案右胶囊滑块的整行按钮（CapsuleSwitchRow，
+	// 实现在 TopBar.cpp）——写配置 IsExpanded，是本条目里唯一改筛选语义的控件。
+	// 类型只用基类：头文件看不见 TopBar.cpp 匿名命名空间里的实现类。
+	QAbstractButton* m_groupToggle = nullptr;
 };
 
 // ------------------------------------------------------------------
@@ -84,7 +99,8 @@ private:
 // ------------------------------------------------------------------
 // 按目录分组的勾选列表：勾上 = 该工具会出现在发给模型的清单里，取消 = 隐藏。
 // 隐藏只影响提示词（省 token），工具仍然可以被调用；描述与参数只用来做提示，
-// 不写进配置文件。
+// 不写进配置文件。每个目录工具行底部的「折叠/可见」开关写该目录的 IsExpanded
+//（折叠 = 整组对模型隐藏，见上）。底部的 Agent 开关写的是 Agent 目录的 IsExpanded（见文件头）。
 class ToolsFilterPopup : public StatusPopupWindow
 {
 	Q_OBJECT
@@ -115,6 +131,8 @@ private:
 	void rebuild();
 	void onDirectoryExpandedChanged(const QString& directoryName, bool expanded);
 	void onToolVisibilityChanged(const QString& directoryName, const QString& toolName, bool visible);
+	// 某目录底部的「折叠/可见」开关变了：更新模型并写回配置（不重建，条目自己已更新显示）
+	void onDirectoryGroupHiddenChanged(const QString& directoryName, bool collapsed);
 	void setAllVisible(bool visible);
 	void saveNow();
 	// 当前目录表（含每行的勾选状态）
@@ -129,8 +147,12 @@ private:
 	bool m_degraded = false;           // 服务端只答出全局层时给个提示
 	// 当前会话的目录表（描述/参数只在内存里）
 	QVector<ToolFilterDirectory> m_directories;
-	// 被用户收起的目录名。存"收起"而不是"展开"：默认全展开，换会话时清空即可复原
+	// 被收起的目录名。**默认全折叠**（观感干净）：新会话播种时把全部目录名记进来，
+	// 用户随后的展开/收起照常增删——刷新与重开窗口都保留本次的翻看状态。
+	// 判断"新会话"用 m_collapsedSeedSession（上次播种的会话号），不能用
+	// m_sessionId：setContext() 会先把它覆盖成新会话，比较永远相等。
 	QSet<QString> m_collapsed;
+	QString m_collapsedSeedSession;
 
 	QLabel* m_hint = nullptr;
 	QLabel* m_statusLabel = nullptr;

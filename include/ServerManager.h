@@ -24,6 +24,13 @@ public:
 	QString dshHome() const;
 	bool isRestarting() const;
 
+	// 出厂 settings.yaml：本部署**不随附任何模型**（写 `llm-deepseek: models: []`）。
+	// 为什么要显式写空数组：适配器自带的默认目录（deepseek-flash 等 4 条）只在
+	// 该路由的 `models` 缺席时才生效 —— 写了空数组才等于"这条路由一条也不公布"。
+	// 只在文件缺失时写入：用户配置过的 harness 一个字都不动（返回 true 表示可用）。
+	// 之所以落在客户端：数据根是客户端建的，缺这一步时"清空 harness"会让随附模型复活。
+	static bool ensureFactorySettings(const QString& dshHome);
+
 signals:
 	void baseUrlReady(const QUrl& url);
 	void outputLine(const QString& line);

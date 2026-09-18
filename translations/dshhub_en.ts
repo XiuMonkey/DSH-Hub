@@ -921,6 +921,18 @@
         <source>还原</source>
         <translation>Restore</translation>
     </message>
+    <message id="toolfilter_group_state_collapsed">
+        <source>已折叠：整组对模型隐藏</source>
+        <translation>Collapsed: hidden from the model as a whole group</translation>
+    </message>
+    <message id="toolfilter_group_state_visible">
+        <source>可见：按各行勾选生效</source>
+        <translation>Visible: each tool follows its own checkbox</translation>
+    </message>
+    <message id="toolfilter_group_toggle_tip">
+        <source>勾选 = 这个目录整组对模型隐藏（配置里该目录 IsExpanded 写 False，下面各行的勾选不再生效）；不勾 = 目录可见，各行按自己的勾选生效。</source>
+        <translation>Checked = this whole directory is hidden from the model (IsExpanded = False for it in the config; the per-tool checkboxes below stop having any effect). Unchecked = the directory is visible and each tool row follows its own checkbox.</translation>
+    </message>
     <message id="toolfilter_dir_empty">
         <source>这个目录下没有工具</source>
         <translation>No tools in this directory</translation>

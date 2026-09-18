@@ -921,6 +921,18 @@
         <source>还原</source>
         <translation>还原</translation>
     </message>
+    <message id="toolfilter_group_state_collapsed">
+        <source>已折叠：整组对模型隐藏</source>
+        <translation>已折叠：整组对模型隐藏</translation>
+    </message>
+    <message id="toolfilter_group_state_visible">
+        <source>可见：按各行勾选生效</source>
+        <translation>可见：按各行勾选生效</translation>
+    </message>
+    <message id="toolfilter_group_toggle_tip">
+        <source>勾选 = 这个目录整组对模型隐藏（配置里该目录 IsExpanded 写 False，下面各行的勾选不再生效）；不勾 = 目录可见，各行按自己的勾选生效。</source>
+        <translation>勾选 = 这个目录整组对模型隐藏（配置里该目录 IsExpanded 写 False，下面各行的勾选不再生效）；不勾 = 目录可见，各行按自己的勾选生效。</translation>
+    </message>
     <message id="toolfilter_dir_empty">
         <source>这个目录下没有工具</source>
         <translation>这个目录下没有工具</translation>

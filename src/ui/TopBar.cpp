@@ -3,9 +3,11 @@
 #include "ThemeManager.h"
 #include "WindowFrame.h"
 
+#include <QAbstractButton>
 #include <QCheckBox>
 #include <QDebug>
 #include <QEvent>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayoutItem>
@@ -77,6 +79,76 @@ namespace
 			bar(5.0, 15.0, 10.0);  // 中：10
 			bar(8.0, 12.0, 14.0);  // 最窄：4（三根都以 x=10 居中）
 		}
+	};
+
+	// 目录底部的整组「折叠/可见」开关：整行可点，左侧状态文案、右侧胶囊滑块。
+	// 刻意不用 QCheckBox：QSS 的 ::indicator 只能换底色，画不出"滑块"，表达不了
+	// 开/合；自绘才像开关。配色每次绘制现取 Theme::（同 ToolsFilterButton 的理由：
+	// 主题靠重建窗口切换，不缓存就永远没有"忘了跟着换色"的机会）。
+	class CapsuleSwitchRow : public QAbstractButton
+	{
+	public:
+		explicit CapsuleSwitchRow(QWidget* parent = nullptr)
+			: QAbstractButton(parent)
+		{
+			setCheckable(true);
+			setCursor(Qt::PointingHandCursor);
+			setFocusPolicy(Qt::NoFocus);
+			setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+		}
+
+		QSize sizeHint() const override
+		{
+			return QSize(160, 26);
+		}
+
+	protected:
+		void paintEvent(QPaintEvent* event) override
+		{
+			Q_UNUSED(event);
+
+			QPainter painter(this);
+			painter.setRenderHint(QPainter::Antialiasing, true);
+
+			// 左侧状态文案：常态次级灰、悬停提亮一档、禁用再淡一档
+			QFont font = this->font();
+			font.setPixelSize(12);
+			painter.setFont(font);
+			const QColor textColor = isEnabled()
+				? QColor(underMouse()
+					? Theme::textSecondary()
+					: Theme::color(QStringLiteral("textTertiary")))
+				: QColor(Theme::color(QStringLiteral("textCaption")));
+			painter.setPen(textColor);
+			const int textWidth = qMax(width() - int(kTrackWidth) - 14, 0);
+			painter.drawText(QRect(4, 0, textWidth, height()),
+				Qt::AlignVCenter | Qt::AlignLeft, text());
+
+			// 右侧胶囊：勾选（折叠）填灰（与工具行勾选框选中态同款 textSecondary，
+			// 不用主题色 accent —— 那是蓝色），滑块滑到右端；未勾选浅灰轨，滑块在左端
+			const qreal trackX = width() - kTrackWidth - 4.0;
+			const qreal trackY = (height() - kTrackHeight) / 2.0;
+			const QRectF track(trackX, trackY, kTrackWidth, kTrackHeight);
+			painter.setPen(Qt::NoPen);
+			painter.setBrush(QColor(isEnabled()
+				? (isChecked() ? Theme::textSecondary() : Theme::border())
+				: Theme::inputBg()));
+			painter.drawRoundedRect(track, kTrackHeight / 2.0, kTrackHeight / 2.0);
+
+			// 滑块：白色圆点在灰轨与主题色轨上都清晰（两套主题的惯例同此）
+			const qreal knobSize = kTrackHeight - 4.0;
+			const qreal knobX = isChecked()
+				? trackX + kTrackWidth - knobSize - 2.0
+				: trackX + 2.0;
+			painter.setBrush(isEnabled() ? QColor(Qt::white) : QColor(Theme::border()));
+			painter.drawEllipse(QPointF(knobX + knobSize / 2.0, trackY + kTrackHeight / 2.0),
+				knobSize / 2.0, knobSize / 2.0);
+		}
+
+	private:
+		// 胶囊轨道的几何（逻辑像素；矢量绘制，高分辨率下不发虚）
+		static constexpr qreal kTrackWidth = 34.0;
+		static constexpr qreal kTrackHeight = 18.0;
 	};
 
 	// 目录表头的箭头，字形与 ModelListEntry 的成员行同一套（U+25BE / U+25B8）。
@@ -187,9 +259,26 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 		bodyLayout->addWidget(box);
 	}
 
+	// 底部开关：这一目录的整组「折叠/可见」。写的是配置里该目录的 IsExpanded
+	//（筛选语义：折叠 = 插件把整组从模型清单里撤下），与表头那个纯显示的
+	// 展开/收起不同。左文案右胶囊滑块，与工具行的勾选框在样式上区分开。
+	// 先设状态再接线。
+	m_groupToggle = new CapsuleSwitchRow(m_body);
+	m_groupToggle->setObjectName(QStringLiteral("toolsFilterGroupToggle"));
+	m_groupToggle->setChecked(m_groupHidden);
+	connect(m_groupToggle, &QAbstractButton::toggled, this, [this](bool collapsed) {
+		m_groupHidden = collapsed;
+		refreshMeta();            // 表头「配置里整组隐藏」后缀跟上
+		applyGroupHiddenVisuals(); // 文案 + 各行勾选框可用性
+		emit groupHiddenChanged(m_name, collapsed);
+		});
+	bodyLayout->addSpacing(4);
+	bodyLayout->addWidget(m_groupToggle);
+
 	layout->addWidget(m_body);
 
 	refreshMeta();
+	applyGroupHiddenVisuals();
 	setExpanded(true);
 
 	connect(m_header, &QPushButton::clicked, this, [this]() {
@@ -247,6 +336,19 @@ void ToolsFilterDirectoryEntry::refreshMeta()
 		tip += qtTrId("toolfilter_dir_toggle_tip");
 		m_header->setToolTip(tip);
 	}
+}
+
+void ToolsFilterDirectoryEntry::applyGroupHiddenVisuals()
+{
+	if (m_groupToggle) {
+		m_groupToggle->setText(m_groupHidden
+			? qtTrId("toolfilter_group_state_collapsed")
+			: qtTrId("toolfilter_group_state_visible"));
+		m_groupToggle->setToolTip(qtTrId("toolfilter_group_toggle_tip"));
+	}
+	// 整组隐藏时各行勾选其实不生效：把勾选框禁用，别让界面撒谎
+	for (QCheckBox* box : m_boxes)
+		box->setEnabled(!m_groupHidden);
 }
 
 // ------------------------------------------------------------------
@@ -365,10 +467,17 @@ void ToolsFilterPopup::applyCatalog(const ToolFilterCatalog& catalog)
 		return;
 	}
 
-	// 换会话：展开状态是"这一次翻看"的状态，不带去别的会话（默认全展开）
-	const bool sameSession = catalog.sessionId == m_sessionId;
-	if (!sameSession)
+	// 新会话默认全折叠（观感干净）：把本次的目录名全部记进"收起"集，用户随后
+	// 的展开/收起照常记录，刷新/重开窗口不丢。
+	// 判断"新会话"不能用 m_sessionId —— TopBar::loadTools 的成功路径会先调
+	// setContext() 把 m_sessionId 覆盖成本会话，applyCatalog 再比较永远相等
+	//（这也是原来"换会话清空"从未生效的原因）。所以单独记一个已播种的会话号。
+	if (m_collapsedSeedSession != catalog.sessionId) {
 		m_collapsed.clear();
+		for (const ToolFilterDirectory& directory : catalog.directories)
+			m_collapsed.insert(directory.name);
+		m_collapsedSeedSession = catalog.sessionId;
+	}
 
 	m_sessionId = catalog.sessionId;
 	m_dropGuidance = catalog.dropGuidance;
@@ -406,6 +515,8 @@ void ToolsFilterPopup::rebuild()
 			this, &ToolsFilterPopup::onDirectoryExpandedChanged);
 		connect(entry, &ToolsFilterDirectoryEntry::toolVisibilityChanged,
 			this, &ToolsFilterPopup::onToolVisibilityChanged);
+		connect(entry, &ToolsFilterDirectoryEntry::groupHiddenChanged,
+			this, &ToolsFilterPopup::onDirectoryGroupHiddenChanged);
 
 		m_listLayout->addWidget(entry);
 	}
@@ -459,6 +570,26 @@ void ToolsFilterPopup::onToolVisibilityChanged(const QString& directoryName, con
 			updateStatus();
 			return;
 		}
+		return;
+	}
+}
+
+void ToolsFilterPopup::onDirectoryGroupHiddenChanged(const QString& directoryName, bool collapsed)
+{
+	if (m_updating)
+		return;
+
+	for (ToolFilterDirectory& directory : m_directories) {
+		if (directory.name != directoryName)
+			continue;
+		if (directory.expanded == !collapsed)
+			return; // 状态没变
+		// 这里写的就是配置里该目录的 IsExpanded（"False" = 插件整组隐藏）——与
+		// 表头那个纯显示的展开/收起不同，这次是真的改筛选语义。条目自己已经
+		// 更新了后缀与各行可用性，这里只改模型 + 写回，不必重建。
+		directory.expanded = !collapsed;
+		saveNow();
+		updateStatus();
 		return;
 	}
 }

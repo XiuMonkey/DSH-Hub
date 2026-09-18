@@ -13,6 +13,7 @@
 #include <QJsonObject>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QTcpSocket>
 #include <QUrlQuery>
 
@@ -167,6 +168,25 @@ namespace
 
 	// cordis.patch.yml 的写入统一走 ExtensionRegistry::ensurePatchEntry（行格式与
 	// 判重规则的唯一所有者，ExtensionLoader 与 session-stats 那一行也调它）。
+
+	// ------------------------------------------------------------------
+	// 出厂 settings.yaml 的内容
+	// ------------------------------------------------------------------
+	// 注释写成 ASCII：这个文件会被服务端的 YAML 解析器和各种工具读，中文注释在
+	// 没有 BOM 的 UTF-8 下容易被当成乱码（与 cordis.patch.yml 同一个理由）。
+	//
+	// models 写成空数组是**刻意的**，不是"没配"：@deepseek-ai/dsh-llm-deepseek 在
+	// 该路由的 models 缺席时会公布自带的 DEFAULT_MODELS（deepseek-flash 等 4 条），
+	// 只有空数组才表达"这条路由什么也不公布"。于是出厂模型列表为空，
+	// 里面每一条都必须是用户自己加的。
+	const char* const kFactorySettingsYaml =
+		"# DSH Hub factory settings.\n"
+		"#\n"
+		"# The empty model list below is deliberate: it suppresses the adapter's\n"
+		"# built-in default catalog, so every model in the list is one you added.\n"
+		"# Delete the two lines below to get the adapter's shipped catalog back.\n"
+		"llm-deepseek:\n"
+		"  models: []\n";
 } // namespace
 
 ServerManager::ServerManager(QObject* parent)
@@ -247,6 +267,36 @@ bool ServerManager::isRestarting() const
 	return m_restarting;
 }
 
+bool ServerManager::ensureFactorySettings(const QString& dshHome)
+{
+	if (dshHome.isEmpty())
+		return false;
+
+	const QString path = dshHome + QStringLiteral("/settings.yaml");
+
+	// 已经有一份就一个字都不动：那可能是用户自己改过的（加模型、改默认模型、
+	// 甚至把 models: [] 删回去换用适配器自带目录）。
+	if (QFile::exists(path))
+		return true;
+
+	QSaveFile file(path);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+		qWarning().noquote() << QStringLiteral(
+			"[ServerManager] 出厂 settings.yaml 写不进去: %1").arg(path);
+		return false;
+	}
+	file.write(kFactorySettingsYaml);
+	if (!file.commit()) {
+		qWarning().noquote() << QStringLiteral(
+			"[ServerManager] 出厂 settings.yaml 提交失败: %1").arg(path);
+		return false;
+	}
+
+	qInfo().noquote() << QStringLiteral(
+		"[ServerManager] 已写入出厂 settings.yaml（不随附任何模型）: %1").arg(path);
+	return true;
+}
+
 void ServerManager::startBundledServer()
 {
 	const QString appDir = QCoreApplication::applicationDirPath();
@@ -271,6 +321,10 @@ void ServerManager::startBundledServer()
 
 	QDir().mkpath(cwd);
 	QDir().mkpath(dshHome);
+
+	// 出厂配置必须在服务端起之前就位：DSH 起完就读 settings.yaml，晚了要等下次重启。
+	// 这一步也是"清空 harness 之后不再冒出随附模型"的关键 —— 数据根是这里建的。
+	ensureFactorySettings(dshHome);
 
 	// 如果 profile 里引用的插件包不存在（例如插件市场被删除），自动从 bundles 中移除，
 	// 避免 DSH 因为缺少可选插件而无法启动。
