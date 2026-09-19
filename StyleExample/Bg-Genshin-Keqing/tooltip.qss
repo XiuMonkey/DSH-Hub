@@ -1,0 +1,31 @@
+/* ==========================================================================
+ * tooltip.qss — 悬浮提示气泡
+ *
+ * 归属：Tooltip.cpp（那个常驻的气泡顶层窗口）
+ *
+ * 为什么自己一个文件、而不是并进 popups.qss（它也是"浮层"）：
+ *   外部 styles/ 目录优先，且启动时只**补缺失**、绝不覆盖已有文件
+ *   （见 ThemeManager::ensureDefaults）。旧安装的 styles/popups.qss 已经存在，
+ *   整份盖住内置版 —— 往 popups.qss 里加规则，老用户永远看不到。
+ *   换一个**新文件名**，升级后它属于"缺失文件"，会被自动释放出来。
+ *
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换），
+ * 规则里不写色值 —— 所以本文件对所有既有主题都生效，不需要新增色板 key。
+ * ========================================================================== */
+
+/* 可见的圆角卡片。
+ * 圆角值必须与 Tooltip.cpp 的 kRadius 一致：阴影是按这个半径同心外扩画的，
+ * 对不上会在四角露出阴影的边。 */
+#tooltipBody {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+}
+
+/* 正文。字号可以改，但别改字体族：气泡宽度是按 label->font() 先量后定宽的
+ * （见 Tooltip::applyText），字体族一旦在这里覆盖，中英文混排的宽度会算不准。 */
+#tooltipText {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 12px;
+}

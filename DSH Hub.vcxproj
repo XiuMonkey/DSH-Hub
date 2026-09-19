@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{92E5DE41-B569-4676-9AA4-3D59F8B0A8C9}</ProjectGuid>
+    <Keyword>QtVS_v304</Keyword>
+    <WindowsTargetPlatformVersion Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">10.0</WindowsTargetPlatformVersion>
+    <QtMsBuild Condition="'$(QtMsBuild)'=='' OR !Exists('$(QtMsBuild)\qt.targets')">$(MSBuildProjectDirectory)\QtMsBuild</QtMsBuild>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Condition="Exists('$(QtMsBuild)\qt_defaults.props')">
+    <Import Project="$(QtMsBuild)\qt_defaults.props" />
+  </ImportGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
+    <QtInstall>6.11.2_msvc2022_64</QtInstall>
+    <QtModules>core;gui;widgets;network;websockets</QtModules>
+    <QtBuildConfig>debug</QtBuildConfig>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
+    <QtInstall>6.11.2_msvc2022_64</QtInstall>
+    <QtModules>core;gui;widgets;network;websockets</QtModules>
+    <QtBuildConfig>release</QtBuildConfig>
+  </PropertyGroup>
+  <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
+    <Message Importance="High" Text="QtMsBuild: could not locate qt.targets, qt.props; project may not build correctly." />
+  </Target>
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(QtMsBuild)\Qt.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(QtMsBuild)\Qt.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>QT_NO_DEPRECATED_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;D:\Qt\6.11.2\msvc2022_64\include\QtCore\6.11.2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>Disabled</Optimization>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>QT_NO_DEPRECATED_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;D:\Qt\6.11.2\msvc2022_64\include\QtCore\6.11.2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>MaxSpeed</Optimization>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="Configuration">
+    <ClCompile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;D:\Qt\6.11.2\msvc2022_64\include\QtCore\6.11.2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="Configuration">
+    <ClCompile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;D:\Qt\6.11.2\msvc2022_64\include\QtCore\6.11.2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\chat\AgentMessageUnit.cpp" />
+    <ClCompile Include="src\chat\CodeBlockView.cpp" />
+    <ClCompile Include="src\common\TopBarTools.cpp" />
+    <ClCompile Include="src\ui\LoadMoreButton.cpp" />
+    <ClCompile Include="src\ui\ChatInputWidget.cpp" />
+    <ClCompile Include="src\ui\Main.cpp">
+      <ObjectFileName>$(IntDir)ui-Main.obj</ObjectFileName>
+    </ClCompile>
+    <ClCompile Include="src\ui\Sidebar.cpp" />
+    <ClCompile Include="src\ui\SmoothWheelScroller.cpp" />
+    <ClCompile Include="src\chat\UserMessageUnit.cpp" />
+    <QtRcc Include="resources\DSHHub.qrc" />
+    <QtMoc Include="include\DSHHub.h" />
+    <QtMoc Include="include\MessageHost.h" />
+    <QtMoc Include="include\SmoothWheelScroller.h" />
+    <QtMoc Include="include\ServerManager.h" />
+    <ClCompile Include="src\network\DshApiClient.cpp" />
+    <ClCompile Include="src\network\DshEventParser.cpp" />
+    <ClCompile Include="src\core\DSHHub.cpp" />
+    <ClCompile Include="src\core\MessageHost.cpp" />
+    <ClCompile Include="src\core\ServerManager.cpp" />
+    <ClCompile Include="src\core\main.cpp" />
+    <ClCompile Include="src\chat\MessageQuery.cpp" />
+    <ClCompile Include="src\chat\SystemMessageUnit.cpp" />
+    <ClCompile Include="src\common\CodeHighlighter.cpp" />
+    <ClCompile Include="src\common\MarkdownPreprocess.cpp" />
+    <ClCompile Include="src\common\InteractionHandler.cpp" />
+    <ClCompile Include="src\common\SessionCatalog.cpp" />
+    <ClCompile Include="src\common\SessionService.cpp" />
+    <ClCompile Include="src\common\SettingsStore.cpp" />
+    <ClCompile Include="src\common\ClientSettings.cpp" />
+    <ClCompile Include="src\common\AgentPresetService.cpp" />
+    <ClCompile Include="src\common\PluginMarketClient.cpp" />
+    <ClCompile Include="src\common\PluginMarketModel.cpp" />
+    <ClCompile Include="src\common\PluginMarketInstaller.cpp" />
+    <ClCompile Include="src\common\ExtensionRegistry.cpp" />
+    <ClCompile Include="src\common\ExtensionInstallTask.cpp" />
+    <ClCompile Include="src\common\ModelSelectionService.cpp" />
+    <ClCompile Include="src\common\TranslationManager.cpp" />
+    <ClCompile Include="src\ui\TranslationUi.cpp" />
+    <ClCompile Include="src\ui\StatusPopupWindow.cpp" />
+    <ClCompile Include="src\ui\ModelSelector.cpp" />
+    <ClCompile Include="src\ui\ModelListPanel.cpp" />
+    <ClCompile Include="src\ui\SpinnerWidget.cpp" />
+    <ClCompile Include="src\ui\TopBar.cpp" />
+    <ClCompile Include="src\ui\TitleBar.cpp" />
+    <ClCompile Include="src\common\WindowFrame.cpp" />
+    <ClCompile Include="src\chat\CacheHistoryManager.cpp" />
+    <ClCompile Include="src\network\SessionPrefetcher.cpp" />
+    <ClCompile Include="src\ui\PopupWindow.cpp" />
+    <ClCompile Include="src\ui\Tooltip.cpp" />
+    <ClCompile Include="src\ui\Settings.cpp" />
+    <ClCompile Include="src\common\ThemeManager.cpp" />
+    <ClCompile Include="src\common\CardShadow.cpp" />
+    <ClCompile Include="src\ui\ShadowPanel.cpp" />
+    <ClCompile Include="src\common\Logger.cpp" />
+    <ClCompile Include="src\ui\PluginsManager.cpp" />
+    <ClCompile Include="src\ui\ExtensionManagerPopup.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DshNamedPipeBridge.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DllCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ComCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\Thunk.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp" />
+    <None Include="resources\highlight_rules.json" />
+    <None Include="resources\DSH-Hub-Logo-Tiny@2x.png" />
+    <None Include="resources\DSH-Hub-Logo-Tiny-Dark@2x.png" />
+    <None Include="resources\DSH-Hub-Icon.png" />
+    <None Include="resources\DSH Hub.ico" />
+    <ResourceCompile Include="resources\DSH Hub.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtMoc Include="include\Sidebar.h" />
+    <QtMoc Include="include\LoadMoreButton.h" />
+    <QtMoc Include="include\DshApiClient.h" />
+    <QtMoc Include="include\DshNamedPipeBridge.h" />
+    <QtMoc Include="include\SessionPrefetcher.h" />
+    <QtMoc Include="include\MessageQuery.h" />
+    <QtMoc Include="include\SpinnerWidget.h" />
+    <QtMoc Include="include\TopBar.h" />
+    <QtMoc Include="include\TitleBar.h" />
+    <QtMoc Include="include\PopupWindow.h" />
+    <QtMoc Include="include\Settings.h" />
+    <QtMoc Include="include\PluginsManager.h" />
+    <QtMoc Include="include\ExtensionManagerPopup.h" />
+    <QtMoc Include="include\ChatInputWidget.h" />
+    <QtMoc Include="include\StatusPopupWindow.h" />
+    <QtMoc Include="include\PluginMarketClient.h" />
+    <QtMoc Include="include\PluginMarketInstaller.h" />
+    <QtMoc Include="include\ModelSelector.h" />
+    <QtMoc Include="include\ModelListPanel.h" />
+    <QtMoc Include="include\ShadowPanel.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtMoc Include="include\UserMessageUnit.h" />
+    <QtMoc Include="include\AgentMessageUnit.h" />
+    <ClInclude Include="include\DshEventParser.h" />
+    <ClInclude Include="include\ExtensionLoader.h" />
+    <ClInclude Include="include\DllCaller.h" />
+    <ClInclude Include="include\ComCaller.h" />
+    <ClInclude Include="include\Thunk.h" />
+    <ClInclude Include="include\SystemMessageUnit.h" />
+    <ClInclude Include="include\CodeHighlighter.h" />
+    <ClInclude Include="include\InteractionHandler.h" />
+    <ClInclude Include="include\CacheHistoryManager.h" />
+    <ClInclude Include="include\ThemeManager.h" />
+    <ClInclude Include="include\CardShadow.h" />
+    <ClInclude Include="include\TopBarTools.h" />
+    <ClInclude Include="include\WindowFrame.h" />
+    <ClInclude Include="include\Logger.h" />
+    <ClInclude Include="include\SessionCatalog.h" />
+    <ClInclude Include="include\SessionService.h" />
+    <ClInclude Include="include\SettingsStore.h" />
+    <ClInclude Include="include\Tooltip.h" />
+    <ClInclude Include="include\ClientSettings.h" />
+    <ClInclude Include="include\AgentPresetService.h" />
+    <ClInclude Include="include\PluginMarketModel.h" />
+    <ClInclude Include="include\ExtensionRegistry.h" />
+    <ClInclude Include="include\ExtensionInstallTask.h" />
+    <ClInclude Include="include\ModelSelectionService.h" />
+    <QtMoc Include="include\TranslationManager.h" />
+    <QtTranslation Include="translations\dshhub_en.ts" />
+  </ItemGroup>
+  <!-- QtTranslation 的 BuildAction **必须保持 false**（即不参与构建）。
+       合法取值只有 lupdate / lrelease / lupdate_lrelease / false
+       （见 QtMsBuild\translation\qttranslation.xml），而 qttranslation.targets 的判据是
+       "BuildAction 字面包含 lupdate / lrelease"。所以写成 true 是无效值，它**什么都不触发**
+       —— 之前那句"设成 true 就会跑 lupdate/lrelease"是误解。
+       ⚠️ 绝不能改成 lupdate / lupdate_lrelease：本项目是 ID-based（qtTrId），
+       语言包由 tools\release-translations.ps1 生成，.ts 里只维护译文（不写 <source>）；
+       跑一次 lupdate 会把译文回标成 type="unfinished"，lrelease 随即把它们丢弃
+       —— 结果是语言包整片失效、界面满屏 key。
+       下面的 <QtTranslation> 条目只用于在 IDE 里能打开这份 .ts，不产生任何构建动作。 -->
+  <ItemDefinitionGroup>
+    <QtTranslation>
+      <BuildAction>false</BuildAction>
+    </QtTranslation>
+  </ItemDefinitionGroup>
+  <!-- .qm 的发布不走 PostBuildEvent：Qt VS Tools 的 QtTranslation 目标不负责拷贝产物，
+       而客户端从 exe 同目录的 translations/ 加载（见 TranslationManager.cpp）。
+       发布用 tools\release-translations.ps1（跑 lrelease 到 x64\<Config>\translations），
+       理由与用法写在该脚本头部。 -->
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
+    <Import Project="$(QtMsBuild)\qt.targets" />
+  </ImportGroup>
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

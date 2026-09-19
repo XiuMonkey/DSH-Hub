@@ -1,0 +1,8 @@
+﻿<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="DSH Hub.vcxproj" Id="92e5de41-b569-4676-9aa4-3d59f8b0a8c9" />
+  <Project Path="DSH Hub.Tests.vcxproj" Id="e9c6d4a1-7b8c-4f2e-9d51-3a5b0c1d2e3f" />
+</Solution>
+

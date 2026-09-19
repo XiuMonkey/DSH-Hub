@@ -1,0 +1,84 @@
+/* ==========================================================================
+ * popups.qss — 浮层：Toast、启动蒙版、主题切换过渡、各窗口遮罩、PopupWindow 外壳
+ *
+ * 归属：Main.cpp（#toastLabel / #initOverlay）、WindowFrame.cpp（#windowScrim）、
+ *       ThemeManager.cpp（主题切换过渡）、PopupWindow.cpp（弹窗外壳）
+ * 约定：遮罩（#initOverlay 启动蒙版、#windowScrim 窗口级那一层）虽然由不同地方
+ *       创建，但它是同一套「半透明蒙版」模式，所以集中在这里。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
+ * ========================================================================== */
+/* 底部“没有更多了”提示 */
+#toastLabel {
+    background: {{toastBg}};
+    color: {{textOnAccent}};
+    border-radius: 16px;
+    padding: 8px 16px;
+    font-size: 13px;
+}
+
+/* 初始化蒙版与居中卡片 */
+/* 蒙版铺满客户区，必须带与窗口一致的圆角：无边框窗口的圆角之外是透明的，
+ * 蒙版若画成直角就会在四个角糊出一块灰色方块。 */
+#initOverlay {
+    background-color: {{overlayBg}};
+    border-radius: 12px;
+}
+#initCard {
+    background: {{panelBg}};
+    border-radius: 20px;
+}
+#initLabel {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* 主题切换过渡弹窗 */
+#themeSwitchBody {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 20px;
+}
+#themeSwitchLabel {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 16px;
+}
+
+/* 插件市场 / 扩展管理 / 设置 / 工具过滤共用的半透明蒙版（WindowFrame 持有
+ * 的那一层，objectName 见 WindowFrame.cpp 的 kScrimObjectName）：
+ * 只盖内容区（不含自绘标题栏，窗口按钮要能继续点），所以底角跟随窗口圆角、
+ * 顶角保持直角。 */
+#windowScrim {
+    background-color: {{overlayBg}};
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+/* ===== PopupWindow.cpp：所有弹窗共用的外壳（圆角主体 + 标题 + 关闭按钮）===== */
+
+/* ===== PopupWindow.cpp ===== */
+#popupBody {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 16px;
+}
+#popupTitle {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 16px;
+}
+#popupCloseButton {
+    background: transparent;
+    color: {{textSecondary}};
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+}
+#popupCloseButton:hover {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+}

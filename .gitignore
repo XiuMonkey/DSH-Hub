@@ -1,0 +1,40 @@
+# Visual Studio
+Count-Lines.ps1
+.vs/
+.workbuddy/
+DevLog/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Build output
+x64/
+build/
+Debug/
+Release/
+DSH Hub/
+DSH Hub.Tests/
+resources/server/
+test extension/
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.obj
+*.o
+*.log
+
+# Qt generated files
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# Compiled translation binaries (rebuild from translations/*.ts)
+resources/translations/*.qm
+
+# Node runtime dependencies
+resources/server/node_modules/
+resources/server/node.exe
+
+build_smoke/

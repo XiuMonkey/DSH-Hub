@@ -1,0 +1,169 @@
+/* ==========================================================================
+ * topbar.qss — 对话顶栏与工具过滤窗口（TopBar / ToolsFilterPopup）
+ *
+ * 归属：src/ui/TopBar.cpp
+ * 约定：工具过滤窗口的遮罩样式在 popups.qss（遮罩是各窗口共用的一套）。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
+ * ========================================================================== */
+/* ===== TopBar.cpp ===== */
+#topBar {
+    background: {{wallpaperPanelBg}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+}
+#topBarTitle {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 14px;
+}
+/* 顶栏右侧的“工具过滤”按钮（图标颜色由 Theme::textSecondary() 画在 C++ 里）。
+ *
+ * 前缀 QPushButton 是**必须**的，不是可有可无的风格问题：
+ *   defaults.qss 的通用按钮规则是 `#dshhubCentral QPushButton`，特异性 (1,0,1)；
+ *   而裸 `#topBarToolsButton` 只有 (1,0,0) —— 直接**输给通用规则**，
+ *   于是这个按钮被刷上 buttonBg 的填充底色、悬停也变成 buttonHover，
+ *   在一块 panelBg 顶栏上就是一块突兀的灰底（亮色下 #E8EAED 尤其明显），
+ *   和侧栏那排"透明底 + 只有悬停才着色"的图标按钮完全不是一路。
+ *   补上类型前缀后两者特异性打平，而 topbar.qss 在 defaults.qss **之后**加载，
+ *   按"同特异性后来者胜"拿下 —— 侧栏的图标按钮就是这么写的，这里对齐它。
+ * padding: 0 同理：通用规则给了 6px 14px，不显式归零就会一直挂着（虽然 32×32
+ * 图标居中时看不出来，但留着是隐患）。 */
+QPushButton#topBarToolsButton {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 0;
+}
+QPushButton#topBarToolsButton:hover {
+    background: {{hoverBg}};
+}
+QPushButton#topBarToolsButton:pressed {
+    background: {{activeBg}};
+}
+
+/* ===== TopBar.cpp: 工具过滤窗口 =====
+ *
+ * 窗口的形状：一个可滚动的目录列表，每个目录一张卡 ——
+ *   表头（目录名 + 计数 + 箭头）是一枚整行可点的按钮，点开/收回下面的工具行；
+ *   工具行是勾选框（勾上 = 会出现在发给模型的清单里）。
+ * 每个目录的展开/收起只是**显示**，不是筛选语义（见 TopBar.cpp 里的说明）。 */
+
+#toolsFilterHint {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+#toolsFilterShowAllButton, #toolsFilterHideAllButton, #toolsFilterRefreshButton {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+#toolsFilterShowAllButton:hover, #toolsFilterHideAllButton:hover, #toolsFilterRefreshButton:hover {
+    background: {{border}};
+}
+#toolsFilterShowAllButton:disabled, #toolsFilterHideAllButton:disabled, #toolsFilterRefreshButton:disabled {
+    color: {{textSecondary}};
+    background: {{inputBg}};
+}
+/* 目录列表：只滚动，不画自己的边框（滚动条外观来自 scrollbars.qss 的全局规则） */
+#toolsFilterScroll {
+    background: transparent;
+    border: none;
+}
+#toolsFilterListContent {
+    background: transparent;
+}
+/* 一个目录：卡片底 + 表头按钮 + 工具行 */
+#toolsFilterDirectory {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+}
+/* 表头带 #toolsFilterDirectory 前缀以压过 defaults.qss 的通用 QPushButton 规则
+ * （同 model-list.qss 里 #modelListEntryHeader 的写法与理由） */
+#toolsFilterDirectory QPushButton#toolsFilterDirectoryHeader {
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    padding: 0;
+    min-width: 0;
+    text-align: left;
+}
+#toolsFilterDirectory QPushButton#toolsFilterDirectoryHeader:hover {
+    background: {{hoverBg}};
+}
+#toolsFilterDirectoryName {
+    color: {{textPrimary}};
+    font-size: 14px;
+    font-weight: 500;
+}
+#toolsFilterDirectoryMeta {
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+#toolsFilterDirectoryChevron {
+    color: {{textCaption}};
+    font-size: 12px;
+}
+#toolsFilterDirectoryBody {
+    background: transparent;
+}
+#toolsFilterDirectoryEmpty {
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+/* 工具行：一行一个勾选框 */
+#toolsFilterDirectoryBody QCheckBox#toolsFilterToolRow {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 13px;
+    spacing: 8px;
+    padding: 3px 4px;
+    border-radius: 6px;
+}
+#toolsFilterDirectoryBody QCheckBox#toolsFilterToolRow:hover {
+    background: {{hoverBg}};
+}
+/* 勾选框：选中填主题色（无勾形，靠"填充"表意，跨平台一致） */
+#toolsFilterDirectoryBody QCheckBox#toolsFilterToolRow::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid {{inputBorder}};
+    border-radius: 4px;
+    background: {{inputBg}};
+}
+#toolsFilterDirectoryBody QCheckBox#toolsFilterToolRow::indicator:hover {
+    border-color: {{textSecondary}};
+}
+#toolsFilterDirectoryBody QCheckBox#toolsFilterToolRow::indicator:checked {
+    background: {{textSecondary}};
+    border-color: {{textSecondary}};
+}
+/* 整组隐藏时各行勾选不生效：禁用的工具行淡化 */
+#toolsFilterDirectoryBody QCheckBox#toolsFilterToolRow:disabled {
+    color: {{textTertiary}};
+}
+#toolsFilterDirectoryBody QCheckBox#toolsFilterToolRow:disabled::indicator {
+    border-color: {{border}};
+}
+/* 目录底部的整组「折叠/可见」开关：左文案右胶囊滑块，整个按钮自绘
+ *（CapsuleSwitchRow，见 TopBar.cpp），这里只保证不受全局按钮规则影响 */
+#toolsFilterGroupToggle {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+#toolsFilterEmpty {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 13px;
+}
+/* 滚动条外观来自 scrollbars.qss 的全局规则（以前这里有一份逐控件的拷贝） */
+#toolsFilterStatus {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}

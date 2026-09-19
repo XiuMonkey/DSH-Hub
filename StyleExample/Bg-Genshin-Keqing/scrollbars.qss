@@ -1,0 +1,59 @@
+/* ==========================================================================
+ * scrollbars.qss — 全局滚动条（全应用唯一一份滚动条规则）
+ *
+ * 归属：全局；由 ThemeManager.cpp 的 Theme::repolishScrollArea() 与 ScrollAreaShowFilter
+ *       负责让它在正确的时机生效（滚动条的匹配结果会在控件构造时被缓存）。
+ * 约定：任何滚动区默认就是细条，不需要逐控件写；要特别处理，就在这个文件里用更具体的
+ *       选择器覆盖（优先级更高）。不要再往别处复制一份 —— 那正是以前 11 处拷贝的来历。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
+ * ========================================================================== */
+/* ==========================================================================
+ * 全局滚动条样式（细条 + 圆角把手）
+ * ==========================================================================
+ * 这里是全应用唯一一份滚动条规则。以前每个滚动区都各自抄一遍「#xxx QScrollBar…」
+ * （代码块、正文、思考/工具卡片、模型选择、模型列表、插件市场、扩展列表…共 11 处，
+ * 而且分成 min-height 20 与 30 两套 token），既容易漏（新控件忘了写就没有样式，
+ * 直接按原生老式滚动条绘制），也会各自漂移。现在统一成全局规则：
+ *   · 任何滚动区（含以后新加的）默认就是细条，不需要再逐控件写；
+ *   · 需要特别处理的滚动条，用更具体的选择器覆盖即可（优先级更高）。
+ *
+ * 仍然必须做的一件事：QAbstractScrollArea 的滚动条是**基类构造**时创建的，那时
+ * 子类的 objectName/父链可能还没就位，QStyleSheetStyle 会把"匹配不到规则"缓存
+ * 下来 —— 之后设名字不会自动重算。所以新建这类控件后调一次
+ * Theme::repolishScrollArea()（它还会挂"首次显示/首次真的有滚动范围"的一次性补丁，
+ * 并且 Theme 内部另有一层全局兜底，见 ThemeManager.cpp 的 ScrollAreaShowFilter）。 */
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0;
+}
+QScrollBar:horizontal {
+    background: transparent;
+    height: 8px;
+    margin: 0;
+}
+QScrollBar::handle:vertical,
+QScrollBar::handle:horizontal {
+    background: {{scrollbarHandle}};
+    border-radius: 4px;
+    min-height: 20px;
+    min-width: 20px;
+}
+QScrollBar::handle:vertical:hover,
+QScrollBar::handle:horizontal:hover {
+    background: {{scrollbarHandleHover}};
+}
+/* 去掉两端的箭头行与空白页（不写这两条，滚动条会退回部分原生绘制） */
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical,
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: transparent;
+    height: 0;
+    width: 0;
+    border: none;
+}

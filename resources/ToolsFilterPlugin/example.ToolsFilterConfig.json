@@ -1,0 +1,50 @@
+{
+  "DropGuidance": "True",
+  "FilterList": [
+    {
+      "Directory": {
+        "IsExpanded": "True",
+        "DirectoryName": "File",
+        "Description": "原版自带工具：按功能分组（文件读写）",
+        "ToolsList": [
+          "read",
+          "write",
+          "edit"
+        ]
+      }
+    },
+    {
+      "Directory": {
+        "IsExpanded": "True",
+        "DirectoryName": "Shell",
+        "Description": "原版自带工具：按功能分组（命令行）",
+        "ToolsList": [
+          { "ToolName": "pwsh", "IsVisible": "False" },
+          "bash"
+        ]
+      }
+    },
+    {
+      "Directory": {
+        "IsExpanded": "True",
+        "DirectoryName": "Web",
+        "Description": "原版自带工具：按功能分组（网络）",
+        "ToolsList": [
+          "web_search",
+          "web_fetch"
+        ]
+      }
+    },
+    {
+      "Directory": {
+        "IsExpanded": "True",
+        "DirectoryName": "AspenPlusToolsPlugin",
+        "Description": "插件工具：按插件名分目录",
+        "ToolsList": [
+          "aspen_status",
+          "aspen_open"
+        ]
+      }
+    }
+  ]
+}

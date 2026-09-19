@@ -1,0 +1,152 @@
+/* ==========================================================================
+ * settings.qss — 设置窗口（Settings）
+ *
+ * 归属：src/ui/Settings.cpp
+ * 约定：模型列表面板的样式已拆到 model-list.qss。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
+ * ========================================================================== */
+
+/* ===== Settings.cpp ===== */
+/* SettingsButton 导航按钮（modelButton/agentButton/serverButton 三个实例共用
+ * #settingsNavButton；:checked 由栏目切换代码 setChecked() 驱动）
+ * 高度只给下限（见 SettingsButton 构造）：pinned 的高度下文字居中，
+ * padding 只影响按钮自身 sizeHint，不影响文字上下留白。 */
+QPushButton#settingsNavButton {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: {{textPrimary}};
+    font-size: 14px;
+    text-align: left;
+}
+QPushButton#settingsNavButton:hover,
+QPushButton#settingsNavButton:checked {
+    background: {{hoverBg}};
+}
+QPushButton#settingsNavButton:pressed {
+    background: {{border}};
+}
+
+/* ===== Settings.cpp ===== */
+/* 各栏目小节标题/提示文字（agentLabel、agentHint、serverLabel、serverHint、
+ * appearanceHint、appearanceFeedback 等 QLabel，原控件级样式同为 QLabel{...} 同款规则） */
+#settingsAgentLabel,
+#settingsAgentHint,
+#settingsServerLabel,
+#settingsServerHint,
+#settingsAppearanceLabel,
+#settingsAppearanceHint,
+#settingsAppearanceFeedback {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+
+/* m_languageCombo（界面语言下拉；切换立即生效，见 TranslationManager） */
+#settingsLanguageCombo {
+    background: {{inputBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: {{textPrimary}};
+    min-width: 200px;
+}
+#settingsLanguageCombo:hover {
+    border-color: {{accent}};
+}
+#settingsLanguageCombo::drop-down {
+    border: none;
+    width: 18px;
+}
+
+/* ===== Settings.cpp ===== */
+/* m_agentPresetButton（默认 Agent 预设选择按钮；:pressed 态与 hover 同底色） */
+QPushButton#agentPresetButton {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 14px;
+    color: {{textPrimary}};
+    text-align: left;
+}
+QPushButton#agentPresetButton:hover {
+    background: {{hoverBg}};
+    border-color: {{accent}};
+}
+QPushButton#agentPresetButton:pressed {
+    background: {{hoverBg}};
+}
+
+/* ===== Settings.cpp ===== */
+/* m_agentPresetPopup（下拉面板 QFrame，自绘背景） */
+QFrame#agentPresetPopup {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+}
+
+/* ===== Settings.cpp ===== */
+/* m_agentPresetList（预设列表 + 内部纵向滚动条） */
+QListWidget#agentPresetList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+QListWidget#agentPresetList::item {
+    min-height: 34px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    margin: 2px 4px;
+    color: {{textPrimary}};
+}
+QListWidget#agentPresetList::item:hover {
+    background: {{hoverBg}};
+}
+QListWidget#agentPresetList::item:selected {
+    background: {{accent}};
+    color: {{textOnAccent}};
+}
+/* 滚动条外观来自 scrollbars.qss 的全局规则（以前每个列表各抄一份） */
+
+/* ===== Settings.cpp ===== */
+/* m_serverUrlEdit（服务器地址输入框，无 :focus 专属样式，维持原状） */
+QLineEdit#serverUrlEdit {
+    background: {{inputBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: {{textPrimary}};
+}
+
+/* ===== Settings.cpp ===== */
+/* serverSaveButton（保存并重启服务）/ stylesResetButton（重置样式为默认） */
+QPushButton#settingsServerSaveButton,
+QPushButton#settingsStylesResetButton {
+    background: {{primaryButtonBg}};
+    color: {{primaryButtonText}};
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+}
+QPushButton#settingsServerSaveButton:hover,
+QPushButton#settingsStylesResetButton:hover {
+    background: {{primaryButtonHover}};
+}
+QPushButton#settingsServerSaveButton:pressed,
+QPushButton#settingsStylesResetButton:pressed {
+    background: {{primaryButtonPressed}};
+}
+QPushButton#settingsServerSaveButton:disabled,
+QPushButton#settingsStylesResetButton:disabled {
+    background: {{primaryButtonDisabledBg}};
+    color: {{primaryButtonDisabledText}};
+}
+
+/* ===== Settings.cpp ===== */
+/* 设置窗口的半透明遮罩不再是"设置自己那份"：它和插件/扩展/工具过滤共用
+ * WindowFrame 持有的窗口级那一层，规则在 popups.qss 的 #windowScrim。 */
+
