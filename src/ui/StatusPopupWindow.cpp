@@ -1,4 +1,4 @@
-#include "StatusPopupWindow.h"
+#include "ui/StatusPopupWindow.h"
 
 #include <QEvent>
 #include <QFontMetrics>

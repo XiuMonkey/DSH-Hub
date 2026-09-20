@@ -1,8 +1,8 @@
-#include "ModelListPanel.h"
+#include "ui/ModelListPanel.h"
 
-#include "DshApiClient.h"
-#include "ThemeManager.h"
-#include "Tooltip.h"
+#include "network/DshApiClient.h"
+#include "common/appearance/ThemeManager.h"
+#include "ui/Tooltip.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -122,7 +122,7 @@ namespace
 				return QStringLiteral("-");
 			const int top = w->mapToGlobal(QPoint(0, 0)).y();
 			return QStringLiteral("%1..%2").arg(top).arg(top + w->height());
-		};
+			};
 
 		QStringList parts;
 		parts << QStringLiteral("form=") + span(form);

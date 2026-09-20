@@ -254,6 +254,12 @@
     <message id="ext_empty_hint">
         <translation>暂无已安装扩展，点击“安装扩展”选择 .ext 文件。</translation>
     </message>
+    <message id="ext_kind_client">
+        <translation>客户端扩展</translation>
+    </message>
+    <message id="ext_client_not_loaded">
+        <translation>未装载</translation>
+    </message>
     <message id="ext_installed_count_fmt">
         <translation>已安装 %1 个扩展。</translation>
     </message>

@@ -254,6 +254,12 @@
     <message id="ext_empty_hint">
         <translation>No extensions installed. Click "Install extension" to pick an .ext file.</translation>
     </message>
+    <message id="ext_kind_client">
+        <translation>Client extension</translation>
+    </message>
+    <message id="ext_client_not_loaded">
+        <translation>not loaded</translation>
+    </message>
     <message id="ext_installed_count_fmt">
         <translation>%1 extension(s) installed.</translation>
     </message>

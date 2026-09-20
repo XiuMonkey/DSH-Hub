@@ -1,6 +1,6 @@
 #include "TestServerManager.h"
 
-#include "ServerManager.h"
+#include "core/ServerManager.h"
 
 #include <QFile>
 #include <QString>

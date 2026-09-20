@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -117,20 +117,20 @@
     <ClCompile Include="src\ExtensionSystem\DllCaller.cpp" />
     <ClCompile Include="src\ExtensionSystem\ComCaller.cpp" />
     <ClCompile Include="src\network\DshEventParser.cpp" />
-    <ClCompile Include="src\common\CodeHighlighter.cpp" />
-    <ClCompile Include="src\common\MarkdownPreprocess.cpp" />
-    <ClCompile Include="src\common\SessionCatalog.cpp" />
-    <ClCompile Include="src\common\PluginMarketModel.cpp" />
+    <ClCompile Include="src\common\util\CodeHighlighter.cpp" />
+    <ClCompile Include="src\common\util\MarkdownPreprocess.cpp" />
+    <ClCompile Include="src\common\session\SessionCatalog.cpp" />
+    <ClCompile Include="src\common\extension\PluginMarketModel.cpp" />
     <ClCompile Include="src\network\DshApiClient.cpp" />
     <ClCompile Include="src\network\SessionPrefetcher.cpp" />
-    <ClCompile Include="src\common\SettingsStore.cpp" />
-    <ClCompile Include="src\common\AgentPresetService.cpp" />
-    <ClCompile Include="src\common\ClientSettings.cpp" />
-    <ClCompile Include="src\common\Logger.cpp" />
-    <ClCompile Include="src\common\TranslationManager.cpp" />
+    <ClCompile Include="src\common\settings\SettingsStore.cpp" />
+    <ClCompile Include="src\common\session\AgentPresetService.cpp" />
+    <ClCompile Include="src\common\settings\ClientSettings.cpp" />
+    <ClCompile Include="src\common\util\Logger.cpp" />
+    <ClCompile Include="src\common\Appearance\TranslationManager.cpp" />
     <ClCompile Include="src\ui\TranslationUi.cpp" />
     <ClCompile Include="src\core\ServerManager.cpp" />
-    <ClCompile Include="src\common\ExtensionRegistry.cpp" />
+    <ClCompile Include="src\common\extension\ExtensionRegistry.cpp" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="unit_test\TestDshEventParser.h" />
@@ -148,16 +148,16 @@
     <QtMoc Include="unit_test\TestLogger.h" />
     <QtMoc Include="unit_test\TestTranslationManager.h" />
     <QtMoc Include="unit_test\TestServerManager.h" />
-    <QtMoc Include="include\DshApiClient.h" />
-    <QtMoc Include="include\ServerManager.h" />
-    <QtMoc Include="include\SessionPrefetcher.h" />
-    <QtMoc Include="include\TranslationManager.h" />
+    <QtMoc Include="include\network\DshApiClient.h" />
+    <QtMoc Include="include\core\ServerManager.h" />
+    <QtMoc Include="include\network\SessionPrefetcher.h" />
+    <QtMoc Include="include\common\appearance\TranslationManager.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\Thunk.h" />
-    <ClInclude Include="include\DllCaller.h" />
-    <ClInclude Include="include\ComCaller.h" />
-    <ClInclude Include="include\ExtensionRegistry.h" />
+    <ClInclude Include="include\ExtensionSystem\Thunk.h" />
+    <ClInclude Include="include\ExtensionSystem\DllCaller.h" />
+    <ClInclude Include="include\ExtensionSystem\ComCaller.h" />
+    <ClInclude Include="include\common\extension\ExtensionRegistry.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

@@ -1,9 +1,9 @@
-#include "MessageQuery.h"
-#include "AgentMessageUnit.h"
-#include "DshEventParser.h"
-#include "DshApiClient.h"
-#include "CacheHistoryManager.h"
-#include "ShadowPanel.h"
+#include "chat/MessageQuery.h"
+#include "chat/AgentMessageUnit.h"
+#include "network/DshEventParser.h"
+#include "network/DshApiClient.h"
+#include "chat/CacheHistoryManager.h"
+#include "ui/ShadowPanel.h"
 
 #include <QClipboard>
 #include <QCoreApplication>

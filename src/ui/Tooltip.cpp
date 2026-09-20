@@ -1,8 +1,8 @@
-#include "Tooltip.h"
+#include "ui/Tooltip.h"
 
-#include "CardShadow.h"
-#include "ShadowPanel.h"
-#include "ThemeManager.h"
+#include "common/appearance/CardShadow.h"
+#include "ui/ShadowPanel.h"
+#include "common/appearance/ThemeManager.h"
 
 #include <QApplication>
 #include <QCursor>

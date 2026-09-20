@@ -5,7 +5,7 @@
 // 这些函数不依赖任何 UI 类，可以单独复用。
 // ------------------------------------------------------------------
 
-#include "DshEventParser.h"
+#include "network/DshEventParser.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>

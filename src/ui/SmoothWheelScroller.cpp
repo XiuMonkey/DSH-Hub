@@ -1,4 +1,4 @@
-#include "SmoothWheelScroller.h"
+#include "ui/SmoothWheelScroller.h"
 
 #include <QAbstractAnimation>
 #include <QAbstractScrollArea>

@@ -5,18 +5,18 @@
 // 外观由 Theme 启动时从 styles/*.qss 统一安装，控件只负责提供 objectName。
 // ------------------------------------------------------------------
 
-#include "DSHHub.h"
+#include "core/DSHHub.h"
 
-#include "ChatInputWidget.h"
-#include "LoadMoreButton.h"
-#include "ShadowPanel.h"
-#include "Sidebar.h"
-#include "SpinnerWidget.h"
-#include "ThemeManager.h"
-#include "TitleBar.h"
-#include "TopBar.h"
-#include "WindowFrame.h"
-#include "MessageQuery.h"
+#include "ui/ChatInputWidget.h"
+#include "ui/LoadMoreButton.h"
+#include "ui/ShadowPanel.h"
+#include "ui/Sidebar.h"
+#include "ui/SpinnerWidget.h"
+#include "common/appearance/ThemeManager.h"
+#include "ui/TitleBar.h"
+#include "ui/TopBar.h"
+#include "common/appearance/WindowFrame.h"
+#include "chat/MessageQuery.h"
 
 #include <QFrame>
 #include <QGuiApplication>

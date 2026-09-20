@@ -1,9 +1,9 @@
-#include "PluginsManager.h"
+#include "ui/PluginsManager.h"
 
-#include "ThemeManager.h"
-#include "WindowFrame.h"
-#include "PluginMarketClient.h"
-#include "PluginMarketInstaller.h"
+#include "common/appearance/ThemeManager.h"
+#include "common/appearance/WindowFrame.h"
+#include "common/extension/PluginMarketClient.h"
+#include "common/extension/PluginMarketInstaller.h"
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -252,18 +252,14 @@ void PluginsManager::openPlugins()
 	if (isVisible())
 		return;
 
-	// 遮罩：宿主主窗口上那唯一一层半透明控件（铺满内容区、不含自绘标题栏，
-	// 否则窗口按钮会被一起盖住点不动）。showOverlay() 里带一次同步重绘，
-	// 所以下面直接 show() 自己就行，不会再出现"弹窗先出、遮罩后到"。
-	WindowFrame::showOverlay(m_host, this);
+	// 铺遮罩 + 居中 + 显示自己：背靠背完成，两者落在同一帧
+	WindowFrame::showOverlayWithPopup(m_host, this, this);
 
-	// 打开前刷新数据（市场 + 已安装 + 确保市场包存在）
+	// 数据随后异步加载（市场 + 已安装 + 确保市场包存在）。刻意放在 show() 之后：
+	// refreshOnOpen() 里含 ensureInstalled()，可能要解包落盘，放前面会让点击后
+	// "卡一下才出现"；放这里既不延迟弹窗出现，也不打断上面那两步的背靠背
+	// （理由见 WindowFrame::showOverlayWithPopup）。
 	refreshOnOpen();
-
-	// 居中于宿主并显示
-	move(m_host->geometry().center() - rect().center());
-	show();
-	raise();
 }
 
 void PluginsManager::closePlugins()

@@ -1,9 +1,9 @@
-#include "ClientSettings.h"
-#include "DSHHub.h"
-#include "Logger.h"
-#include "ThemeManager.h"
-#include "Tooltip.h"
-#include "TranslationManager.h"
+#include "common/settings/ClientSettings.h"
+#include "core/DSHHub.h"
+#include "common/util/Logger.h"
+#include "common/appearance/ThemeManager.h"
+#include "ui/Tooltip.h"
+#include "common/appearance/TranslationManager.h"
 
 #include <QCoreApplication>
 #include <QFont>

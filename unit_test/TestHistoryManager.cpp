@@ -1,6 +1,6 @@
 #include "TestHistoryManager.h"
 
-#include "CacheHistoryManager.h"
+#include "chat/CacheHistoryManager.h"
 
 #include <QTest>
 

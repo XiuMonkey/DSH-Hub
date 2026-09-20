@@ -1,4 +1,4 @@
-#include "TranslationManager.h"
+#include "common/appearance/TranslationManager.h"
 
 // ------------------------------------------------------------------
 // TranslationUi.cpp

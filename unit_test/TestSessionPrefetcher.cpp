@@ -1,7 +1,7 @@
 #include "TestSessionPrefetcher.h"
 
-#include "DshApiClient.h"
-#include "SessionPrefetcher.h"
+#include "network/DshApiClient.h"
+#include "network/SessionPrefetcher.h"
 
 #include <QTest>
 

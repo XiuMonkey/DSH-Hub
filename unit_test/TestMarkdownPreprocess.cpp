@@ -6,7 +6,7 @@
 
 #include "TestMarkdownPreprocess.h"
 
-#include "MarkdownPreprocess.h"
+#include "common/util/MarkdownPreprocess.h"
 
 #include <QTextDocument>
 #include <QTest>

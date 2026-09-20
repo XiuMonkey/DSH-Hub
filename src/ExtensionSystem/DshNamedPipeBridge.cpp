@@ -8,7 +8,7 @@
 //         {"id":1,"ok":false,"error":"..."}
 // ------------------------------------------------------------------
 
-#include "DshNamedPipeBridge.h"
+#include "ExtensionSystem/DshNamedPipeBridge.h"
 
 #include <QJsonDocument>
 #include <QJsonParseError>

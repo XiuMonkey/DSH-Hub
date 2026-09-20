@@ -9,9 +9,9 @@
 // #windowCloseButton 规则），本文件只负责建控件、换字形（最大化 ↔ 还原）。
 // ------------------------------------------------------------------
 
-#include "TitleBar.h"
+#include "ui/TitleBar.h"
 
-#include "ThemeManager.h"
+#include "common/appearance/ThemeManager.h"
 
 #include <QEvent>
 #include <QHBoxLayout>

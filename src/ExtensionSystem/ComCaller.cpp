@@ -5,7 +5,7 @@
 // 调用白名单 ProgId 组件的方法/属性。命名不含 "Json"，与 DllCaller
 // 的 json/native 风格是并列的执行路径。
 
-#include "ComCaller.h"
+#include "ExtensionSystem/ComCaller.h"
 
 #include <QCoreApplication>
 #include <QJsonArray>

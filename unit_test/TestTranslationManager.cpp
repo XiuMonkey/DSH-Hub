@@ -1,6 +1,6 @@
 #include "TestTranslationManager.h"
 
-#include "TranslationManager.h"
+#include "common/appearance/TranslationManager.h"
 
 #include <QStringList>
 #include <QTest>

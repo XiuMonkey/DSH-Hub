@@ -1,6 +1,6 @@
 #include "TestSettingsStore.h"
 
-#include "SettingsStore.h"
+#include "common/settings/SettingsStore.h"
 
 #include <QCoreApplication>
 #include <QTest>

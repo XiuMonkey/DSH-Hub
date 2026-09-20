@@ -1,6 +1,6 @@
-#include "CodeBlockView.h"
+#include "chat/CodeBlockView.h"
 
-#include "ThemeManager.h"
+#include "common/appearance/ThemeManager.h"
 
 #include <QFont>
 #include <QFontDatabase>

@@ -1,6 +1,6 @@
 #include "TestCodeHighlighter.h"
 
-#include "CodeHighlighter.h"
+#include "common/util/CodeHighlighter.h"
 
 #include <QFile>
 #include <QJsonArray>

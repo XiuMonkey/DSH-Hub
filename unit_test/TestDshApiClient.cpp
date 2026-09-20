@@ -1,6 +1,6 @@
 #include "TestDshApiClient.h"
 
-#include "DshApiClient.h"
+#include "network/DshApiClient.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>

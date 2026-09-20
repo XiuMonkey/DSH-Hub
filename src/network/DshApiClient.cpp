@@ -10,7 +10,7 @@
 //   - 把 WebSocket 收到的 JSON 帧原样通过信号抛给界面层。
 // ------------------------------------------------------------------
 
-#include "DshApiClient.h"
+#include "network/DshApiClient.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>

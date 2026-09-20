@@ -180,20 +180,20 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/src/ExtensionSystem/DllCaller.cpp"
 		"${DSHHUB_ROOT}/src/ExtensionSystem/ComCaller.cpp"
 		"${DSHHUB_ROOT}/src/network/DshEventParser.cpp"
-		"${DSHHUB_ROOT}/src/common/CodeHighlighter.cpp"
-		"${DSHHUB_ROOT}/src/common/MarkdownPreprocess.cpp"
-		"${DSHHUB_ROOT}/src/common/SessionCatalog.cpp"
-		"${DSHHUB_ROOT}/src/common/PluginMarketModel.cpp"
+		"${DSHHUB_ROOT}/src/common/util/CodeHighlighter.cpp"
+		"${DSHHUB_ROOT}/src/common/util/MarkdownPreprocess.cpp"
+		"${DSHHUB_ROOT}/src/common/session/SessionCatalog.cpp"
+		"${DSHHUB_ROOT}/src/common/extension/PluginMarketModel.cpp"
 		"${DSHHUB_ROOT}/src/network/DshApiClient.cpp"
 		"${DSHHUB_ROOT}/src/network/SessionPrefetcher.cpp"
-		"${DSHHUB_ROOT}/src/common/SettingsStore.cpp"
-		"${DSHHUB_ROOT}/src/common/AgentPresetService.cpp"
-		"${DSHHUB_ROOT}/src/common/ClientSettings.cpp"
-		"${DSHHUB_ROOT}/src/common/Logger.cpp"
-		"${DSHHUB_ROOT}/src/common/TranslationManager.cpp"
+		"${DSHHUB_ROOT}/src/common/settings/SettingsStore.cpp"
+		"${DSHHUB_ROOT}/src/common/session/AgentPresetService.cpp"
+		"${DSHHUB_ROOT}/src/common/settings/ClientSettings.cpp"
+		"${DSHHUB_ROOT}/src/common/util/Logger.cpp"
+		"${DSHHUB_ROOT}/src/common/Appearance/TranslationManager.cpp"
 		"${DSHHUB_ROOT}/src/ui/TranslationUi.cpp"
 		"${DSHHUB_ROOT}/src/core/ServerManager.cpp"
-		"${DSHHUB_ROOT}/src/common/ExtensionRegistry.cpp")
+		"${DSHHUB_ROOT}/src/common/extension/ExtensionRegistry.cpp")
 
 	# 测试类头文件带 Q_OBJECT，交给 AUTOMOC
 	file(GLOB DSHHUB_TEST_HEADERS CONFIGURE_DEPENDS "${DSHHUB_ROOT}/unit_test/*.h")
@@ -210,10 +210,10 @@ if(DSHHUB_BUILD_TESTS)
 	# 构造函数与槽）。清单必须与上面 DSHHUB_TEST_SOURCES 里那几个带 Q_OBJECT 的
 	# 类一一对应。
 	set(DSHHUB_TEST_PUBLIC_HEADERS
-		"${DSHHUB_ROOT}/include/DshApiClient.h"
-		"${DSHHUB_ROOT}/include/SessionPrefetcher.h"
-		"${DSHHUB_ROOT}/include/TranslationManager.h"
-		"${DSHHUB_ROOT}/include/ServerManager.h")
+		"${DSHHUB_ROOT}/include/network/DshApiClient.h"
+		"${DSHHUB_ROOT}/include/network/SessionPrefetcher.h"
+		"${DSHHUB_ROOT}/include/common/appearance/TranslationManager.h"
+		"${DSHHUB_ROOT}/include/core/ServerManager.h")
 
 	qt_add_executable(dshhub_tests
 		${DSHHUB_TEST_SOURCES}

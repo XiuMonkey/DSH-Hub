@@ -1,6 +1,6 @@
 #include "TestLogger.h"
 
-#include "Logger.h"
+#include "common/util/Logger.h"
 
 #include <QTest>
 

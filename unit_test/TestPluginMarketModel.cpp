@@ -6,10 +6,10 @@
 
 #include "TestPluginMarketModel.h"
 
-#include "AgentPresetService.h"
-#include "DshApiClient.h"
-#include "PluginMarketModel.h"
-#include "SessionCommands.h"
+#include "common/session/AgentPresetService.h"
+#include "network/DshApiClient.h"
+#include "common/extension/PluginMarketModel.h"
+#include "common/session/SessionCommands.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>

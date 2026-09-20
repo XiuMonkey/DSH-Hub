@@ -1,6 +1,6 @@
-#include "ShadowPanel.h"
+#include "ui/ShadowPanel.h"
 
-#include "ThemeManager.h"
+#include "common/appearance/ThemeManager.h"
 
 #include <QMargins>
 #include <QPainter>

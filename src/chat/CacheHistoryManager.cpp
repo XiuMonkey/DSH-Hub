@@ -1,6 +1,6 @@
-#include "CacheHistoryManager.h"
+#include "chat/CacheHistoryManager.h"
 
-#include "MessageQuery.h"
+#include "chat/MessageQuery.h"
 
 #include <QDebug>
 #include <QVBoxLayout>

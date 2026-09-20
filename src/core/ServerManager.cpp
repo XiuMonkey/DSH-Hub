@@ -1,6 +1,6 @@
-#include "ServerManager.h"
-#include "ExtensionRegistry.h"
-#include "SettingsStore.h"
+#include "core/ServerManager.h"
+#include "common/extension/ExtensionRegistry.h"
+#include "common/settings/SettingsStore.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>

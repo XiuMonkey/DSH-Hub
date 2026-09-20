@@ -1,31 +1,33 @@
-#include "DSHHub.h"
-#include "ServerManager.h"
-#include "SessionCommands.h"
-#include "ThemeManager.h"
-#include "ToolRequestDispatcher.h"
-#include "ChatInputWidget.h"
-#include "Sidebar.h"
-#include "Logger.h"
+#include "core/DSHHub.h"
+#include "core/ServerManager.h"
+#include "core/HostExports.h"
+#include "common/util/CommonRegistry.h"
+#include "common/session/SessionCommands.h"
+#include "common/appearance/ThemeManager.h"
+#include "core/ToolRequestDispatcher.h"
+#include "ui/ChatInputWidget.h"
+#include "ui/Sidebar.h"
+#include "common/util/Logger.h"
 
-#include "DshApiClient.h"
-#include "MessageHost.h"
-#include "SessionPrefetcher.h"
-#include "CodeHighlighter.h"
-#include "TopBar.h"
-#include "TitleBar.h"
-#include "WindowFrame.h"
-#include "Settings.h"
-#include "PluginsManager.h"
-#include "DshNamedPipeBridge.h"
-#include "DllCaller.h"
-#include "ExtensionManagerPopup.h"
-#include "InteractionHandler.h"
+#include "network/DshApiClient.h"
+#include "core/MessageHost.h"
+#include "network/SessionPrefetcher.h"
+#include "common/util/CodeHighlighter.h"
+#include "ui/TopBar.h"
+#include "ui/TitleBar.h"
+#include "common/appearance/WindowFrame.h"
+#include "ui/Settings.h"
+#include "ui/PluginsManager.h"
+#include "ExtensionSystem/DshNamedPipeBridge.h"
+#include "ExtensionSystem/DllCaller.h"
+#include "ExtensionSystem/ClientExtension.h"
+#include "ui/ExtensionManagerPopup.h"
 
-#include "AgentMessageUnit.h"
+#include "chat/AgentMessageUnit.h"
 
 // 注意：current() 返回 MessageQuery*，这里调用它的成员函数（lastAgentUnit 等）
 // 所以需要完整类型，不能只靠前置声明
-#include "MessageQuery.h"
+#include "chat/MessageQuery.h"
 
 #include <QCoreApplication>
 #include <QMoveEvent>
@@ -251,7 +253,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		this, &DSHHub::onClearConversationClicked);
 
 	connect(m_api, &DshApiClient::connected, this, &DSHHub::handleConnected);
-	connect(m_api, &DshApiClient::muxFrameReceived, this, &DSHHub::handleMuxFrame);
+	connect(m_api, &DshApiClient::muxFrameReceived, this, &DSHHub::forwardMuxFrame);
 	// 0.1.5：历史由 session/follow 快照播种，工作区workspace/follow 驱动
 	connect(m_api, &DshApiClient::sessionSnapshotReady, this, &DSHHub::handleSessionSnapshot);
 	// 小灰字：快照里那份"全量折叠"的投影做种子 + session/control 的实时推送做更新。
@@ -308,11 +310,16 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		this, &DSHHub::createSessionAndSend);
 	// 首屏内容真正上屏 收掉启动遮罩（finishInitialization 幂等
 	connect(m_messageHost, &MessageHost::contentReady, this, &DSHHub::finishInitialization);
-	// 整列表被整体替换（缓存恢首屏构建完成）→ 先收掉内联交互面板，
+	// 整列表被整体替换（缓存恢复首屏构建完成）→ 先收掉内联交互面板，
 	// 再在刷新前同步滚到底，避免先显示顶部再闪烁
 	connect(m_messageHost, &MessageHost::contentReplaced, this, [this]() {
-		clearInteractionPanels();
+		m_messageHost->clearInteractionPanels();
 		m_messageHost->scrollToBottomNow();
+		});
+	// 一次对话收尾：刷新会话标题（标题在侧栏，MessageHost 不碰）
+	connect(m_messageHost, &MessageHost::turnFinished, this, [this]() {
+		if (m_sidebar && m_api)
+			m_sidebar->workspaceList()->refreshTitles(m_api);
 		});
 
 	// 首屏预取：session/list 回来后并发发一session/page，结果入库供"立即点亮"
@@ -322,10 +329,10 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 		[this](const QString& sessionId, const QJsonArray& events, int throughSeq, bool hasMore) {
 			if (!m_messageHost)
 				return;
-			// 命中当前会话且界面还空着 已用它点亮；这时才记"见过的最seq"
+			// 命中当前会话且界面还空着 → 已用它点亮；这时才记"见过的最新 seq"
 			if (m_messageHost->onPrefetched(sessionId, events, throughSeq, hasMore)
 				== MessageHost::PrefetchOutcome::Painted) {
-				m_sessionLastSeq = qMax(m_sessionLastSeq, throughSeq);
+				m_messageHost->noteObservedSeq(throughSeq);
 			}
 		});
 	connect(m_prefetcher, &SessionPrefetcher::prefetchFailed,
@@ -379,6 +386,23 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	}
 
 	TimingLogger::mark(QStringLiteral("DSHHub ctor done (server spawned / UI ready)"));
+
+	// 登记主窗口：插件可用 C 导出 DshHubHostRegistryFind 按 index 取到本窗口。
+	// 侧栏/顶栏各自在自己的构造函数里登记，这里只管窗口自身。
+	// 登记是覆盖语义 —— 切主题时新窗口先建、旧窗口下一轮事件循环才析构，
+	// 新窗口这一句会直接顶掉旧窗口的登记（见 CommonRegistry.h 的设计要点）。
+	CommonRegistry::instance().AddToRegistry(DshHostIndex::kMainWindow, this);
+
+	// 装载「客户端扩展」（ClientExtension）：装进本进程、在 GUI 线程直接改宿主界面。
+	// 位置很关键：必须在窗口、顶栏/侧栏都建好且已登记之后 —— 插件在 attachHost()
+	// 里要查注册表并往布局里挂控件。
+	// ⚠️ 与上面 DllCaller 那条线（工具扩展）不是一套东西：那套跑 Worker 线程、
+	//    只做 JSON 工具调用，碰不到宿主对象。
+	const auto clientExtensions = ClientExtension::loadAll();
+	if (!clientExtensions.isEmpty()) {
+		qInfo().noquote() << QStringLiteral("[DSH Hub] client extensions:")
+			<< clientExtensions.join(QStringLiteral(", "));
+	}
 }
 
 void DSHHub::resizeEvent(QResizeEvent* event)
@@ -525,6 +549,10 @@ QProcess* DSHHub::takeServerProcess()
 
 DSHHub::~DSHHub()
 {
+	// 先摘除登记：一旦开始拆成员，这个窗口就不再是"可用的主窗口"了，
+	// 继续登记着只会让插件拿到半残对象。Destroy 带身份校验，安全。
+	CommonRegistry::instance().Destroy(DshHostIndex::kMainWindow, this);
+
 	// 先停掉工具调用线程池，避Worker 仍在m_dllCaller / 排队任务引用 this
 	if (m_toolPool) {
 		m_toolPool->clear();
@@ -640,20 +668,6 @@ namespace
  * 将来拆的话，取数该进一个 SessionStatsService，"什么时候刷"该回输入区自己的控制器。
  */
 
-void DSHHub::clearInteractionPanels()
-{
-	for (QWidget* panel : m_interactionPanels) {
-		if (!panel)
-			continue;
-
-		if (m_messageHost->layout())
-			m_messageHost->layout()->removeWidget(panel);
-		panel->hide();
-		panel->deleteLater();
-	}
-	m_interactionPanels.clear();
-}
-
 void DSHHub::onNewWorkspaceClicked()
 {
 	const QString path = QFileDialog::getExistingDirectory(
@@ -736,16 +750,18 @@ void DSHHub::switchToFreshSession(const QString& sessionId, const QString& title
 	// （取消旧构建MessageHost::showFreshSession 内部做）
 	if (m_messageHost)
 		m_messageHost->stopStreaming();
-	clearInteractionPanels();
+	if (m_messageHost)
+		m_messageHost->clearInteractionPanels();
 
 	m_sessionId = sessionId;
 	// 0.1.5：实时日志事件来mux per-session session/follow 流，
 	// 换会话时把跟随流也换过去（快照帧会补齐初始历史，DshApiClient）
 	if (m_api)
 		m_api->followSession(sessionId);
-	// 新会话重新统见过的最seq"（缓存新鲜度判定用）；旧值交给消息区写缓存元数据
-	const int observedLastSeq = m_sessionLastSeq;
-	m_sessionLastSeq = 0;
+	// 新会话重新开始统计"见过的最新 seq"（缓存新鲜度判定用）；旧值交给消息区写缓存元数据
+	const int observedLastSeq = m_messageHost ? m_messageHost->observedLastSeq() : 0;
+	if (m_messageHost)
+		m_messageHost->noteObservedSeq(0);
 	syncComposerSession();
 
 	if (m_topBar)
@@ -804,17 +820,19 @@ void DSHHub::onSessionSelected(const QString& sessionId)
 	// 切换会话时停止旧会话的流式渲染状态，避免旧输出继续污染新会话
 	if (m_messageHost)
 		m_messageHost->stopStreaming();
-	clearInteractionPanels();
+	if (m_messageHost)
+		m_messageHost->clearInteractionPanels();
 
 	m_sessionId = sessionId;
 	// 0.1.5：实时日志事件来mux per-session session/follow 流，
 	// 换会话时把跟随流也换过去（快照帧会补齐初始历史，DshApiClient）
 	if (m_api)
 		m_api->followSession(sessionId);
-	// 新会话重新统见过的最seq"（缓存新鲜度判定用）；旧会话观测到的值交
+	// 新会话重新开始统计"见过的最新 seq"（缓存新鲜度判定用）；旧会话观测到的值交
 	// MessageHost 写进缓存元数据（缓存内容最新位）
-	const int observedLastSeq = m_sessionLastSeq;
-	m_sessionLastSeq = 0;
+	const int observedLastSeq = m_messageHost ? m_messageHost->observedLastSeq() : 0;
+	if (m_messageHost)
+		m_messageHost->noteObservedSeq(0);
 	syncComposerSession();
 
 	if (m_sidebar)
@@ -892,7 +910,8 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 				// 删除当前会话时也停止流式渲染
 				if (m_messageHost)
 					m_messageHost->stopStreaming();
-				clearInteractionPanels();
+				if (m_messageHost)
+					m_messageHost->clearInteractionPanels();
 				// 当前会话被删除时丢弃消息区当前实例（交给缓存丢弃），
 				// 避免继续持有已归档会
 				if (m_messageHost)
@@ -922,8 +941,8 @@ void DSHHub::onClearConversationClicked()
 	m_sidebar->clearAllSessions(
 		m_serverManager->dshHome(),
 		[this]() {
-			clearInteractionPanels();
 			if (m_messageHost) {
+				m_messageHost->clearInteractionPanels();
 				m_messageHost->clearCurrent();
 				m_cacheManager.clearAll();
 				m_sessionId.clear();
@@ -938,22 +957,51 @@ void DSHHub::onClearConversationClicked()
 		});
 }
 
+QString DSHHub::preferredWorkspaceId()
+{
+	// 用户预期"新会话跟旧会话同处"，所以先看当前会话的归属
+	if (m_sidebar && !m_sessionId.isEmpty()) {
+		const QString fromCurrent =
+			m_sidebar->workspaceList()->catalog().workspaceFor(m_sessionId);
+		if (!fromCurrent.isEmpty())
+			return fromCurrent;
+	}
+
+	// 退一步：基线里的第一个工作区（清空会话时当前会话已经没了）
+	for (const auto& item : m_workspaceItems) {
+		const QString workspaceId = item.toObject()
+			.value(QStringLiteral("workspaceId")).toString();
+		if (!workspaceId.isEmpty())
+			return workspaceId;
+	}
+	return QString();
+}
+
 void DSHHub::callSessionCreate()
 {
 	if (!m_api)
 		return;
 
+	// 归属由我们显式给出（理由见 preferredWorkspaceId），并且在建之前先把工作区
+	// **分组**恢复出来 —— "清空会话"把 catalog 连分组一起清了，而
+	// addSessionToWorkspace 需要那个分组已经存在，否则照样落到"未分组"。
+	// applyWorkspaceState 用的是客户端手里那份 workspace/follow 基线，不发请求。
+	const QString workspaceId = preferredWorkspaceId();
+	if (m_sidebar)
+		applyWorkspaceState();
+
 	m_api->callMethod(
 		QStringLiteral("session/create"),
-		SessionCommands::sessionCreate(),
-		[this](const QJsonObject& value) {
+		SessionCommands::sessionCreate(workspaceId),
+		[this, workspaceId](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
 			if (sid.isEmpty())
 				return;
 
 			switchToFreshSession(sid, qtTrId("session_untitled"), /*loadHistory=*/true);
 			if (m_sidebar) {
-				m_sidebar->workspaceList()->addSession(sid, qtTrId("session_untitled"));
+				m_sidebar->workspaceList()->addSessionToWorkspace(
+					sid, qtTrId("session_untitled"), workspaceId);
 				m_sidebar->workspaceList()->setCurrentSession(sid);
 			}
 		},
@@ -995,8 +1043,13 @@ void DSHHub::onSessionCreated(const QString& sessionId, const QString& workspace
 
 void DSHHub::onNoSessionAvailable()
 {
-	if (m_sidebar && m_api)
-		m_sidebar->createSession(m_api);
+	if (!m_sidebar || !m_api)
+		return;
+
+	// 删除最后一个会话会走到这里。新建的会话要挂进工作区分组，所以先按基线把分组
+	// 恢复出来（分组不存在时 addSessionToWorkspace 会退回"未分组"），再带上归属建。
+	applyWorkspaceState();
+	m_sidebar->createSession(m_api, preferredWorkspaceId());
 }
 
 void DSHHub::onSessionListError(const QString& code, const QString& message)
@@ -1018,14 +1071,10 @@ void DSHHub::openExtensions()
 	if (m_extensionPopup)
 		return;
 
-	// 遮罩：本窗口上那唯一一层半透明控件（铺满内容区、不含自绘标题栏，否则
-	// 窗口按钮会被一起盖住点不动）。showOverlay() 里带一次同步重绘，所以
-	// 下面直接 show() 弹窗就行，不会再出现"弹窗先出、遮罩后到"。
-	WindowFrame::showOverlay(this, this);
-
+	// 先把弹窗整个建好：构造函数要建全部控件、读扩展清单，是本函数里最耗时的一步。
+	// 它必须排在铺遮罩**之前** —— 遮罩那次同步重绘要紧贴弹窗 show()，中间夹工作
+	// 就会出现"遮罩先出、弹窗后到"（见 WindowFrame::showOverlayWithPopup）。
 	m_extensionPopup = new ExtensionManagerPopup(m_serverManager->dshHome() + QStringLiteral("/profiles/web"), this);
-	m_extensionPopup->move(geometry().center() - m_extensionPopup->rect().center());
-	m_extensionPopup->show();
 
 	connect(m_extensionPopup, &ExtensionManagerPopup::serverRestartRequested,
 		m_serverManager, &ServerManager::restart);
@@ -1057,6 +1106,9 @@ void DSHHub::openExtensions()
 			m_extensionPopup = nullptr;
 		}
 		});
+
+	// 铺遮罩 + 居中 + 显示：背靠背完成，两者落在同一帧
+	WindowFrame::showOverlayWithPopup(this, this, m_extensionPopup);
 }
 
 void DSHHub::handlePipeRequest(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket)
@@ -1284,61 +1336,14 @@ void DSHHub::applyWorkspaceState()
 		m_sidebar->workspaceList()->setCurrentSession(m_sessionId);
 }
 
-void DSHHub::handleMuxFrame(const QJsonObject& frame)
+void DSHHub::forwardMuxFrame(const QJsonObject& frame)
 {
-	const QJsonObject payload = frame.value(QStringLiteral("payload")).toObject();
-	const QString type = payload.value(QStringLiteral("type")).toString();
-	const QString frameSessionId = payload.value(QStringLiteral("sessionId")).toString();
+	// 帧的路由（会话事件渲染、交互面板）整体归 MessageHost；
+	// 这里只是一个转发点，顺便保证 messageHost 还没搭好时不崩。
+	if (!m_messageHost)
+		return;
 
-	if (type == QStringLiteral("session/event")) {
-		const QJsonObject event = payload.value(QStringLiteral("event")).toObject();
-		// 记录本会话见过的最seq：缓存快照用它判断缓存是否已被后来事件超
-		const int eventSeq = event.value(QStringLiteral("seq")).toInt();
-		if (eventSeq > m_sessionLastSeq)
-			m_sessionLastSeq = eventSeq;
-		// 只渲染当前会话的事件：防止在 A 会话输出时切B 会话
-		// A 的流式内容错误地显示B 里。（0.1.5 只跟随当前会话，所以这里的
-		// "别的会话的帧"正常不会出现；真出现也直接丢弃。）
-		if (!frameSessionId.isEmpty() && frameSessionId != m_sessionId)
-			return;
-		if (!m_messageHost)
-			return;
-
-		// “事件 → 气泡内容”的解析、streaming 标志 / 节流定时器 / 输入区按钮状态
-		// 都在 MessageHost::onStreamEvent 里；这里只管窗口侧的事（会话标题刷新）
-		if (m_messageHost->onStreamEvent(event) == MessageHost::StreamOutcome::Finished) {
-			// 一次对话完成后，刷新会话标题（如果服务端已经生成了标题
-			if (m_sidebar && m_api)
-				m_sidebar->workspaceList()->refreshTitles(m_api);
-			// 小灰字不用在这里补：本轮产生的投影变化由 session/control 流实时推过来
-		}
-	}
-	else if (type == QStringLiteral("question/requested")) {
-		QWidget* panel = InteractionHandler::handleQuestion(frame, m_api, m_messageHost->layout());
-		if (panel) {
-			m_interactionPanels.append(panel);
-			m_messageHost->scrollToBottomNow();
-			connect(panel, &QObject::destroyed, this, [this, panel]() {
-				m_interactionPanels.removeAll(panel);
-				});
-		}
-		else if (m_messageHost->current()) {
-			m_messageHost->addSystemMessage(qtTrId("ask_panel_create_failed"));
-		}
-	}
-	else if (type == QStringLiteral("approval/requested")) {
-		QWidget* panel = InteractionHandler::handleApproval(frame, m_api, m_messageHost->layout());
-		if (panel) {
-			m_interactionPanels.append(panel);
-			m_messageHost->scrollToBottomNow();
-			connect(panel, &QObject::destroyed, this, [this, panel]() {
-				m_interactionPanels.removeAll(panel);
-				});
-		}
-		else if (m_messageHost->current()) {
-			m_messageHost->addSystemMessage(qtTrId("ask_approval_panel_create_failed"));
-		}
-	}
+	m_messageHost->handleMuxFrame(frame);
 }
 
 void DSHHub::handleTransportError(const QString& context, const QString& message)

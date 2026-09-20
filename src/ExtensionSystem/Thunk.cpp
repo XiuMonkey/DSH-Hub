@@ -6,7 +6,7 @@
 // 目标 DLL 函数的真实调用约定（由 DllCaller 的 native 风格使用）。
 // ------------------------------------------------------------------
 
-#include "Thunk.h"
+#include "ExtensionSystem/Thunk.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX

@@ -6,11 +6,11 @@
 // 代码围栏切 CodeBlockView 子单元，Thinking/Tool 用富文本锚点挂宿主 ProseView。
 // ------------------------------------------------------------------
 
-#include "AgentMessageUnit.h"
-#include "CodeBlockView.h"
-#include "CodeHighlighter.h"
-#include "MarkdownPreprocess.h"
-#include "ThemeManager.h"
+#include "chat/AgentMessageUnit.h"
+#include "chat/CodeBlockView.h"
+#include "common/util/CodeHighlighter.h"
+#include "common/util/MarkdownPreprocess.h"
+#include "common/appearance/ThemeManager.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QCryptographicHash>

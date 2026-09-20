@@ -1,10 +1,10 @@
-#include "ModelSelector.h"
+#include "ui/ModelSelector.h"
 
 #include <algorithm>
 
-#include "DshApiClient.h"
-#include "ShadowPanel.h"
-#include "ThemeManager.h"
+#include "network/DshApiClient.h"
+#include "ui/ShadowPanel.h"
+#include "common/appearance/ThemeManager.h"
 
 #include <QDebug>
 #include <QDialog>

@@ -1,4 +1,4 @@
-#include "SystemMessageUnit.h"
+#include "chat/SystemMessageUnit.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QFrame>

@@ -1,6 +1,6 @@
-#include "PopupWindow.h"
-#include "ShadowPanel.h"
-#include "ThemeManager.h"
+#include "ui/PopupWindow.h"
+#include "ui/ShadowPanel.h"
+#include "common/appearance/ThemeManager.h"
 
 #include <QCloseEvent>
 #include <QEvent>

@@ -6,23 +6,24 @@
 // 这里的代码原先住在 DSHHub 里，搬家时只做了三件事：
 //   1) 改名：m_cacheManager→m_cache、m_historyLoader→m_loader、
 //      m_messagesLayout→m_layout、m_sessionLoading*→m_loading*；
-//   2) "见过的最新 seq"（原 DSHHub::m_sessionLastSeq）由成员改成入参——它属于
-//      mux 观测，仍由 DSHHub 持有；
-//   3) 窗口侧的两件事改成信号：收交互面板 + 滚到底 → contentReplaced()，
-//      收初始化遮罩 → contentReady()。
+//   2) 窗口侧的两件事改成信号：收初始化遮罩 → contentReady()、
+//      整表替换时收交互面板并滚到底 → contentReplaced()；
+//   3) 交互面板与 mux 帧路由（原 DSHHub::handleMuxFrame）后来整体下沉到这里，
+//      面板的"建"与"收"因此归同一个类；窗口侧只需接 turnFinished() 刷新标题。
 // 除此之外逐行照搬，行为与搬家前一致。
 // ------------------------------------------------------------------
 
-#include "MessageHost.h"
+#include "core/MessageHost.h"
 
-#include "ChatInputWidget.h"
-#include "DshApiClient.h"
-#include "LoadMoreButton.h"
-#include "MessageQuery.h"
-#include "SessionCommands.h"
-#include "SmoothWheelScroller.h"
-#include "SpinnerWidget.h"
-#include "Logger.h"
+#include "ui/ChatInputWidget.h"
+#include "network/DshApiClient.h"
+#include "common/appearance/InteractionHandler.h"
+#include "ui/LoadMoreButton.h"
+#include "chat/MessageQuery.h"
+#include "common/session/SessionCommands.h"
+#include "ui/SmoothWheelScroller.h"
+#include "ui/SpinnerWidget.h"
+#include "common/util/Logger.h"
 
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
@@ -947,4 +948,86 @@ MessageHost::StreamOutcome MessageHost::onStreamEvent(const QJsonObject& event)
 		return StreamOutcome::Streaming;
 	}
 	return StreamOutcome::Ignored;
+}
+
+// ------------------------------------------------------------------
+// mux 帧路由（原 DSHHub::handleMuxFrame，随交互面板所有权一起搬来）
+// ------------------------------------------------------------------
+//
+// 分三类：
+//   session/event       → 记 seq、过滤本会话、渲染（窗口侧只剩标题刷新）
+//   question/requested  → 建问询面板挂在列表里
+//   approval/requested  → 建审批面板挂在列表里
+//
+// 面板的"建"与"收"现在都在本类：建的时候收进 m_interactionPanels，
+// 收的时候走 clearInteractionPanels()。两者必须待在一起，否则会漏回收。
+// ------------------------------------------------------------------
+
+void MessageHost::handleMuxFrame(const QJsonObject& frame)
+{
+	const QJsonObject payload = frame.value(QStringLiteral("payload")).toObject();
+	const QString type = payload.value(QStringLiteral("type")).toString();
+	const QString frameSessionId = payload.value(QStringLiteral("sessionId")).toString();
+
+	if (type == QStringLiteral("session/event")) {
+		const QJsonObject event = payload.value(QStringLiteral("event")).toObject();
+		// 记录本会话见过的最新 seq：缓存快照用它判断缓存是否已被后来事件超越
+		const int eventSeq = event.value(QStringLiteral("seq")).toInt();
+		if (eventSeq > m_sessionLastSeq)
+			m_sessionLastSeq = eventSeq;
+		// 只渲染当前会话的事件：防止在 A 会话输出时切到 B 会话，
+		// A 的流式内容错误地显示在 B 里。（0.1.5 只跟随当前会话，所以这里的
+		// "别的会话的帧"正常不会出现；真出现也直接丢弃。）
+		if (!frameSessionId.isEmpty() && frameSessionId != m_sessionId)
+			return;
+
+		// "事件 → 气泡内容"的解析、streaming 标志 / 节流定时器 / 输入区按钮状态
+		// 都在 onStreamEvent 里；这里只管收尾之后的事。
+		if (onStreamEvent(event) == StreamOutcome::Finished) {
+			// 一次对话完成后，刷新会话标题（如果服务端已经生成了标题）。
+			// 标题归侧栏，本类不碰，交给 DSHHub。
+			emit turnFinished();
+			// 小灰字不用在这里补：本轮产生的投影变化由 session/control 流实时推过来
+		}
+	}
+	else if (type == QStringLiteral("question/requested")) {
+		QWidget* panel = InteractionHandler::handleQuestion(frame, m_api, m_layout);
+		if (panel) {
+			m_interactionPanels.append(panel);
+			scrollToBottomNow();
+			connect(panel, &QObject::destroyed, this, [this, panel]() {
+				m_interactionPanels.removeAll(panel);
+				});
+		}
+		else if (current()) {
+			addSystemMessage(qtTrId("ask_panel_create_failed"));
+		}
+	}
+	else if (type == QStringLiteral("approval/requested")) {
+		QWidget* panel = InteractionHandler::handleApproval(frame, m_api, m_layout);
+		if (panel) {
+			m_interactionPanels.append(panel);
+			scrollToBottomNow();
+			connect(panel, &QObject::destroyed, this, [this, panel]() {
+				m_interactionPanels.removeAll(panel);
+				});
+		}
+		else if (current()) {
+			addSystemMessage(qtTrId("ask_approval_panel_create_failed"));
+		}
+	}
+}
+
+void MessageHost::clearInteractionPanels()
+{
+	for (QWidget* panel : m_interactionPanels) {
+		if (!panel)
+			continue;
+
+		if (m_layout)
+			m_layout->removeWidget(panel);
+		panel->hide();
+		panel->deleteLater();
+	}
+	m_interactionPanels.clear();
 }

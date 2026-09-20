@@ -1,5 +1,6 @@
-#include "ExtensionLoader.h"
-#include "ExtensionRegistry.h"
+#include "ExtensionSystem/ExtensionLoader.h"
+#include "ExtensionSystem/ClientExtension.h"
+#include "common/extension/ExtensionRegistry.h"
 
 #include <QDebug>
 #include <QDir>
@@ -9,6 +10,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QtCore/private/qzipreader_p.h>
 #include <QRegularExpression>
 #include <QSet>
@@ -123,6 +125,115 @@ namespace
 			}
 		}
 	}
+	// 极简 JSON5 → QJsonObject：剥掉 // 与 /* */ 注释、去掉尾随逗号，再交给
+	// QJsonDocument（它只认严格 JSON）。逐字节扫描，只在字符串外面动手。
+	QJsonObject parseJson5Object(const QByteArray& raw, QString* error)
+	{
+		QByteArray cleaned;
+		cleaned.reserve(raw.size());
+
+		bool inString = false;
+		bool escaped = false;
+		bool inLineComment = false;
+		bool inBlockComment = false;
+
+		for (int i = 0; i < raw.size(); ++i) {
+			const char c = raw.at(i);
+			const char next = (i + 1 < raw.size()) ? raw.at(i + 1) : '\0';
+
+			if (inLineComment) {
+				if (c == '\n') {
+					inLineComment = false;
+					cleaned.append(c);
+				}
+				continue;
+			}
+			if (inBlockComment) {
+				if (c == '*' && next == '/') {
+					inBlockComment = false;
+					++i;
+				}
+				continue;
+			}
+			if (inString) {
+				cleaned.append(c);
+				if (escaped)
+					escaped = false;
+				else if (c == '\\')
+					escaped = true;
+				else if (c == '"')
+					inString = false;
+				continue;
+			}
+			if (c == '"') {
+				inString = true;
+				cleaned.append(c);
+				continue;
+			}
+			if (c == '/' && next == '/') {
+				inLineComment = true;
+				++i;
+				continue;
+			}
+			if (c == '/' && next == '*') {
+				inBlockComment = true;
+				++i;
+				continue;
+			}
+			cleaned.append(c);
+		}
+
+		// 尾随逗号：JSON5 允许 ,] 与 ,}，QJsonDocument 不允许。手工扫一遍
+		// （Qt 6 的 QByteArray 没有 replace(QRegularExpression, ...) 了），
+		// 并跳过字符串内部，免得吃掉 "a,]b" 这种字面量里的逗号。
+		QByteArray trimmed;
+		trimmed.reserve(cleaned.size());
+		bool inStr = false;
+		bool esc = false;
+		for (int i = 0; i < cleaned.size(); ++i) {
+			const char c = cleaned.at(i);
+			if (inStr) {
+				trimmed.append(c);
+				if (esc)
+					esc = false;
+				else if (c == '\\')
+					esc = true;
+				else if (c == '"')
+					inStr = false;
+				continue;
+			}
+			if (c == '"') {
+				inStr = true;
+				trimmed.append(c);
+				continue;
+			}
+			if (c == ',') {
+				int j = i + 1;
+				while (j < cleaned.size()) {
+					const char w = cleaned.at(j);
+					if (w == ' ' || w == '\t' || w == '\n' || w == '\r') {
+						++j;
+						continue;
+					}
+					break;
+				}
+				if (j < cleaned.size() && (cleaned.at(j) == '}' || cleaned.at(j) == ']'))
+					continue; // 尾随逗号：丢掉
+			}
+			trimmed.append(c);
+		}
+
+		QJsonParseError parseError{};
+		const QJsonDocument doc = QJsonDocument::fromJson(trimmed, &parseError);
+		if (parseError.error != QJsonParseError::NoError) {
+			if (error)
+				*error = QStringLiteral("JSON5 parse error: %1 at offset %2")
+				.arg(parseError.errorString())
+				.arg(parseError.offset);
+			return {};
+		}
+		return doc.object();
+	}
 } // namespace
 
 bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
@@ -158,6 +269,65 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 	if (!findFiles(rootDir, &loaded, error))
 		return false;
 
+	// regulation 里的 Type 决定走哪条路线（见头文件开头两条路线的说明）。
+	if (!readDescriptor(loaded.jsonPath, &loaded, error))
+		return false;
+
+	if (ClientExtension::isClientExtensionType(loaded.type)) {
+		// 客户端扩展：不碰 serverProfilePath（不写 extensions.json、不改
+		// cordis.patch.yml、不重启服务端），只把 dll + regulation 落到
+		// <exe>/clientExtensions/<Name>/。这里**不装载 DLL** —— 本函数跑在
+		// ExtensionInstallTask 的后台线程上，装载必须由 GUI 线程做（调用方拿到
+		// isClientExtension 后自己调 ClientExtension::loadOne）。
+		const QString name = loaded.declaredName.isEmpty()
+			? extInfo.completeBaseName()
+			: loaded.declaredName;
+		const QString destDir = ClientExtension::extensionDirectory()
+			+ QStringLiteral("/") + name;
+
+		if (!QDir().mkpath(destDir)) {
+			m_errorString = QStringLiteral("cannot create client extension directory: %1").arg(destDir);
+			if (error)
+				*error = m_errorString;
+			return false;
+		}
+
+		const QString destDll = destDir + QStringLiteral("/")
+			+ QFileInfo(loaded.dllPath).fileName();
+		const QString destJson = destDir + QStringLiteral("/regulation.json5");
+
+		QFile::remove(destDll);
+		QFile::remove(destJson);
+
+		if (!QFile::copy(loaded.dllPath, destDll)) {
+			m_errorString = QStringLiteral("cannot copy client extension dll: %1").arg(loaded.dllPath);
+			if (error)
+				*error = m_errorString;
+			return false;
+		}
+		if (!QFile::copy(loaded.jsonPath, destJson)) {
+			m_errorString = QStringLiteral("cannot copy client extension descriptor: %1").arg(loaded.jsonPath);
+			if (error)
+				*error = m_errorString;
+			return false;
+		}
+
+		loaded.pluginName = name;
+		loaded.dllPath = destDll;
+		loaded.jsonPath = destJson;
+		loaded.isClientExtension = true;
+		loaded.rootDir = rootDir;
+		if (out)
+			*out = loaded;
+
+		m_errorString.clear();
+		qInfo().noquote() << QStringLiteral(
+			"[ExtensionLoader] client extension installed: name=%1 type=%2 dll=%3")
+			.arg(name, loaded.type, destDll);
+		return true;
+	}
+
+	// ---- 老路线：工具扩展（以下原样）----
 	if (!serverProfilePath.isEmpty() && !loaded.pluginPath.isEmpty()) {
 		if (!installPlugin(loaded.pluginPath, serverProfilePath, &loaded, error))
 			return false;
@@ -343,6 +513,38 @@ bool ExtensionLoader::findFiles(const QString& rootDir,
 	if (out->pluginName.isEmpty())
 		out->pluginName = QFileInfo(rootDir).fileName();
 
+	return true;
+}
+
+bool ExtensionLoader::readDescriptor(const QString& jsonPath,
+	LoadedExtension* out,
+	QString* error)
+{
+	QFile file(jsonPath);
+	if (!file.open(QIODevice::ReadOnly)) {
+		m_errorString = QStringLiteral("cannot open descriptor: %1").arg(jsonPath);
+		if (error)
+			*error = m_errorString;
+		return false;
+	}
+	const QByteArray raw = file.readAll();
+	file.close();
+
+	QString parseError;
+	const QJsonObject root = parseJson5Object(raw, &parseError);
+	if (!parseError.isEmpty()) {
+		m_errorString = QStringLiteral("%1 (%2)").arg(parseError, jsonPath);
+		if (error)
+			*error = m_errorString;
+		return false;
+	}
+
+	out->declaredName = root.value(QStringLiteral("Name")).toString();
+	out->type = root.value(QStringLiteral("Type")).toString();
+
+	qInfo().noquote() << QStringLiteral("[ExtensionLoader] descriptor Name=%1 Type=%2")
+		.arg(out->declaredName.isEmpty() ? QStringLiteral("(none)") : out->declaredName,
+			out->type.isEmpty() ? QStringLiteral("(none)") : out->type);
 	return true;
 }
 

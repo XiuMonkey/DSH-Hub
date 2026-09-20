@@ -22,9 +22,9 @@
 // }
 // ------------------------------------------------------------------
 
-#include "DllCaller.h"
-#include "Thunk.h"
-#include "ComCaller.h"
+#include "ExtensionSystem/DllCaller.h"
+#include "ExtensionSystem/Thunk.h"
+#include "ExtensionSystem/ComCaller.h"
 
 #include <QCoreApplication>
 #include <QDebug>

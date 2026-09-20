@@ -1,4 +1,4 @@
-#include "SpinnerWidget.h"
+#include "ui/SpinnerWidget.h"
 
 #include <QPainter>
 #include <QTimer>

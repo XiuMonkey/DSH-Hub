@@ -1,7 +1,7 @@
-#include "SessionPrefetcher.h"
+#include "network/SessionPrefetcher.h"
 
-#include "DshApiClient.h"
-#include "SessionCommands.h"
+#include "network/DshApiClient.h"
+#include "common/session/SessionCommands.h"
 
 #include <QDebug>
 

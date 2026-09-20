@@ -1,8 +1,8 @@
-#include "ChatInputWidget.h"
+#include "ui/ChatInputWidget.h"
 
-#include "ModelSelector.h"
-#include "ShadowPanel.h"
-#include "ThemeManager.h"
+#include "ui/ModelSelector.h"
+#include "ui/ShadowPanel.h"
+#include "common/appearance/ThemeManager.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QEvent>

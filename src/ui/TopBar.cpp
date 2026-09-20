@@ -1,7 +1,9 @@
-#include "TopBar.h"
+#include "ui/TopBar.h"
 
-#include "ThemeManager.h"
-#include "WindowFrame.h"
+#include "common/appearance/ThemeManager.h"
+#include "common/appearance/WindowFrame.h"
+#include "common/util/CommonRegistry.h"
+#include "core/HostExports.h"
 
 #include <QAbstractButton>
 #include <QCheckBox>
@@ -680,26 +682,47 @@ TopBar::TopBar(QWidget* parent)
 	// 宽度与消息内容一致（见 Main.cpp 的宽度约定：1152 - 左右各 16px 留白）
 	setFixedWidth(1120);
 
-	auto* layout = new QHBoxLayout(this);
-	layout->setContentsMargins(16, 0, 16, 0);
-	layout->setSpacing(8);
+	m_layout = new QHBoxLayout(this);
+	m_layout->setContentsMargins(16, 0, 16, 0);
+	m_layout->setSpacing(8);
 
 	m_titleLabel = new QLabel(this);
 	m_titleLabel->setObjectName(QStringLiteral("topBarTitle"));
-	layout->addWidget(m_titleLabel);
-	layout->addStretch();
+	m_layout->addWidget(m_titleLabel);
+	m_layout->addStretch();
 
 	// 工具栏右侧：工具过滤入口。
 	// 图标在 ToolsFilterButton::paintEvent 里矢量绘制（清晰度与 devicePixelRatio
 	// 的处理见该类的注释），所以这里不设 icon/iconSize —— objectName 与 QSS 规则
 	// 由该类自己在构造里设好。
 	m_toolsButton = new ToolsFilterButton(this);
-	layout->addWidget(m_toolsButton);
+	m_layout->addWidget(m_toolsButton);
 
 	connect(m_toolsButton, &QPushButton::clicked, this, &TopBar::openToolsFilter);
 
 	setTitle(QString());
 	retranslateUi();
+
+	// 登记到全局注册表：插件可按 index 取到顶栏（它是 VirtualTopBar 接口的实现）。
+	// 放在构造末尾 —— 登记出去的对象必须已经能用；覆盖语义见 CommonRegistry.h。
+	CommonRegistry::instance().AddToRegistry(DshHostIndex::kTopBar, this);
+}
+
+TopBar::~TopBar()
+{
+	CommonRegistry::instance().Destroy(DshHostIndex::kTopBar, this);
+}
+
+QHBoxLayout* TopBar::GetLayout()
+{
+	// 把布局原样交出去，不做任何代劳。之前 AddExternalWidget 时代由顶栏替调用方
+	// 决定「插在工具按钮左边 + 顺手 show」；现在这些判断全部下放给调用方，
+	// 顶栏只保证「这个指针在顶栏存活期间有效」。
+	//
+	// 布局顺序提醒（调用方若想插在工具按钮左侧，自行用 indexOf 定位）：
+	//     标题 | stretch | 已挂的外部控件 | 工具按钮
+	// 工具按钮贴最右是系统约定，直接 addWidget 会把它挤离右边缘。
+	return m_layout;
 }
 
 void TopBar::setTitle(const QString& title)
@@ -784,24 +807,20 @@ void TopBar::openToolsFilter()
 	if (m_toolsPopup && m_toolsPopup->isVisible())
 		return;
 
-	// 遮罩：宿主主窗口上那唯一一层半透明控件（铺满内容区、不含自绘标题栏，
-	// 否则窗口按钮会被一起盖住点不动）。showOverlay() 里带一次同步重绘，
-	// 所以下面直接 show() 弹窗就行，不会再出现"弹窗先出、遮罩后到"。
-	WindowFrame::showOverlay(host, this);
-
+	// 惰性建弹窗要排在铺遮罩**之前**：构造是要花时间的，而遮罩那次同步重绘必须
+	// 紧贴弹窗 show()（见 WindowFrame::showOverlayWithPopup）。
 	if (!m_toolsPopup) {
 		m_toolsPopup = new ToolsFilterPopup(host);
 		connect(m_toolsPopup, &PopupWindow::closed, this, &TopBar::closeToolsFilter);
 		connect(m_toolsPopup, &ToolsFilterPopup::refreshRequested, this, [this]() { loadTools(true); });
 	}
 
-	// 不在这里预置上下文：窗口保留上一次 applyCatalog 注入的 DropGuidance /
-	// HideContexts，紧接着的 loadTools(true) 会用服务端的权威值覆盖它 ——
-	// 预置一个默认值会让"加载还没回来就点了勾选"这种情况把配置写坏。
-	m_toolsPopup->move(host->geometry().center() - m_toolsPopup->rect().center());
-	m_toolsPopup->show();
-	m_toolsPopup->raise();
+	// 铺遮罩 + 居中 + 显示：背靠背完成，两者落在同一帧
+	WindowFrame::showOverlayWithPopup(host, this, m_toolsPopup);
 
+	// 数据随后异步加载。不在这里预置上下文：窗口保留上一次 applyCatalog 注入的
+	// DropGuidance / HideContexts，紧接着的 loadTools(true) 会用服务端的权威值
+	// 覆盖它 —— 预置一个默认值会让"加载还没回来就点了勾选"这种情况把配置写坏。
 	loadTools(true);
 }
 

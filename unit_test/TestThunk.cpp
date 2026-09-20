@@ -1,7 +1,7 @@
 #include "TestThunk.h"
 
-#include "Thunk.h"
-#include "DllCaller.h"
+#include "ExtensionSystem/Thunk.h"
+#include "ExtensionSystem/DllCaller.h"
 
 #include <atomic>
 #include <thread>
@@ -377,6 +377,11 @@ void TestThunk::testNativeExtensionViaDllCaller()
 	const QString jsonPath = extDir + QStringLiteral("/regulation.json5");
 	const QString dllPath = extDir + QStringLiteral("/main.dll");
 
+	// "test extension/" 是示例扩展的源码目录，不进 git（只保留在开发机上）。
+	// 干净检出时它不存在，此时跳过而不是报失败。
+	if (!QFile::exists(jsonPath) || !QFile::exists(dllPath))
+		QSKIP("需要本机存在 test extension/NativeThunkExt（含已编译的 main.dll）才能跑本条用例");
+
 	QVERIFY2(QFile::exists(jsonPath), qPrintable(jsonPath));
 	QVERIFY2(QFile::exists(dllPath), qPrintable(dllPath));
 
@@ -432,6 +437,10 @@ void TestThunk::testMultiExtensionDllCaller()
 	const QString nativeJson = nativeDir + QStringLiteral("/regulation.json5");
 	const QString nativeDll = nativeDir + QStringLiteral("/main.dll");
 
+	// 第一个扩展来自 "test extension/"（源码目录，不进 git）：干净检出时不存在。
+	if (!QFile::exists(nativeJson) || !QFile::exists(nativeDll))
+		QSKIP("需要本机存在 test extension/NativeThunkExt（含已编译的 main.dll）才能跑本条用例");
+
 	// 第二个扩展取自 harness 的 launch-root：那是“已安装的 FFmpeg 示例扩展”，
 	// 由安装流程/发行包生成，且被 .gitignore 忽略。机器上没装过时它不存在，
 	// 此时跳过而不是报失败（否则这套单测在任何干净检出上都必然红一条）。
@@ -485,6 +494,11 @@ void TestThunk::testConcurrentDllCaller()
 	const QString extDir = QStringLiteral("test extension/NativeThunkExt");
 	const QString jsonPath = extDir + QStringLiteral("/regulation.json5");
 	const QString dllPath = extDir + QStringLiteral("/main.dll");
+
+	// "test extension/" 是示例扩展的源码目录，不进 git（只保留在开发机上）。
+	// 干净检出时它不存在，此时跳过而不是报失败。
+	if (!QFile::exists(jsonPath) || !QFile::exists(dllPath))
+		QSKIP("需要本机存在 test extension/NativeThunkExt（含已编译的 main.dll）才能跑本条用例");
 
 	DllCaller caller;
 	QVERIFY2(caller.loadDescriptor(jsonPath), qPrintable(caller.errorString()));

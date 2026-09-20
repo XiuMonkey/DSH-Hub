@@ -1,8 +1,10 @@
-#include "Sidebar.h"
-#include "ThemeManager.h"
+#include "ui/Sidebar.h"
+#include "common/appearance/ThemeManager.h"
+#include "common/util/CommonRegistry.h"
+#include "core/HostExports.h"
 
-#include "DshApiClient.h"
-#include "SessionService.h"
+#include "network/DshApiClient.h"
+#include "common/session/SessionService.h"
 
 #include <QContextMenuEvent>
 #include <QDialog>
@@ -587,6 +589,19 @@ Sidebar::Sidebar(QWidget* parent)
 		this, &Sidebar::createSessionInWorkspaceRequested);
 	connect(m_workspaceList, &WorkspaceList::deleteSessionRequested,
 		this, &Sidebar::deleteSessionRequested);
+
+	// 登记到全局注册表：插件可用 C 导出 DshHubHostRegistryFind 按 index 取到本对象。
+	// 放在构造末尾 —— 登记出去的对象必须已经能用，不能是半成品。
+	// 登记是覆盖语义：切主题时新侧栏会直接顶掉旧侧栏（旧侧栏稍后才析构，
+	// 它调 Destroy 时会被身份校验拒绝，不会误删这一条）。
+	CommonRegistry::instance().AddToRegistry(DshHostIndex::kSidebar, this);
+}
+
+Sidebar::~Sidebar()
+{
+	// 注销：Destroy 只在"表里登记的正是 this"时才摘除。所以"新侧栏已接管、
+	// 旧侧栏才析构"这种顺序不会误删新记录（靠的就是那个身份校验）。
+	CommonRegistry::instance().Destroy(DshHostIndex::kSidebar, this);
 }
 
 WorkspaceList* Sidebar::workspaceList() const

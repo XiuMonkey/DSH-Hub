@@ -1,6 +1,6 @@
 #include "TestClientSettings.h"
 
-#include "ClientSettings.h"
+#include "common/settings/ClientSettings.h"
 
 #include <QByteArray>
 #include <QDir>

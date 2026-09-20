@@ -6,7 +6,7 @@
 
 #include "TestSessionCatalog.h"
 
-#include "SessionCatalog.h"
+#include "common/session/SessionCatalog.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
