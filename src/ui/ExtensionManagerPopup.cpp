@@ -208,6 +208,11 @@ void ExtensionManagerPopup::pollInstall()
 			qWarning().noquote() << QStringLiteral("[ExtensionManager] client extension load failed:")
 				<< ext.pluginName << loadError;
 		}
+
+		// 立刻重建列表：客户端扩展的"已安装"判据是**目录**（这一步刚落地），装载状态
+		// 也刚刚变过 —— 不刷新的话，新装好的扩展要等关掉再打开弹窗才出现
+		// （"装完不在列表里、重开 popup 才进"就是这个原因）。
+		populateList();
 		return;
 	}
 

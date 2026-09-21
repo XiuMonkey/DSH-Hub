@@ -17,7 +17,7 @@ CodeBlockView::CodeBlockView(QWidget* parent)
 	// QStyleSheetStyle 会把"匹配不到 #codeBlockView QScrollBar"缓存下来，
 	// 之后 setObjectName 不会触发重新匹配 —— 滚动条会一直是原生（老式）样式。
 	// 这里设完 objectName 后强制重新解析一次。
-	Theme::repolishScrollArea(this);
+	ThemeManager::instance().repolishScrollArea(this);
 
 	setReadOnly(true);
 	setUndoRedoEnabled(false);

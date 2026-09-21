@@ -142,7 +142,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	setAttribute(Qt::WA_TranslucentBackground, true);
 
 	// 样式表按窗口安装（替代全局 qApp 表）：本窗口与后续加入的子控件统一应用当前主题
-	Theme::applyToWindow(this);
+	ThemeManager::instance().applyToWindow(this);
 	setWindowTitle(QStringLiteral("DSH Hub"));
 	setAttribute(Qt::WA_DeleteOnClose);
 
@@ -536,7 +536,7 @@ QUrl DSHHub::authenticatedBaseUrl() const
 
 void DSHHub::toggleTheme()
 {
-	Theme::switchTheme(this);
+	ThemeManager::instance().switchTheme(this);
 }
 
 // openPlugins 已迁出：插件窗口的开关/遮罩/居中由常驻的
@@ -1353,4 +1353,26 @@ void DSHHub::handleTransportError(const QString& context, const QString& message
 		return;
 
 	m_messageHost->addSystemMessage(qtTrId("chat_transport_error_fmt").arg(context, message));
+}
+
+// ------------------------------------------------------------------
+// VirtualWindow 接口的实现（客户端扩展用）
+// ------------------------------------------------------------------
+// 与设置 / 插件市场 / 扩展管理走同一条路径：遮罩铺在宿主上、弹窗居中显示，
+// 两步背靠背完成（理由见 WindowFrame::showOverlayWithPopup）。
+// owner 就用弹窗自身：遮罩按 owner 记名，扩展只要 show/hide 成对就不会串。
+void DSHHub::ExternalShowOverlay(QWidget* popup)
+{
+	if (!popup)
+		return;
+
+	WindowFrame::showOverlayWithPopup(this, popup, popup);
+}
+
+void DSHHub::ExternalHideOverlay(QWidget* popup)
+{
+	if (!popup)
+		return;
+
+	WindowFrame::hideOverlay(this, popup);
 }

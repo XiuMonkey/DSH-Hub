@@ -37,7 +37,7 @@ namespace
 	// 直接矢量画、并把几何对齐到设备像素（实心胶囊、整高、整数坐标）就没有这两个问题：
 	// 实测满覆盖像素 0 → 44，最大 alpha 232 → 255，线正好落在整行像素上。
 	//
-	// 颜色每次绘制现取 Theme::textSecondary()，不缓存 —— 主题是重建窗口切换的，
+	// 颜色每次绘制现取 ThemeManager::instance().textSecondary()，不缓存 —— 主题是重建窗口切换的，
 	// 这样连"忘了跟着换色"的机会都没有。
 	class ToolsFilterButton : public QPushButton
 	{
@@ -64,7 +64,7 @@ namespace
 			QPainter painter(this);
 			painter.setRenderHint(QPainter::Antialiasing, true); // 只有胶囊两端的圆头需要
 			painter.setPen(Qt::NoPen);
-			painter.setBrush(QColor(Theme::textSecondary()));
+			painter.setBrush(QColor(ThemeManager::instance().textSecondary()));
 			// 之后 1 单位 = 1 设备像素
 			painter.scale(1.0 / dpr, 1.0 / dpr);
 
@@ -85,7 +85,7 @@ namespace
 
 	// 目录底部的整组「折叠/可见」开关：整行可点，左侧状态文案、右侧胶囊滑块。
 	// 刻意不用 QCheckBox：QSS 的 ::indicator 只能换底色，画不出"滑块"，表达不了
-	// 开/合；自绘才像开关。配色每次绘制现取 Theme::（同 ToolsFilterButton 的理由：
+	// 开/合；自绘才像开关。配色每次绘制现取 ThemeManager::instance()（同 ToolsFilterButton 的理由：
 	// 主题靠重建窗口切换，不缓存就永远没有"忘了跟着换色"的机会）。
 	class CapsuleSwitchRow : public QAbstractButton
 	{
@@ -118,9 +118,9 @@ namespace
 			painter.setFont(font);
 			const QColor textColor = isEnabled()
 				? QColor(underMouse()
-					? Theme::textSecondary()
-					: Theme::color(QStringLiteral("textTertiary")))
-				: QColor(Theme::color(QStringLiteral("textCaption")));
+					? ThemeManager::instance().textSecondary()
+					: ThemeManager::instance().color(QStringLiteral("textTertiary")))
+				: QColor(ThemeManager::instance().color(QStringLiteral("textCaption")));
 			painter.setPen(textColor);
 			const int textWidth = qMax(width() - int(kTrackWidth) - 14, 0);
 			painter.drawText(QRect(4, 0, textWidth, height()),
@@ -133,8 +133,8 @@ namespace
 			const QRectF track(trackX, trackY, kTrackWidth, kTrackHeight);
 			painter.setPen(Qt::NoPen);
 			painter.setBrush(QColor(isEnabled()
-				? (isChecked() ? Theme::textSecondary() : Theme::border())
-				: Theme::inputBg()));
+				? (isChecked() ? ThemeManager::instance().textSecondary() : ThemeManager::instance().border())
+				: ThemeManager::instance().inputBg()));
 			painter.drawRoundedRect(track, kTrackHeight / 2.0, kTrackHeight / 2.0);
 
 			// 滑块：白色圆点在灰轨与主题色轨上都清晰（两套主题的惯例同此）
@@ -142,7 +142,7 @@ namespace
 			const qreal knobX = isChecked()
 				? trackX + kTrackWidth - knobSize - 2.0
 				: trackX + 2.0;
-			painter.setBrush(isEnabled() ? QColor(Qt::white) : QColor(Theme::border()));
+			painter.setBrush(isEnabled() ? QColor(Qt::white) : QColor(ThemeManager::instance().border()));
 			painter.drawEllipse(QPointF(knobX + knobSize / 2.0, trackY + kTrackHeight / 2.0),
 				knobSize / 2.0, knobSize / 2.0);
 		}
@@ -381,8 +381,8 @@ ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 	m_scroll->setWidgetResizable(true);
 	m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	// 滚动条在基类构造时就建好了，那时 objectName 还没设 —— 见 ThemeManager.h 里
-	// Theme::repolishScrollArea 的说明（下面这句顺带把"首次显示/首次真出现"也补上）
-	Theme::repolishScrollArea(m_scroll);
+	// repolishScrollArea 的说明（下面这句顺带把"首次显示/首次真出现"也补上）
+	ThemeManager::instance().repolishScrollArea(m_scroll);
 	layout->addWidget(m_scroll, 1);
 
 	m_listContent = new QWidget(m_scroll);

@@ -64,7 +64,7 @@ PopupWindow::PopupWindow(QWidget* parent)
 	m_mainLayout->addLayout(m_contentLayout, 1);
 
 	// 窗口级样式：本弹窗与后续 setContent 加入的内容统一应用当前主题样式表
-	Theme::applyToWindow(this);
+	ThemeManager::instance().applyToWindow(this);
 
 	// 标题留空 -> 显示可翻译的默认名（子类可用 setTitle 覆盖）
 	retranslateUi();

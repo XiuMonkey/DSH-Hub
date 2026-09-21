@@ -16,7 +16,7 @@
     color: {{textPrimary}};
     font-size: 14px;
 }
-/* 顶栏右侧的“工具过滤”按钮（图标颜色由 Theme::textSecondary() 画在 C++ 里）。
+/* 顶栏右侧的“工具过滤”按钮（图标颜色由 ThemeManager::instance().textSecondary() 画在 C++ 里）。
  *
  * 前缀 QPushButton 是**必须**的，不是可有可无的风格问题：
  *   defaults.qss 的通用按钮规则是 `#dshhubCentral QPushButton`，特异性 (1,0,1)；

@@ -1,7 +1,7 @@
 /* ==========================================================================
  * scrollbars.qss — 全局滚动条（全应用唯一一份滚动条规则）
  *
- * 归属：全局；由 ThemeManager.cpp 的 Theme::repolishScrollArea() 与 ScrollAreaShowFilter
+ * 归属：全局；由 ThemeManager.cpp 的 repolishScrollArea() 与 ScrollAreaShowFilter
  *       负责让它在正确的时机生效（滚动条的匹配结果会在控件构造时被缓存）。
  * 约定：任何滚动区默认就是细条，不需要逐控件写；要特别处理，就在这个文件里用更具体的
  *       选择器覆盖（优先级更高）。不要再往别处复制一份 —— 那正是以前 11 处拷贝的来历。
@@ -20,8 +20,8 @@
  * 仍然必须做的一件事：QAbstractScrollArea 的滚动条是**基类构造**时创建的，那时
  * 子类的 objectName/父链可能还没就位，QStyleSheetStyle 会把"匹配不到规则"缓存
  * 下来 —— 之后设名字不会自动重算。所以新建这类控件后调一次
- * Theme::repolishScrollArea()（它还会挂"首次显示/首次真的有滚动范围"的一次性补丁，
- * 并且 Theme 内部另有一层全局兜底，见 ThemeManager.cpp 的 ScrollAreaShowFilter）。 */
+ * ThemeManager::instance().repolishScrollArea()（它还会挂"首次显示/首次真的有滚动范围"的一次性补丁，
+ * 并且 ThemeManager 内部另有一层全局兜底，见 ThemeManager.cpp 的 ScrollAreaShowFilter）。 */
 QScrollBar:vertical {
     background: transparent;
     width: 8px;

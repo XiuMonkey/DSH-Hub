@@ -42,7 +42,7 @@ SidebarLogo::SidebarLogo(QWidget* parent)
 	setAlignment(Qt::AlignCenter);
 	setAttribute(Qt::WA_TranslucentBackground);
 
-	const QString logoResource = Theme::isDark()
+	const QString logoResource = ThemeManager::instance().isDark()
 		? QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny-Dark@2x.png")
 		: QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny@2x.png");
 	QPixmap logoPix(logoResource);
@@ -206,18 +206,20 @@ void SessionButton::contextMenuEvent(QContextMenuEvent* event)
 	auto* deleteAction = new QPushButton(qtTrId("session_delete_label"), &menu);
 	deleteAction->setObjectName(QStringLiteral("sessionContextDeleteAction"));
 	deleteAction->setCursor(Qt::PointingHandCursor);
+	// 这条样式表要拼 5 个语义色：先取一次单例引用，行内就不必反复写入口
+	const ThemeManager& theme = ThemeManager::instance();
 	deleteAction->setStyleSheet(
 		QStringLiteral("QPushButton#sessionContextDeleteAction {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("panelBg")) + QStringLiteral(";")
-		+ QStringLiteral("  border: 1px solid ") + Theme::color(QStringLiteral("border")) + QStringLiteral(";")
+		+ QStringLiteral("  background: ") + theme.color(QStringLiteral("panelBg")) + QStringLiteral(";")
+		+ QStringLiteral("  border: 1px solid ") + theme.color(QStringLiteral("border")) + QStringLiteral(";")
 		+ QStringLiteral("  border-radius: 10px;")
 		+ QStringLiteral("  padding: 8px 20px;")
 		+ QStringLiteral("  font-size: 13px;")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("textPrimary")) + QStringLiteral(";")
+		+ QStringLiteral("  color: ") + theme.color(QStringLiteral("textPrimary")) + QStringLiteral(";")
 		+ QStringLiteral("}")
 		+ QStringLiteral("QPushButton#sessionContextDeleteAction:hover {")
-		+ QStringLiteral("  background: ") + Theme::color(QStringLiteral("dangerBg")) + QStringLiteral(";")
-		+ QStringLiteral("  color: ") + Theme::color(QStringLiteral("danger")) + QStringLiteral(";")
+		+ QStringLiteral("  background: ") + theme.color(QStringLiteral("dangerBg")) + QStringLiteral(";")
+		+ QStringLiteral("  color: ") + theme.color(QStringLiteral("danger")) + QStringLiteral(";")
 		+ QStringLiteral("}"));
 
 	auto* layout = new QVBoxLayout(&menu);
@@ -544,8 +546,8 @@ Sidebar::Sidebar(QWidget* parent)
 	m_workspaceScroll->setMinimumHeight(kMinWorkspaceListHeight);
 	// 滚动条是 QAbstractScrollArea 基类构造时建的，那时 objectName 还没设，
 	// 规则会被缓存成"匹配不到"；设完名字后重新解析一次
-	// （见 Theme::repolishScrollArea 的注释）。
-	Theme::repolishScrollArea(m_workspaceScroll);
+	// （见 ThemeManager::instance().repolishScrollArea 的注释）。
+	ThemeManager::instance().repolishScrollArea(m_workspaceScroll);
 
 	m_workspaceList = new WorkspaceList(m_workspaceScroll);
 	m_workspaceScroll->setWidget(m_workspaceList);

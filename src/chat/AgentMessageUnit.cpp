@@ -107,7 +107,7 @@ QTextBrowser* AgentMessageUnit::createRichPart(const QString& objectName)
 
 	// 滚动条是 QAbstractScrollArea 基类构造时建好的，那时 objectName 还没设，
 	// 规则会被缓存成"匹配不到"；设完名字后重新解析一次（#agentProse QScrollBar）
-	Theme::repolishScrollArea(view);
+	ThemeManager::instance().repolishScrollArea(view);
 
 	view->setReadOnly(true);
 
@@ -597,7 +597,7 @@ void AgentMessageUnit::updateLiveThinking(const QString& content)
 		if (QLabel* header = block.card->findChild<QLabel*>(QStringLiteral("agentThinkHeader"))) {
 			const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 			const QString anchor = QStringLiteral(
-				"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
+				"<a href=\"dsh://thinking/%1\" style=\"color:") + ThemeManager::instance().textSecondary()
 				+ QStringLiteral("; text-decoration:none;\">") + qtTrId("chat_thought_header_fmt") + QStringLiteral("</a>");
 			header->setText(anchor.arg(m_liveThinkingBlock)
 				.arg(arrow, thinkingPreview(content).toHtmlEscaped()));
@@ -606,7 +606,7 @@ void AgentMessageUnit::updateLiveThinking(const QString& content)
 	// 展开时正文原地刷新
 	if (block.expanded && block.body) {
 		const QString html = QStringLiteral(
-			"<p style='color:") + Theme::textSecondary() + QStringLiteral(";'><i>%1</i></p>");
+			"<p style='color:") + ThemeManager::instance().textSecondary() + QStringLiteral(";'><i>%1</i></p>");
 		block.body->setHtml(html.arg(content.toHtmlEscaped()));
 	}
 	if (!m_bulkFit)
@@ -775,7 +775,7 @@ void AgentMessageUnit::addThinkingCard(int index)
 		[this](const QString& link) { handleAnchorClicked(QUrl(link)); });
 
 	const QString anchor = QStringLiteral(
-		"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
+		"<a href=\"dsh://thinking/%1\" style=\"color:") + ThemeManager::instance().textSecondary()
 		+ QStringLiteral("; text-decoration:none;\">") + qtTrId("chat_thought_header_fmt") + QStringLiteral("</a>");
 	header->setText(anchor.arg(index).arg(arrow, thinkingPreview(block.content).toHtmlEscaped()));
 	layout->addWidget(header);
@@ -784,7 +784,7 @@ void AgentMessageUnit::addThinkingCard(int index)
 		QTextBrowser* body = createRichPart(QStringLiteral("agentThinkBody"));
 		block.body = body;
 		const QString html = QStringLiteral(
-			"<p style='color:") + Theme::textSecondary() + QStringLiteral(";'><i>%1</i></p>");
+			"<p style='color:") + ThemeManager::instance().textSecondary() + QStringLiteral(";'><i>%1</i></p>");
 		body->setHtml(html.arg(block.content.toHtmlEscaped()));
 		m_proseViews.append(body);
 		layout->addWidget(body);
@@ -803,7 +803,7 @@ void AgentMessageUnit::updateThinkingCard(int index)
 	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 	if (header) {
 		const QString anchor = QStringLiteral(
-			"<a href=\"dsh://thinking/%1\" style=\"color:") + Theme::textSecondary()
+			"<a href=\"dsh://thinking/%1\" style=\"color:") + ThemeManager::instance().textSecondary()
 			+ QStringLiteral("; text-decoration:none;\">") + qtTrId("chat_thought_header_fmt") + QStringLiteral("</a>");
 		header->setText(anchor.arg(index).arg(arrow, thinkingPreview(block.content).toHtmlEscaped()));
 	}
@@ -813,7 +813,7 @@ void AgentMessageUnit::updateThinkingCard(int index)
 		QTextBrowser* body = createRichPart(QStringLiteral("agentThinkBody"));
 		block.body = body;
 		const QString html = QStringLiteral(
-			"<p style='color:") + Theme::textSecondary() + QStringLiteral(";'><i>%1</i></p>");
+			"<p style='color:") + ThemeManager::instance().textSecondary() + QStringLiteral(";'><i>%1</i></p>");
 		body->setHtml(html.arg(block.content.toHtmlEscaped()));
 		m_proseViews.append(body);
 		if (cardLayout)
@@ -898,7 +898,7 @@ void AgentMessageUnit::addToolCard(int index)
 		[this](const QString& link) { handleAnchorClicked(QUrl(link)); });
 
 	const QString anchor = QStringLiteral(
-		"<a href=\"dsh://tool/%1\" style=\"color:") + Theme::accent()
+		"<a href=\"dsh://tool/%1\" style=\"color:") + ThemeManager::instance().accent()
 		+ QStringLiteral("; text-decoration:none;\">%2 %3</a>");
 	header->setText(anchor.arg(index).arg(arrow, block.title.toHtmlEscaped()));
 	layout->addWidget(header);
@@ -924,7 +924,7 @@ void AgentMessageUnit::updateToolCard(int index)
 	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 	if (header) {
 		const QString anchor = QStringLiteral(
-			"<a href=\"dsh://tool/%1\" style=\"color:") + Theme::accent()
+			"<a href=\"dsh://tool/%1\" style=\"color:") + ThemeManager::instance().accent()
 			+ QStringLiteral("; text-decoration:none;\">%2 %3</a>");
 		header->setText(anchor.arg(index).arg(arrow, block.title.toHtmlEscaped()));
 	}
@@ -1068,16 +1068,18 @@ QString AgentMessageUnit::restoreInlineCodeHtml(const QString& html, const QStri
 		const QString token = QStringLiteral("@@INLINE_CODE_%1@@").arg(i);
 		const QString span = QStringLiteral(
 			"<span style='"
-			"background:") + Theme::inputBg() + QStringLiteral(
-				";border:1px solid ") + Theme::border() + QStringLiteral(
-					";box-shadow:0 1px 2px ") + Theme::color(QStringLiteral("shadowSubtle")) + QStringLiteral(";"
-						"border-radius:4px;"
-						"padding:1px 4px;"
-						"font-family:Consolas,Menlo,monospace;"
-						"font-size:0.9em;"
-						"color:") + Theme::textPrimary() + QStringLiteral(
-							";'>%1</span>"
-						).arg(codes.at(i).toHtmlEscaped());
+			"background:") + ThemeManager::instance().inputBg() + QStringLiteral(
+				";border:1px solid ") + ThemeManager::instance().border() + QStringLiteral(
+					";box-shadow:0 1px 2px ")
+			+ ThemeManager::instance().color(QStringLiteral("shadowSubtle"))
+			+ QStringLiteral(";"
+				"border-radius:4px;"
+				"padding:1px 4px;"
+				"font-family:Consolas,Menlo,monospace;"
+				"font-size:0.9em;"
+				"color:") + ThemeManager::instance().textPrimary() + QStringLiteral(
+					";'>%1</span>"
+				).arg(codes.at(i).toHtmlEscaped());
 		result.replace(token, span);
 	}
 

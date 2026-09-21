@@ -106,7 +106,7 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 	m_agentPresetList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	// 滚动条早于 objectName 存在（基类构造时创建），设完名字重新解析一次，
 	// 否则 #agentPresetList QScrollBar 规则匹配不上、滚动条按原生样式画
-	Theme::repolishScrollArea(m_agentPresetList);
+	ThemeManager::instance().repolishScrollArea(m_agentPresetList);
 	popupLayout->addWidget(m_agentPresetList);
 
 	auto* agentHint = new QLabel(qtTrId("settings_agent_preset_hint"), agentPanel);
@@ -227,7 +227,7 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 	appearanceFeedback->hide();
 
 	connect(stylesResetButton, &QPushButton::clicked, this, [appearanceFeedback]() {
-		Theme::resetStyles();
+		ThemeManager::instance().resetStyles();
 		if (appearanceFeedback) {
 			appearanceFeedback->setText(
 				qtTrId("settings_styles_reset_done"));

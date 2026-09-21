@@ -1,435 +1,140 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>qml;cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
-    </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>qrc;rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
-    <Filter Include="Form Files">
-      <UniqueIdentifier>{99349809-55BA-4b9d-BF79-8FDBB0286EB3}</UniqueIdentifier>
-      <Extensions>ui</Extensions>
-    </Filter>
-    <Filter Include="Translation Files">
-      <UniqueIdentifier>{639EADAA-A684-42e4-A9AD-28FC9BCB8F7C}</UniqueIdentifier>
-      <Extensions>ts</Extensions>
-    </Filter>
-    <Filter Include="Source Files\Core">
-      <UniqueIdentifier>{A1C0E001-0001-4000-8000-000000000001}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\UI">
-      <UniqueIdentifier>{A1C0E001-0002-4000-8000-000000000002}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Chat">
-      <UniqueIdentifier>{A1C0E001-0003-4000-8000-000000000003}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Network">
-      <UniqueIdentifier>{A1C0E001-0004-4000-8000-000000000004}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\ExtensionSystem">
-      <UniqueIdentifier>{A1C0E001-0005-4000-8000-000000000005}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Common">
-      <UniqueIdentifier>{A1C0E001-0006-4000-8000-000000000006}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Common\Util">
-      <UniqueIdentifier>{A1C0E001-0007-4000-8000-000000000007}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Common\Settings">
-      <UniqueIdentifier>{A1C0E001-0008-4000-8000-000000000008}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Common\Session">
-      <UniqueIdentifier>{A1C0E001-0009-4000-8000-000000000009}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Common\Extension">
-      <UniqueIdentifier>{A1C0E001-000A-4000-8000-00000000000A}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Common\Appearance">
-      <UniqueIdentifier>{A1C0E001-000B-4000-8000-00000000000B}</UniqueIdentifier>
-    </Filter>
+    <ClCompile Include="src\chat\AgentMessageUnit.cpp" />
+    <ClCompile Include="src\chat\CodeBlockView.cpp" />
+    <ClCompile Include="src\common\appearance\TopBarTools.cpp" />
+    <ClCompile Include="src\ui\LoadMoreButton.cpp" />
+    <ClCompile Include="src\ui\ChatInputWidget.cpp" />
+    <ClCompile Include="src\ui\Main.cpp" />
+    <ClCompile Include="src\ui\Sidebar.cpp" />
+    <ClCompile Include="src\ui\SmoothWheelScroller.cpp" />
+    <ClCompile Include="src\chat\UserMessageUnit.cpp" />
+    <ClCompile Include="src\network\DshApiClient.cpp" />
+    <ClCompile Include="src\network\DshEventParser.cpp" />
+    <ClCompile Include="src\core\DSHHub.cpp" />
+    <ClCompile Include="src\core\MessageHost.cpp" />
+    <ClCompile Include="src\core\ServerManager.cpp" />
+    <ClCompile Include="src\core\main.cpp" />
+    <ClCompile Include="src\core\HostExports.cpp" />
+    <ClCompile Include="src\chat\MessageQuery.cpp" />
+    <ClCompile Include="src\chat\SystemMessageUnit.cpp" />
+    <ClCompile Include="src\common\util\CodeHighlighter.cpp" />
+    <ClCompile Include="src\common\util\CommonRegistry.cpp" />
+    <ClCompile Include="src\common\util\MarkdownPreprocess.cpp" />
+    <ClCompile Include="src\common\appearance\InteractionHandler.cpp" />
+    <ClCompile Include="src\common\session\SessionCatalog.cpp" />
+    <ClCompile Include="src\common\session\SessionService.cpp" />
+    <ClCompile Include="src\common\settings\SettingsStore.cpp" />
+    <ClCompile Include="src\common\settings\ClientSettings.cpp" />
+    <ClCompile Include="src\common\session\AgentPresetService.cpp" />
+    <ClCompile Include="src\common\extension\PluginMarketClient.cpp" />
+    <ClCompile Include="src\common\extension\PluginMarketModel.cpp" />
+    <ClCompile Include="src\common\extension\PluginMarketInstaller.cpp" />
+    <ClCompile Include="src\common\extension\ExtensionRegistry.cpp" />
+    <ClCompile Include="src\common\extension\ExtensionInstallTask.cpp" />
+    <ClCompile Include="src\common\session\ModelSelectionService.cpp" />
+    <ClCompile Include="src\common\appearance\TranslationManager.cpp" />
+    <ClCompile Include="src\ui\TranslationUi.cpp" />
+    <ClCompile Include="src\ui\StatusPopupWindow.cpp" />
+    <ClCompile Include="src\ui\ModelSelector.cpp" />
+    <ClCompile Include="src\ui\ModelListPanel.cpp" />
+    <ClCompile Include="src\ui\SpinnerWidget.cpp" />
+    <ClCompile Include="src\ui\TopBar.cpp" />
+    <ClCompile Include="src\ui\TitleBar.cpp" />
+    <ClCompile Include="src\common\appearance\WindowFrame.cpp" />
+    <ClCompile Include="src\chat\CacheHistoryManager.cpp" />
+    <ClCompile Include="src\network\SessionPrefetcher.cpp" />
+    <ClCompile Include="src\ui\PopupWindow.cpp" />
+    <ClCompile Include="src\ui\Tooltip.cpp" />
+    <ClCompile Include="src\ui\Settings.cpp" />
+    <ClCompile Include="src\common\appearance\ThemeManager.cpp" />
+    <ClCompile Include="src\common\appearance\CardShadow.cpp" />
+    <ClCompile Include="src\ui\ShadowPanel.cpp" />
+    <ClCompile Include="src\common\util\Logger.cpp" />
+    <ClCompile Include="src\ui\PluginsManager.cpp" />
+    <ClCompile Include="src\ui\ExtensionManagerPopup.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DshNamedPipeBridge.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DllCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ComCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\Thunk.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ClientExtension.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <QtRcc Include="resources\DSHHub.qrc">
-      <Filter>Resource Files</Filter>
-    </QtRcc>
-    <QtMoc Include="include\core\DSHHub.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\core\MessageHost.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\SmoothWheelScroller.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\core\ServerManager.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <ClCompile Include="src\core\ServerManager.cpp">
-      <Filter>Source Files\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\DSHHub.cpp">
-      <Filter>Source Files\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\MessageHost.cpp">
-      <Filter>Source Files\Core</Filter>
-    </ClCompile>
-    <None Include="resources\highlight_rules.json">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="resources\DSH-Hub-Logo-Tiny@2x.png">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="resources\DSH-Hub-Icon.png">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="resources\DSH-Hub-Logo-Tiny-Dark@2x.png">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="resources\DSH Hub.ico">
-      <Filter>Resource Files</Filter>
-    </None>
-    <ResourceCompile Include="resources\DSH Hub.rc">
-      <Filter>Resource Files</Filter>
-    </ResourceCompile>
+    <QtTranslation Include="translations\dshhub_en.ts" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\ui\ChatInputWidget.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\Sidebar.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\SmoothWheelScroller.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\main.cpp">
-      <Filter>Source Files\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="src\core\HostExports.cpp">
-      <Filter>Source Files\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="src\network\DshApiClient.cpp">
-      <Filter>Source Files\Network</Filter>
-    </ClCompile>
-    <ClCompile Include="src\network\DshEventParser.cpp">
-      <Filter>Source Files\Network</Filter>
-    </ClCompile>
-    <ClCompile Include="src\chat\AgentMessageUnit.cpp">
-      <Filter>Source Files\Chat</Filter>
-    </ClCompile>
-    <ClCompile Include="src\chat\CodeBlockView.cpp">
-      <Filter>Source Files\Chat</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\util\CodeHighlighter.cpp">
-      <Filter>Source Files\Common\Util</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\util\CommonRegistry.cpp">
-      <Filter>Source Files\Common\Util</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\appearance\InteractionHandler.cpp">
-      <Filter>Source Files\Common\Appearance</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\SpinnerWidget.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\network\SessionPrefetcher.cpp">
-      <Filter>Source Files\Network</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\TopBar.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\TitleBar.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\appearance\WindowFrame.cpp">
-      <Filter>Source Files\Common\Appearance</Filter>
-    </ClCompile>
-    <ClCompile Include="src\chat\CacheHistoryManager.cpp">
-      <Filter>Source Files\Chat</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\PopupWindow.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\Tooltip.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\Settings.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\PluginsManager.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\ExtensionManagerPopup.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\appearance\ThemeManager.cpp">
-      <Filter>Source Files\Common\Appearance</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\appearance\CardShadow.cpp">
-      <Filter>Source Files\Common\Appearance</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\ShadowPanel.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\util\Logger.cpp">
-      <Filter>Source Files\Common\Util</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ExtensionSystem\DshNamedPipeBridge.cpp">
-      <Filter>Source Files\ExtensionSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ExtensionSystem\DllCaller.cpp">
-      <Filter>Source Files\ExtensionSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ExtensionSystem\ComCaller.cpp">
-      <Filter>Source Files\ExtensionSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ExtensionSystem\Thunk.cpp">
-      <Filter>Source Files\ExtensionSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp">
-      <Filter>Source Files\ExtensionSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ExtensionSystem\ClientExtension.cpp">
-      <Filter>Source Files\ExtensionSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\LoadMoreButton.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\chat\UserMessageUnit.cpp">
-      <Filter>Source Files\Chat</Filter>
-    </ClCompile>
-    <ClCompile Include="src\chat\MessageQuery.cpp">
-      <Filter>Source Files\Chat</Filter>
-    </ClCompile>
-    <ClCompile Include="src\chat\SystemMessageUnit.cpp">
-      <Filter>Source Files\Chat</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\session\SessionCatalog.cpp">
-      <Filter>Source Files\Common\Session</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\session\SessionService.cpp">
-      <Filter>Source Files\Common\Session</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\settings\SettingsStore.cpp">
-      <Filter>Source Files\Common\Settings</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\settings\ClientSettings.cpp">
-      <Filter>Source Files\Common\Settings</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\session\AgentPresetService.cpp">
-      <Filter>Source Files\Common\Session</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\extension\PluginMarketClient.cpp">
-      <Filter>Source Files\Common\Extension</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\extension\PluginMarketModel.cpp">
-      <Filter>Source Files\Common\Extension</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\extension\PluginMarketInstaller.cpp">
-      <Filter>Source Files\Common\Extension</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\extension\ExtensionRegistry.cpp">
-      <Filter>Source Files\Common\Extension</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\extension\ExtensionInstallTask.cpp">
-      <Filter>Source Files\Common\Extension</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\StatusPopupWindow.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\ModelSelector.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\ModelListPanel.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\session\ModelSelectionService.cpp">
-      <Filter>Source Files\Common\Session</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\appearance\TranslationManager.cpp">
-      <Filter>Source Files\Common\Appearance</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\TranslationUi.cpp">
-      <Filter>Source Files\UI</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\Main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\util\MarkdownPreprocess.cpp">
-      <Filter>Source Files\Common\Util</Filter>
-    </ClCompile>
-    <ClCompile Include="src\common\appearance\TopBarTools.cpp">
-      <Filter>Source Files\Common\Appearance</Filter>
-    </ClCompile>
+    <ClInclude Include="include\network\DshEventParser.h" />
+    <ClInclude Include="include\ExtensionSystem\ExtensionLoader.h" />
+    <ClInclude Include="include\ExtensionSystem\DllCaller.h" />
+    <ClInclude Include="include\ExtensionSystem\ComCaller.h" />
+    <ClInclude Include="include\ExtensionSystem\Thunk.h" />
+    <ClInclude Include="include\ExtensionSystem\ClientExtension.h" />
+    <ClInclude Include="include\chat\SystemMessageUnit.h" />
+    <ClInclude Include="include\common\util\CodeHighlighter.h" />
+    <ClInclude Include="include\common\appearance\InteractionHandler.h" />
+    <ClInclude Include="include\chat\CacheHistoryManager.h" />
+    <ClInclude Include="include\common\appearance\CardShadow.h" />
+    <ClInclude Include="include\common\appearance\TopBarTools.h" />
+    <ClInclude Include="include\VirtualClass\VirtualCommon.h" />
+    <ClInclude Include="include\core\HostExports.h" />
+    <ClInclude Include="include\core\DshHostPlugin.h" />
+    <ClInclude Include="include\common\appearance\WindowFrame.h" />
+    <ClInclude Include="include\common\util\Logger.h" />
+    <ClInclude Include="include\common\session\SessionCatalog.h" />
+    <ClInclude Include="include\common\session\SessionService.h" />
+    <ClInclude Include="include\common\settings\SettingsStore.h" />
+    <ClInclude Include="include\ui\Tooltip.h" />
+    <ClInclude Include="include\common\settings\ClientSettings.h" />
+    <ClInclude Include="include\common\session\AgentPresetService.h" />
+    <ClInclude Include="include\common\extension\PluginMarketModel.h" />
+    <ClInclude Include="include\common\extension\ExtensionRegistry.h" />
+    <ClInclude Include="include\common\extension\ExtensionInstallTask.h" />
+    <ClInclude Include="include\common\session\ModelSelectionService.h" />
   </ItemGroup>
   <ItemGroup>
-    <QtMoc Include="include\ui\ChatInputWidget.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\Sidebar.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\LoadMoreButton.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\network\DshApiClient.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ExtensionSystem\DshNamedPipeBridge.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\SpinnerWidget.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\TopBar.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <ClInclude Include="include\common\appearance\WindowFrame.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <QtMoc Include="include\ui\PopupWindow.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\Settings.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\PluginsManager.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\ExtensionManagerPopup.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\chat\MessageQuery.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\network\SessionPrefetcher.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\chat\AgentMessageUnit.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\chat\UserMessageUnit.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\StatusPopupWindow.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\common\extension\PluginMarketClient.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\common\extension\PluginMarketInstaller.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\ModelSelector.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\ModelListPanel.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\ShadowPanel.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="include\ui\TitleBar.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
+    <ResourceCompile Include="resources\DSH Hub.rc" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\network\DshEventParser.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\ExtensionSystem\ExtensionLoader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\ExtensionSystem\DllCaller.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\chat\SystemMessageUnit.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\util\CodeHighlighter.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <QtMoc Include="include\common\util\CommonRegistry.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <ClInclude Include="include\common\appearance\InteractionHandler.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\chat\CacheHistoryManager.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\appearance\ThemeManager.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\appearance\CardShadow.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\util\Logger.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\core\HostExports.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\core\DshHostPlugin.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\session\SessionCatalog.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\session\SessionService.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\settings\SettingsStore.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\ui\Tooltip.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\settings\ClientSettings.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\session\AgentPresetService.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\extension\PluginMarketModel.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\extension\ExtensionRegistry.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\extension\ExtensionInstallTask.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <QtMoc Include="include\common\appearance\TranslationManager.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtTranslation Include="translations\dshhub_en.ts">
-      <Filter>Translation Files</Filter>
-    </QtTranslation>
-    <ClInclude Include="include\ExtensionSystem\ComCaller.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\ExtensionSystem\Thunk.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\ExtensionSystem\ClientExtension.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\session\ModelSelectionService.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\common\appearance\TopBarTools.h">
-    <ClInclude Include="include\VirtualClass\VirtualTopBar.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <QtMoc Include="include\core\DSHHub.h" />
+    <QtMoc Include="include\core\MessageHost.h" />
+    <QtMoc Include="include\ui\SmoothWheelScroller.h" />
+    <QtMoc Include="include\core\ServerManager.h" />
+    <QtMoc Include="include\ui\Sidebar.h" />
+    <QtMoc Include="include\common\util\CommonRegistry.h" />
+    <QtMoc Include="include\ui\LoadMoreButton.h" />
+    <QtMoc Include="include\network\DshApiClient.h" />
+    <QtMoc Include="include\ExtensionSystem\DshNamedPipeBridge.h" />
+    <QtMoc Include="include\network\SessionPrefetcher.h" />
+    <QtMoc Include="include\chat\MessageQuery.h" />
+    <QtMoc Include="include\ui\SpinnerWidget.h" />
+    <QtMoc Include="include\ui\TopBar.h" />
+    <QtMoc Include="include\ui\TitleBar.h" />
+    <QtMoc Include="include\ui\PopupWindow.h" />
+    <QtMoc Include="include\ui\Settings.h" />
+    <QtMoc Include="include\ui\PluginsManager.h" />
+    <QtMoc Include="include\ui\ExtensionManagerPopup.h" />
+    <QtMoc Include="include\ui\ChatInputWidget.h" />
+    <QtMoc Include="include\ui\StatusPopupWindow.h" />
+    <QtMoc Include="include\common\extension\PluginMarketClient.h" />
+    <QtMoc Include="include\common\extension\PluginMarketInstaller.h" />
+    <QtMoc Include="include\ui\ModelSelector.h" />
+    <QtMoc Include="include\ui\ModelListPanel.h" />
+    <QtMoc Include="include\ui\ShadowPanel.h" />
+    <QtMoc Include="include\chat\UserMessageUnit.h" />
+    <QtMoc Include="include\chat\AgentMessageUnit.h" />
+    <QtMoc Include="include\common\appearance\ThemeManager.h" />
+    <QtMoc Include="include\common\appearance\TranslationManager.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtRcc Include="resources\DSHHub.qrc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="resources\highlight_rules.json" />
+    <None Include="resources\DSH-Hub-Logo-Tiny@2x.png" />
+    <None Include="resources\DSH-Hub-Logo-Tiny-Dark@2x.png" />
+    <None Include="resources\DSH-Hub-Icon.png" />
+    <None Include="resources\DSH Hub.ico" />
   </ItemGroup>
 </Project>

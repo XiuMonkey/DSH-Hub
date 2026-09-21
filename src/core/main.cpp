@@ -38,7 +38,8 @@ int main(int argc, char* argv[])
 	// 然后按主题读调色板、合成各板块 QSS 并安装到 QApplication。
 	const QString stylesDir = QCoreApplication::applicationDirPath()
 		+ QStringLiteral("/styles");
-	Theme::init(stylesDir, dark ? Theme::Mode::Dark : Theme::Mode::Light);
+	ThemeManager::instance().init(stylesDir,
+		dark ? ThemeManager::Mode::Dark : ThemeManager::Mode::Light);
 	TimingLogger::mark(QStringLiteral("theme styles init"));
 
 	// 悬浮提示：装应用级事件过滤器，接管所有 QEvent::ToolTip，换成自绘气泡。

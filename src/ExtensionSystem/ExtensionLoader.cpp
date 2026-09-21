@@ -292,25 +292,41 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 			return false;
 		}
 
+		// **整包落地**：dll、regulation.json5 之外的文件与子目录也一并拷进去 ——
+		// 客户端扩展可以带自己的资源（例如扩展自己的 styles/ 文件夹）。
+		// 与下面工具扩展那条线（installPlugin 的持久化循环）做法一致。
+		const QString packageRoot = QFileInfo(loaded.dllPath).absolutePath();
+		const QFileInfoList entries = QDir(packageRoot).entryInfoList(
+			QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+		for (const QFileInfo& entry : entries) {
+			const QString dest = destDir + QStringLiteral("/") + entry.fileName();
+			if (entry.isDir()) {
+				QString copyError;
+				if (!copyRecursively(entry.absoluteFilePath(), dest, &copyError)) {
+					m_errorString = QStringLiteral("cannot copy client extension directory: %1").arg(copyError);
+					if (error)
+						*error = m_errorString;
+					return false;
+				}
+			}
+			else {
+				QFile::remove(dest);
+				if (!QFile::copy(entry.absoluteFilePath(), dest)) {
+					// 最常见的成因：这个扩展**正在运行**，它的 dll 被本进程映射着，
+					// Windows 不允许覆盖同名文件 —— 只能重启客户端之后再装。
+					m_errorString = QStringLiteral("cannot copy client extension file: %1"
+						"（若该扩展正在运行，其 dll 被本进程占用，请重启客户端后再安装）")
+						.arg(entry.absoluteFilePath());
+					if (error)
+						*error = m_errorString;
+					return false;
+				}
+			}
+		}
+
 		const QString destDll = destDir + QStringLiteral("/")
 			+ QFileInfo(loaded.dllPath).fileName();
 		const QString destJson = destDir + QStringLiteral("/regulation.json5");
-
-		QFile::remove(destDll);
-		QFile::remove(destJson);
-
-		if (!QFile::copy(loaded.dllPath, destDll)) {
-			m_errorString = QStringLiteral("cannot copy client extension dll: %1").arg(loaded.dllPath);
-			if (error)
-				*error = m_errorString;
-			return false;
-		}
-		if (!QFile::copy(loaded.jsonPath, destJson)) {
-			m_errorString = QStringLiteral("cannot copy client extension descriptor: %1").arg(loaded.jsonPath);
-			if (error)
-				*error = m_errorString;
-			return false;
-		}
 
 		loaded.pluginName = name;
 		loaded.dllPath = destDll;

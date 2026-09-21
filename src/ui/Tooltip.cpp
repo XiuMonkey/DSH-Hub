@@ -245,15 +245,15 @@ namespace
 
 	private:
 		// 深浅色变了就重挂样式表。
-		// 本窗口是常驻单例（不像各弹窗每次新建），而 Theme::setMode() 只换全局调色板、
+		// 本窗口是常驻单例（不像各弹窗每次新建），而 ThemeManager::instance().setMode() 只换全局调色板、
 		// 不会重挂已存在的顶层窗口（只有 reload() 会遍历），所以必须自己盯。
 		void syncTheme()
 		{
-			const int mode = Theme::isDark() ? 1 : 0;
+			const int mode = ThemeManager::instance().isDark() ? 1 : 0;
 			if (mode == m_themedMode)
 				return;
 			m_themedMode = mode;
-			Theme::applyToWindow(this);
+			ThemeManager::instance().applyToWindow(this);
 		}
 
 		// 锚点被删时立刻收掉：气泡是独立顶层窗口，不会随锚点一起消失

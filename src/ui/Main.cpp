@@ -127,7 +127,7 @@ void DSHHub::buildUi()
 	m_scrollArea->setObjectName(QStringLiteral("chatScrollArea"));
 	m_scrollArea->setFrameShape(QFrame::NoFrame);
 	// 同上：滚动条早于 objectName 存在，需重新解析一次 #chatScrollArea 的滚动条规则
-	Theme::repolishScrollArea(m_scrollArea);
+	ThemeManager::instance().repolishScrollArea(m_scrollArea);
 
 	auto* scrollContent = new QWidget;
 	scrollContent->setObjectName(QStringLiteral("chatScrollContent"));
@@ -308,7 +308,7 @@ void DSHHub::buildUi()
 	auto* cardLogo = new QLabel(initCard);
 	cardLogo->setAlignment(Qt::AlignCenter);
 	cardLogo->setAttribute(Qt::WA_TranslucentBackground);
-	const QString cardLogoResource = Theme::isDark()
+	const QString cardLogoResource = ThemeManager::instance().isDark()
 		? QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny-Dark@2x.png")
 		: QStringLiteral(":/DSHHub/DSH-Hub-Logo-Tiny@2x.png");
 	QPixmap cardLogoPix(cardLogoResource);

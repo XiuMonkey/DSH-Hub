@@ -81,6 +81,6 @@ void ShadowPanel::paintEvent(QPaintEvent* event)
 	// 走 CardShadow::parseColor：色板里的阴影色是 rgba(...) 写法，
 	// QColor 的字符串构造不认它（会得到无效色 → 阴影整块不画）
 	CardShadow::paint(painter, cardRect, m_spec,
-		CardShadow::parseColor(Theme::color(m_shadowKey)), devicePixelRatioF(),
+		CardShadow::parseColor(ThemeManager::instance().color(m_shadowKey)), devicePixelRatioF(),
 		m_padOverride);
 }

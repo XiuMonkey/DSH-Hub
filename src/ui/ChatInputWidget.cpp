@@ -187,7 +187,7 @@ void SessionStatsLine::paintEvent(QPaintEvent* event)
 	painter.setFont(font());
 	// 颜色取主题的"第三级文字"（和官方 StatsLine 的 label-tertiary 同一个角色）；
 	// 主题切换会重建主窗口，所以这里不需要跟着变
-	painter.setPen(QColor(Theme::color(QStringLiteral("textTertiary"))));
+	painter.setPen(QColor(ThemeManager::instance().color(QStringLiteral("textTertiary"))));
 
 	// 一行、居中，放不下就省略号（完整内容在 tooltip 里）
 	const QFontMetrics metrics(font());

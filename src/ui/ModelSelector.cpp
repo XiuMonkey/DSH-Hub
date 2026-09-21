@@ -176,7 +176,7 @@ public:
 		m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 		m_scroll->setFocusPolicy(Qt::NoFocus);
 		// 滚动条早于 objectName 存在（基类构造时创建），设完名字重新解析一次
-		Theme::repolishScrollArea(m_scroll);
+		ThemeManager::instance().repolishScrollArea(m_scroll);
 
 		m_content = new QWidget(m_scroll);
 		m_content->setObjectName(QStringLiteral("modelSelectorMenuContent"));

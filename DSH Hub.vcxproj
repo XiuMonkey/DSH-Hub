@@ -220,10 +220,9 @@
     <ClInclude Include="include\common\util\CodeHighlighter.h" />
     <ClInclude Include="include\common\appearance\InteractionHandler.h" />
     <ClInclude Include="include\chat\CacheHistoryManager.h" />
-    <ClInclude Include="include\common\appearance\ThemeManager.h" />
     <ClInclude Include="include\common\appearance\CardShadow.h" />
     <ClInclude Include="include\common\appearance\TopBarTools.h" />
-    <ClInclude Include="include\VirtualClass\VirtualTopBar.h" />
+    <ClInclude Include="include\VirtualClass\VirtualCommon.h" />
     <ClInclude Include="include\core\HostExports.h" />
     <ClInclude Include="include\core\DshHostPlugin.h" />
     <ClInclude Include="include\common\appearance\WindowFrame.h" />
@@ -238,6 +237,7 @@
     <ClInclude Include="include\common\extension\ExtensionRegistry.h" />
     <ClInclude Include="include\common\extension\ExtensionInstallTask.h" />
     <ClInclude Include="include\common\session\ModelSelectionService.h" />
+    <QtMoc Include="include\common\appearance\ThemeManager.h" />
     <QtMoc Include="include\common\appearance\TranslationManager.h" />
     <QtTranslation Include="translations\dshhub_en.ts" />
   </ItemGroup>

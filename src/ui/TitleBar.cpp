@@ -80,8 +80,8 @@ TitleBar::TitleBar(QWidget* parent)
 
 	// 深色底用反色版：原图是黑圆盘 + 白鲸，直接放进暗色标题栏，圆盘会糊进背景。
 	// 反色版由同目录 DSH-Hub-Icon.png 逐像素 RGB 取反得到（alpha 不动）。
-	// 切主题会重建主窗口（Theme::switchTheme），所以这里构造期判断一次就够。
-	const QString logoResource = Theme::isDark()
+	// 切主题会重建主窗口（ThemeManager::instance().switchTheme()），所以这里构造期判断一次就够。
+	const QString logoResource = ThemeManager::instance().isDark()
 		? QStringLiteral(":/DSHHub/DSH-Hub-Icon-Dark.png")
 		: QStringLiteral(":/DSHHub/DSH-Hub-Icon.png");
 	QPixmap logo(logoResource);

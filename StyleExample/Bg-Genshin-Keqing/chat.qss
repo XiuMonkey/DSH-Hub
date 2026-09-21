@@ -140,7 +140,7 @@
    它落在卡片外面，所以规则挂在 #sessionStatsLine 上而不是 #inputCapsule 下。
    行高固定 14px 由代码给（卡片上抬 8px 腾出来的那一行，见 Main.cpp 的输入区留白），
    这里只给字号；自绘文字的颜色在 ChatInputWidget.cpp 里取
-   Theme::color("textTertiary")，与官方 StatsLine 的"第三级文字"是同一个角色。 */
+   ThemeManager::instance().color("textTertiary")，与官方 StatsLine 的"第三级文字"是同一个角色。 */
 #sessionStatsLine {
     background: transparent;
     font-size: 12px;
@@ -288,7 +288,7 @@
 }
 /* 代码块、正文视图（#agentProse）、思考/工具卡片正文（#agentThinkBody / #agentToolBody）
  * 的滚动条都不再单独写规则：scrollbars.qss 里有一条全局滚动条样式，所有滚动区共用。
- * 只是这些控件仍要在建好之后调 Theme::repolishScrollArea()（见该函数注释）。 */
+ * 只是这些控件仍要在建好之后调 ThemeManager::instance().repolishScrollArea()（见该函数注释）。 */
 
 /* ===== AgentMessageUnit.cpp 的正文视图（QTextBrowser，#agentProse）===== */
 /* 正文视图自带横向滚动条（防止极端 HTML 撑宽）；纵向在 createRichPart() 里设为
