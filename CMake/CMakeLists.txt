@@ -181,6 +181,9 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/src/ExtensionSystem/DllCaller.cpp"
 		"${DSHHUB_ROOT}/src/ExtensionSystem/ComCaller.cpp"
 		"${DSHHUB_ROOT}/src/ExtensionSystem/ClientExtension.cpp"
+		# ClientExtension.cpp 引用了 UiStage::releaseForOwner（卸载扩展时强制收回架空），
+		# 所以测试目标也必须编它，否则 LNK2019。
+		"${DSHHUB_ROOT}/src/common/appearance/UiStage.cpp"
 		"${DSHHUB_ROOT}/src/network/DshEventParser.cpp"
 		"${DSHHUB_ROOT}/src/common/util/CodeHighlighter.cpp"
 		"${DSHHUB_ROOT}/src/common/util/MarkdownPreprocess.cpp"
@@ -192,7 +195,7 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/src/common/session/AgentPresetService.cpp"
 		"${DSHHUB_ROOT}/src/common/settings/ClientSettings.cpp"
 		"${DSHHUB_ROOT}/src/common/util/Logger.cpp"
-		"${DSHHUB_ROOT}/src/common/Appearance/TranslationManager.cpp"
+		"${DSHHUB_ROOT}/src/common/appearance/TranslationManager.cpp"
 		"${DSHHUB_ROOT}/src/ui/TranslationUi.cpp"
 		"${DSHHUB_ROOT}/src/core/ServerManager.cpp"
 		"${DSHHUB_ROOT}/src/common/extension/ExtensionRegistry.cpp")

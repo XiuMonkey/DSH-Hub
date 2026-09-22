@@ -8,6 +8,10 @@
 // 本窗口实现其中的 VirtualWindow，插件按 index 取到本对象后 qobject_cast 成接口再用。
 #include "VirtualClass/VirtualCommon.h"
 
+// 架空（VirtualShell）的让渡动作本体。放在 common/appearance 下是因为
+// WindowFrame 也要问它（遮罩范围 / 窗口条命中测试），见 UiStage.h 的文件头。
+#include "common/appearance/UiStage.h"
+
 #include <QMainWindow>
 #include <QProcess>
 #include <QString>
@@ -42,10 +46,10 @@ class QScrollArea;
 class QTimer;
 class LoadMoreButton;
 
-class DSHHub : public QMainWindow, public VirtualWindow
+class DSHHub : public QMainWindow, public VirtualWindow, public VirtualShell
 {
 	Q_OBJECT
-		Q_INTERFACES(VirtualWindow)
+		Q_INTERFACES(VirtualWindow VirtualShell)
 
 public:
 	explicit DSHHub(QWidget* parent = nullptr,
@@ -84,6 +88,33 @@ public:
 	//    只有最后一个 release 的才真正隐藏。
 	void ExternalShowOverlay(QWidget* popup) override;
 	void ExternalHideOverlay(QWidget* popup) override;
+
+	// ------------------------------------------------------------------
+	// VirtualShell 接口的实现（"架空原 UI"）—— 全部只有一行转发
+	// ------------------------------------------------------------------
+	// 宿主侧刻意**不在本类里写任何逻辑**：让渡动作（摘原生客户区、建舞台、
+	// 收宿主浮层、窗口条登记）全在 common/appearance/UiStage.cpp。
+	// 这里只做三件事：接上接口、把 owner 从 char* 转成 QString、转发。
+	// 所以本文件相对"没有架空功能"的版本只多了这几行 + 一个基类。
+	//
+	// 内联定义在这里而不是另开 .cpp：这 4 个都是单行转发，另开一个编译单元
+	// 只会多一份样板（也省掉往 .vcxproj 里再登一个源文件）。
+	QWidget* ExternalAcquireStage(const char* owner) override
+	{
+		return (owner && *owner) ? UiStage::acquire(this, QString::fromUtf8(owner)) : nullptr;
+	}
+	bool ExternalReleaseStage(const char* owner) override
+	{
+		return (owner && *owner) ? UiStage::release(this, QString::fromUtf8(owner)) : false;
+	}
+	bool ExternalStageAcquired() override
+	{
+		return UiStage::isTakenOver(this);
+	}
+	void ExternalSetCaptionBand(int top, int height) override
+	{
+		UiStage::setCaptionBand(this, top, height);
+	}
 
 signals:
 	void initializationComplete();

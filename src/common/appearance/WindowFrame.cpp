@@ -7,6 +7,10 @@
 
 #include "common/appearance/WindowFrame.h"
 
+// 架空（VirtualShell）：本文件只在两处问它 —— 遮罩覆盖范围、窗口条命中测试。
+// 方向是 common/appearance → common/appearance，不引入跨层依赖。
+#include "common/appearance/UiStage.h"
+
 #include <QByteArray>
 #include <QHash>
 #include <QLayout>
@@ -90,6 +94,19 @@ namespace
 		if (titleBar && titleBar->isVisible()) {
 			const QRect titleRect(titleBar->mapTo(window, QPoint(0, 0)), titleBar->size());
 			if (titleRect.contains(pos) && !isWindowControlAt(window, pos))
+				return HTCAPTION;
+		}
+
+		// 2b) 架空（UiStage）时原生标题栏被藏起来了，回落到**扩展登记的自绘窗口条**。
+		//     没有这条回落，扩展自绘的界面就拖不动、双击不最大化、贴边不吸附 ——
+		//     它只能靠 Alt+Space 挪窗口，等于窗口级交互全丢。
+		//     isWindowControlAt 那套 dshWindowControl 动态属性约定照旧生效，
+		//     所以扩展自己的最小化 / 关闭按钮仍然点得到。
+		int captionTop = 0;
+		int captionHeight = 0;
+		if (UiStage::captionBand(window, &captionTop, &captionHeight)) {
+			const QRect band(0, captionTop, window->width(), captionHeight);
+			if (band.contains(pos) && !isWindowControlAt(window, pos))
 				return HTCAPTION;
 		}
 #else
@@ -308,6 +325,13 @@ namespace WindowFrame
 			return QRect();
 
 		QRect area = host->rect();
+
+		// 架空（UiStage）时"标题栏以下"这个概念不成立：整块客户区都是扩展的画布，
+		// 所以遮罩要铺满。不回退的话，扩展弹出自己的窗口时遮罩会短一截，
+		// 顶部留出一条没被压暗的缝（那一截本来是为宿主自绘标题栏让出来的）。
+		if (UiStage::isTakenOver(host))
+			return area;
+
 		const QWidget* bar = host->findChild<QWidget*>(QLatin1String(kTitleBarObjectName));
 		if (bar) {
 			// 标题栏底边在宿主坐标系里的 y（标题栏挂在中央容器的布局里，不能直接读几何）

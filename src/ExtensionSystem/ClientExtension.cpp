@@ -2,6 +2,9 @@
 
 #include "core/DshHostPlugin.h"
 
+// 架空（VirtualShell）的兜底收台，见下面 remove() 里那段说明
+#include "common/appearance/UiStage.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -37,6 +40,14 @@ namespace ClientExtension
 		// 所以老插件没有它也不会踩空 vtable 槽位，宿主用 indexOfMethod 一查就知道）。
 		// 有它就说明作者保证：invoke 之后，宿主再也不会用到插件的任何对象。
 		const char* const kDetachSlot = "detachHost()";
+
+		// 插件可选实现的"我是谁"槽（同一套元对象层字符串契约，零 ABI 变更）。
+		// 宿主在 attachHost() 之前推一次本扩展的**安装目录名**。
+		// 为什么需要：架空（VirtualShell::ExternalAcquireStage）要求 owner 等于安装名，
+		// 宿主才能做所有权校验，并在**卸载时把这个扩展占的台强制收回** ——
+		// 那件事不能指望插件自觉（它崩了/忘了就会留下一个 vtable 指向已解映射内存的
+		// 控件，unload() 之后碰一下就崩）。有了这个槽，插件就不必硬编码自己的名字。
+		const char* const kIdentitySlot = "setHostIdentity(QString)";
 
 		bool onGuiThread()
 		{
@@ -158,6 +169,13 @@ namespace ClientExtension
 				return false; // loader 留在 qApp 下，随进程一起走
 			}
 
+			// 先把身份交给插件（可选槽；老插件没有它，indexOfMethod 一查便知，
+			// 不做任何事，也不会踩空槽位）。插件要架空就必须知道自己的安装名。
+			if (root->metaObject()->indexOfMethod(kIdentitySlot) >= 0) {
+				QMetaObject::invokeMethod(root, "setHostIdentity", Qt::DirectConnection,
+					Q_ARG(QString, name));
+			}
+
 			plugin->attachHost();
 			g_loadedNames.append(name);
 			qInfo("[ClientExtension] loaded: name=%s dll=%s", qPrintable(name), qPrintable(fileName));
@@ -250,6 +268,17 @@ namespace ClientExtension
 					" falling back to mark + sweep", qPrintable(name), kDetachSlot);
 			}
 		}
+
+		// 1b) 宿主**强制收回架空**：不管插件有没有 detachHost()、有没有自己还台，
+		//     这里都由宿主收一遍。为什么必须由宿主做：
+		//       · 不能指望插件自觉 —— 它崩了 / 忘了，客户区就一直停在它的画面上，
+		//         而且"已卸载"的扩展还占着界面，用户只能重启；
+		//       · 幂等 —— 插件自己的 detachHost() 里已经调过 ExternalReleaseStage
+		//         的话，这里是空操作（owner 已清空）。
+		//     位置刻意放在 unload() **之后**：release() 只是把舞台 hide() 掉、
+		//     不会去碰扩展留在舞台里的控件（那些 vtable 可能已经解映射，碰一下就崩）。
+		if (const int stages = UiStage::releaseForOwner(name); stages > 0)
+			qInfo("[ClientExtension] %s: 宿主强制收回架空（%d 个窗口）", qPrintable(name), stages);
 
 		// 2) 删判据文件（不是可执行文件、没被锁，必定成功）。删掉即"已卸载"：
 		//    不再出现在已安装列表里，下次启动也不会被装载。

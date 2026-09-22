@@ -118,6 +118,7 @@
     <ClCompile Include="src\ExtensionSystem\DllCaller.cpp" />
     <ClCompile Include="src\ExtensionSystem\ComCaller.cpp" />
     <ClCompile Include="src\ExtensionSystem\ClientExtension.cpp" />
+    <ClCompile Include="src\common\appearance\UiStage.cpp" />
     <ClCompile Include="src\network\DshEventParser.cpp" />
     <ClCompile Include="src\common\util\CodeHighlighter.cpp" />
     <ClCompile Include="src\common\util\MarkdownPreprocess.cpp" />
@@ -129,7 +130,7 @@
     <ClCompile Include="src\common\session\AgentPresetService.cpp" />
     <ClCompile Include="src\common\settings\ClientSettings.cpp" />
     <ClCompile Include="src\common\util\Logger.cpp" />
-    <ClCompile Include="src\common\Appearance\TranslationManager.cpp" />
+    <ClCompile Include="src\common\appearance\TranslationManager.cpp" />
     <ClCompile Include="src\ui\TranslationUi.cpp" />
     <ClCompile Include="src\core\ServerManager.cpp" />
     <ClCompile Include="src\common\extension\ExtensionRegistry.cpp" />
