@@ -15,11 +15,6 @@ void SessionPrefetcher::setApi(DshApiClient* api)
 	m_api = api;
 }
 
-bool SessionPrefetcher::isPending(const QString& sessionId) const
-{
-	return m_inFlight.contains(sessionId);
-}
-
 /**
  * 预取一个会话的最近一页历史。
  *
@@ -62,9 +57,4 @@ void SessionPrefetcher::prefetch(const QString& sessionId, int throughSeq, int m
 				<< "code=" << error.code << "message=" << error.message;
 			emit prefetchFailed(sessionId, error.code, error.message);
 		});
-}
-
-void SessionPrefetcher::forget(const QString& sessionId)
-{
-	m_inFlight.remove(sessionId);
 }

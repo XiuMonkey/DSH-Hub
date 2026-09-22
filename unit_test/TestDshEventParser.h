@@ -39,9 +39,4 @@ private slots:
 	void extractToolResult_valid();
 	void extractToolResult_invalid();
 
-	void extractApproval_valid();
-	void extractApproval_missingApprovalId();
-
-	void extractQuestions_returnsOptions();
-	void extractQuestions_empty();
 };

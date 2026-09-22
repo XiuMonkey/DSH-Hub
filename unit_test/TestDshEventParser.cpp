@@ -286,7 +286,6 @@ void TestDshEventParser::extractToolResult_valid()
 	const ToolResultInfo info = extractToolResult(event);
 	QVERIFY(info.valid);
 	QCOMPARE(info.message, QStringLiteral("done"));
-	QVERIFY(info.error.isEmpty());
 }
 
 void TestDshEventParser::extractToolResult_invalid()
@@ -299,71 +298,4 @@ void TestDshEventParser::extractToolResult_invalid()
 	const ToolResultInfo info = extractToolResult(event);
 	QVERIFY(!info.valid);
 	QVERIFY(info.message.isEmpty());
-	QVERIFY(info.error.isEmpty());
-}
-
-void TestDshEventParser::extractApproval_valid()
-{
-	const QJsonObject payload = objectFromJson(R"json({
-        "sessionId": "sess-1",
-        "approvalId": "appr-1",
-        "toolName": "run_command",
-        "reason": "needs permission"
-    })json");
-
-	const ApprovalInfo info = extractApproval(payload);
-	QVERIFY(info.valid);
-	QCOMPARE(info.sessionId, QStringLiteral("sess-1"));
-	QCOMPARE(info.approvalId, QStringLiteral("appr-1"));
-	QCOMPARE(info.toolName, QStringLiteral("run_command"));
-	QCOMPARE(info.reason, QStringLiteral("needs permission"));
-}
-
-void TestDshEventParser::extractApproval_missingApprovalId()
-{
-	const QJsonObject payload = objectFromJson(R"json({
-        "sessionId": "sess-1",
-        "toolName": "run_command"
-    })json");
-
-	const ApprovalInfo info = extractApproval(payload);
-	QVERIFY(!info.valid);
-	QCOMPARE(info.sessionId, QStringLiteral("sess-1"));
-	QVERIFY(info.approvalId.isEmpty());
-}
-
-void TestDshEventParser::extractQuestions_returnsOptions()
-{
-	const QJsonObject payload = objectFromJson(R"json({
-        "questions": [
-            {
-                "id": "q1",
-                "question": "Choose an option",
-                "detail": "detail text",
-                "multiSelect": true,
-                "options": [
-                    { "label": "A" },
-                    { "label": "B" }
-                ]
-            }
-        ]
-    })json");
-
-	const QList<QuestionInfo> questions = extractQuestions(payload);
-	QCOMPARE(questions.size(), 1);
-	const QuestionInfo& info = questions.first();
-	QCOMPARE(info.id, QStringLiteral("q1"));
-	QCOMPARE(info.question, QStringLiteral("Choose an option"));
-	QCOMPARE(info.detail, QStringLiteral("detail text"));
-	QVERIFY(info.multiSelect);
-	QCOMPARE(info.options, QStringList() << QStringLiteral("A") << QStringLiteral("B"));
-}
-
-void TestDshEventParser::extractQuestions_empty()
-{
-	const QJsonObject payload = objectFromJson(R"json({
-        "questions": []
-    })json");
-
-	QVERIFY(extractQuestions(payload).isEmpty());
 }

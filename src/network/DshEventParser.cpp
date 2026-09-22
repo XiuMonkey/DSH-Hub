@@ -151,43 +151,6 @@ ToolResultInfo extractToolResult(const QJsonObject& event)
 	ToolResultInfo info;
 	const QJsonObject data = event.value(QStringLiteral("data")).toObject();
 	info.message = data.value(QStringLiteral("message")).toString();
-	info.error = data.value(QStringLiteral("error")).toString();
-	info.valid = !info.message.isEmpty() || !info.error.isEmpty();
+	info.valid = !info.message.isEmpty();
 	return info;
-}
-
-ApprovalInfo extractApproval(const QJsonObject& payload)
-{
-	ApprovalInfo info;
-	info.sessionId = payload.value(QStringLiteral("sessionId")).toString();
-	info.approvalId = payload.value(QStringLiteral("approvalId")).toString();
-	info.toolName = payload.value(QStringLiteral("toolName")).toString();
-	info.reason = payload.value(QStringLiteral("reason")).toString();
-	info.valid = !info.sessionId.isEmpty() && !info.approvalId.isEmpty();
-	return info;
-}
-
-QList<QuestionInfo> extractQuestions(const QJsonObject& payload)
-{
-	QList<QuestionInfo> result;
-	const QJsonArray questions = payload.value(QStringLiteral("questions")).toArray();
-
-	for (const auto& questionValue : questions) {
-		const QJsonObject question = questionValue.toObject();
-		QuestionInfo info;
-		info.id = question.value(QStringLiteral("id")).toString();
-		info.question = question.value(QStringLiteral("question")).toString();
-		info.detail = question.value(QStringLiteral("detail")).toString();
-		info.multiSelect = question.value(QStringLiteral("multiSelect")).toBool();
-
-		const QJsonArray options = question.value(QStringLiteral("options")).toArray();
-		for (const auto& optionValue : options) {
-			const QJsonObject option = optionValue.toObject();
-			info.options << option.value(QStringLiteral("label")).toString();
-		}
-
-		result.append(info);
-	}
-
-	return result;
 }

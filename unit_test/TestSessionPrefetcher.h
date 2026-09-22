@@ -18,7 +18,4 @@ private slots:
 
 	void defaultState();
 	void setApi();
-	void isPendingDefault();
-	void forgetNonexistent();
-	void isPendingAfterForget();
 };

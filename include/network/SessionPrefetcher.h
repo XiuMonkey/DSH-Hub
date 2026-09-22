@@ -24,14 +24,11 @@ public:
 	// 绑定 API 客户端（发出请求前设置即可）。
 	void setApi(DshApiClient* api);
 
-	// 该会话是否已有结果或在途（避免重复请求）。
-	bool isPending(const QString& sessionId) const;
 
 	// 预取一个会话的最近一页历史。throughSeq 取 session/list 行的 projections.asOfSeq。
 	void prefetch(const QString& sessionId, int throughSeq, int maxMessages = 20);
 
 	// 会话已打开/删除时清掉在途标记（迟到的结果仍会送去入库）。
-	void forget(const QString& sessionId);
 
 signals:
 	// 某个会话的一页历史已到。
