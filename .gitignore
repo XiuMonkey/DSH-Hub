@@ -10,12 +10,13 @@ DevLog/
 
 # Build output
 x64/
+ReleaseBuild/
 build/
 Debug/
 Release/
 DSH Hub/
 DSH Hub.Tests/
-resources/server/
+assets/resources/server/
 test extension/
 *.exe
 *.dll
@@ -31,10 +32,10 @@ qrc_*.cpp
 ui_*.h
 
 # Compiled translation binaries (rebuild from translations/*.ts)
-resources/translations/*.qm
+assets/resources/translations/*.qm
 
 # Node runtime dependencies
-resources/server/node_modules/
-resources/server/node.exe
+assets/resources/server/node_modules/
+assets/resources/server/node.exe
 
 build_smoke/
