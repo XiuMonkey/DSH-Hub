@@ -1,0 +1,47 @@
+<RCC>
+    <qresource prefix="DSHHub">
+        <file>EnterBtn.png</file>
+        <file>StopBtn.png</file>
+        <file>DSH-Hub-Logo-Tiny@2x.png</file>
+        <file>DSH-Hub-Logo-Tiny-Dark@2x.png</file>
+        <file>DSH-Hub-Icon.png</file>
+        <file>DSH-Hub-Icon-Dark.png</file>
+        <file>Setting-Icon.png</file>
+        <file>Plugin-Icon.png</file>
+        <file>Theme-Icon.png</file>
+        <file>Extension-Icon.png</file>
+        <file>highlight_rules.json</file>
+        <file alias="styles/theme-light.json">styles/theme-light.json</file>
+        <file alias="styles/theme-dark.json">styles/theme-dark.json</file>
+        <!-- 样式表：一个文件 = 一个界面/表面，文件名就是它负责的那个界面，
+             加载顺序见 ThemeManager.cpp 的 kModules（顺序即级联顺序）。
+             每个文件头部都写明「归属」，改某个界面时只动它自己那个文件。 -->
+        <file alias="styles/main-window.qss">styles/main-window.qss</file>
+        <file alias="styles/defaults.qss">styles/defaults.qss</file>
+        <file alias="styles/scrollbars.qss">styles/scrollbars.qss</file>
+        <file alias="styles/chat.qss">styles/chat.qss</file>
+        <file alias="styles/sidebar.qss">styles/sidebar.qss</file>
+        <file alias="styles/popups.qss">styles/popups.qss</file>
+        <file alias="styles/tooltip.qss">styles/tooltip.qss</file>
+        <file alias="styles/extension-manager.qss">styles/extension-manager.qss</file>
+        <file alias="styles/topbar.qss">styles/topbar.qss</file>
+        <file alias="styles/settings.qss">styles/settings.qss</file>
+        <file alias="styles/model-list.qss">styles/model-list.qss</file>
+        <file alias="styles/plugin-market.qss">styles/plugin-market.qss</file>
+        <!-- 内置语言包：随程序内置，启动时释放到外部 translations\ 目录
+             （存在则不覆盖），用户可就地改而无需重新编译。
+             由 tools\release-translations.ps1 从 translations\dshhub_*.ts 生成。
+             源码里只有 key（qtTrId），没有任何语言"免翻译"，内置这两份
+             只是保证开箱即有中英可用；其它语言从外部目录补充即可。 -->
+        <file alias="translations/dshhub_zh_CN.qm">translations/dshhub_zh_CN.qm</file>
+        <file alias="translations/dshhub_en.qm">translations/dshhub_en.qm</file>
+        <!-- 内置插件：工具过滤器（按会话隐藏模型可见的工具，见
+             resources/ToolsFilterPlugin/）。编译进 exe 是为了让内置插件不依赖
+             发布目录里的散装文件；首次启动服务端时由
+             ServerManager::ensureBuiltinPlugins() 调用 ExtensionLoader 安装到
+             <DSH_HOME>/profiles/web/node_modules/ 下。 -->
+        <file alias="ToolsFilterPlugin/package.json">ToolsFilterPlugin/package.json</file>
+        <file alias="ToolsFilterPlugin/index.js">ToolsFilterPlugin/index.js</file>
+        <file alias="ToolsFilterPlugin/example.ToolsFilterConfig.json">ToolsFilterPlugin/example.ToolsFilterConfig.json</file>
+    </qresource>
+</RCC>

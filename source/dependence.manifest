@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  私有程序集清单：让 exe 从 dependence\ 子目录解析这些 DLL。
+
+  Windows 的加载器**默认不搜索 exe 的子目录**，所以"把 dll 挪进 dependence\" 这种做法
+  单靠移动文件是不成立的（启动即 0xc0000135）。真正的机制是这一份清单：
+
+    <exe 目录>\dependence\dependence.manifest      <- 本文件（目录名必须 == 程序集 name）
+    <exe 目录>\dependence\<上面 <file> 列出的 dll>  <- 实际 DLL
+    <exe 自身 manifest 里的 <dependency> 声明>      <- 见 dependence.deps.manifest
+
+  ⚠️ 维护约定：**加/换 DLL 必须同步改下面的 <file> 列表**，漏一个就是启动失败。
+     两边要一起改的还有 source/dependence.deps.manifest 里的 version（两处必须一致）。
+
+  私有程序集刻意**不写 publicKeyToken**（那是有签名共享程序集才需要的）。
+  本工程只出 x64，所以 processorArchitecture 固定 amd64。
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="dependence" version="1.0.0.0" processorArchitecture="amd64" />
+
+  <!-- Qt 运行库 -->
+  <file name="Qt6Core.dll" />
+  <file name="Qt6Gui.dll" />
+  <file name="Qt6Widgets.dll" />
+  <file name="Qt6Network.dll" />
+  <file name="Qt6WebSockets.dll" />
+
+  <!-- MSVC 运行库（app-local 部署，exe 自身的 manifest 里没有 Microsoft.VC*.CRT 依赖） -->
+  <file name="concrt140.dll" />
+  <file name="msvcp140.dll" />
+  <file name="msvcp140_1.dll" />
+  <file name="msvcp140_2.dll" />
+  <file name="vcruntime140.dll" />
+  <file name="vcruntime140_1.dll" />
+</assembly>

@@ -1,0 +1,312 @@
+/* ==========================================================================
+ * model-list.qss — 模型列表面板（设置 → 模型列表）
+ *
+ * 归属：src/ui/ModelListPanel.cpp
+ * 约定：一个界面/表面只出现在一个文件里；别的板块的样式不要写进来。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
+ * ========================================================================== */
+/* ===== ModelListPanel.cpp（设置 → 模型列表）===== */
+#modelListPanel {
+    background: transparent;
+}
+#modelListTitle {
+    color: {{textPrimary}};
+    font-size: 14px;
+    font-weight: 600;
+}
+#modelListHint,
+#modelListStatus,
+#modelListEmpty {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+/* 列表级操作的瞬时提示（右键删除的结果），几秒后自动消失 */
+#modelListNotice {
+    background: transparent;
+    color: {{accent}};
+    font-size: 12px;
+}
+
+/* 成员行右键菜单：圆角主体 + 透明外圈（不用 QMenu，理由见 ModelListPanel.cpp） */
+#modelListContextMenu {
+    background: {{menuBg}};
+    border: 1px solid {{menuBorder}};
+    border-radius: 8px;
+}
+/* 动作行带 #modelListContextMenu 前缀以压过 defaults.qss 的通用按钮规则。
+   静止态也给底色与描边：这是菜单里唯一一项，不要做成“看不见的透明文字”。 */
+#modelListContextMenu QPushButton#modelListContextAction {
+    background: {{hoverBg}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    padding: 0 14px;
+    min-width: 0;
+    text-align: left;
+    font-size: 13px;
+    color: {{textPrimary}};
+}
+#modelListContextMenu QPushButton#modelListContextAction:hover {
+    background: {{activeBg}};
+    border-color: {{accent}};
+}
+#modelListContextMenu QPushButton#modelListContextAction:pressed {
+    background: {{border}};
+}
+#modelListContextMenu QPushButton#modelListContextAction:disabled {
+    background: transparent;
+    border-color: {{border}};
+    color: {{textTertiary}};
+}
+#modelListContextHint {
+    background: transparent;
+    color: {{textCaption}};
+    font-size: 11px;
+    padding: 2px 12px 2px 12px;
+}
+
+/* 「获取模型」取回候选后的下拉：贴在模型 ID 输入框下方、与它等宽，
+   所以按菜单（浮层）而不是按表单控件的观感来做 */
+#modelListFetchMenu {
+    background: {{menuBg}};
+    border: 1px solid {{menuBorder}};
+    border-radius: 8px;
+}
+#modelListFetchMenuContent {
+    background: transparent;
+}
+/* 滚动区自身不画背景，圆角与边框都由 #modelListFetchMenu 承担 */
+#modelListFetchScroll {
+    background: transparent;
+    border: none;
+}
+/* 选项行带 #modelListFetchMenu 前缀以压过 defaults.qss 的通用按钮规则。
+   一行一个模型 id，悬停即高亮 —— 这是下拉，选中项没有别的状态可表达。 */
+#modelListFetchMenu QPushButton#modelListFetchOption {
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    padding: 0 8px;
+    min-width: 0;
+    text-align: left;
+    font-size: 12px;
+    color: {{textPrimary}};
+}
+#modelListFetchMenu QPushButton#modelListFetchOption:hover {
+    background: {{activeBg}};
+}
+#modelListFetchMenu QPushButton#modelListFetchOption:pressed {
+    background: {{hoverBg}};
+}
+#modelListRouteHint {
+    background: transparent;
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+/* API Key 一行的引用名与“已配置/未配置”状态 */
+#modelListApiKeyRef {
+    background: transparent;
+    color: {{textCaption}};
+    font-size: 11px;
+}
+#modelListFeedback {
+    background: transparent;
+    color: {{accent}};
+    font-size: 12px;
+}
+
+/* 列表容器：只滚动，不画自己的边框（滚动条外观来自 scrollbars.qss 的全局规则） */
+#modelListScroll {
+    background: transparent;
+    border: none;
+}
+#modelListContent {
+    background: transparent;
+}
+/* 模型行容器：只给行做分组，不画东西 */
+#modelListRows {
+    background: transparent;
+}
+/* 提供方分组标题 */
+#modelListGroup {
+    background: transparent;
+    color: {{textCaption}};
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 2px 0 2px;
+}
+
+/* 一个可展开成员：卡片底 + 表头按钮 + 详情区 */
+#modelListEntry {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+}
+/* 表头带 #modelListEntry 前缀以压过 defaults.qss 的通用 QPushButton 规则 */
+#modelListEntry QPushButton#modelListEntryHeader {
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    padding: 0;
+    min-width: 0;
+    text-align: left;
+}
+#modelListEntry QPushButton#modelListEntryHeader:hover {
+    background: {{hoverBg}};
+}
+#modelListEntryName {
+    color: {{textPrimary}};
+    font-size: 14px;
+    font-weight: 500;
+}
+#modelListEntryMeta {
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+#modelListEntryBadge {
+    background: {{tagBg}};
+    color: {{accent}};
+    border-radius: 8px;
+    padding: 1px 8px;
+    font-size: 11px;
+}
+#modelListEntryChevron {
+    color: {{textCaption}};
+    font-size: 12px;
+}
+#modelListEntryDetail {
+    background: transparent;
+}
+#modelListDetailName {
+    color: {{textTertiary}};
+    font-size: 12px;
+}
+#modelListDetailValue {
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+
+/* “添加模型”按钮 */
+QPushButton#modelListAddButton {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 14px;
+    color: {{textPrimary}};
+}
+QPushButton#modelListAddButton:hover {
+    background: {{hoverBg}};
+    border-color: {{accent}};
+}
+QPushButton#modelListAddButton:disabled {
+    color: {{textTertiary}};
+    border-color: {{border}};
+}
+
+/* 拉出的新增模型表单 */
+#modelListForm {
+    background: {{inputBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+}
+#modelListFormTitle {
+    color: {{textPrimary}};
+    font-size: 13px;
+    font-weight: 600;
+}
+#modelListFieldLabel {
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+/* 表单里的输入框与下拉（同一个 objectName，两种控件各写一条） */
+#modelListForm QLineEdit#modelListField {
+    background: {{panelBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: {{textPrimary}};
+}
+#modelListForm QLineEdit#modelListField:focus {
+    border-color: {{accent}};
+}
+#modelListForm QComboBox#modelListField {
+    background: {{panelBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: {{textPrimary}};
+}
+#modelListForm QComboBox#modelListField:hover {
+    border-color: {{accent}};
+}
+#modelListForm QComboBox#modelListField::drop-down {
+    border: none;
+    width: 18px;
+}
+#modelListForm QCheckBox#modelListField {
+    color: {{textPrimary}};
+    font-size: 13px;
+}
+#modelListForm QCheckBox#modelListField::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 2px solid {{border}};
+    background: transparent;
+}
+#modelListForm QCheckBox#modelListField::indicator:hover {
+    border-color: {{textSecondary}};
+}
+#modelListForm QCheckBox#modelListField::indicator:checked {
+    border-color: {{textSecondary}};
+    background: {{textSecondary}};
+}
+/* 模型 ID 右侧的「获取模型」：读操作，所以做成次要按钮，不跟「添加」抢注意力 */
+QPushButton#modelListFetchButton {
+    background: {{panelBg}};
+    border: 1px solid {{scrollbar}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: {{textSecondary}};
+}
+QPushButton#modelListFetchButton:hover {
+    background: {{hoverBg}};
+    border-color: {{accent}};
+    color: {{textPrimary}};
+}
+QPushButton#modelListFetchButton:disabled {
+    background: transparent;
+    color: {{textTertiary}};
+    border-color: {{border}};
+}
+QPushButton#modelListSubmitButton {
+    background: {{primaryButtonBg}};
+    color: {{primaryButtonText}};
+    border: none;
+    border-radius: 8px;
+    padding: 7px 16px;
+}
+QPushButton#modelListSubmitButton:hover {
+    background: {{primaryButtonHover}};
+}
+QPushButton#modelListSubmitButton:pressed {
+    background: {{primaryButtonPressed}};
+}
+QPushButton#modelListSubmitButton:disabled {
+    background: {{primaryButtonDisabledBg}};
+    color: {{primaryButtonDisabledText}};
+}
+QPushButton#modelListCancelButton {
+    background: transparent;
+    color: {{textSecondary}};
+    border: 1px solid {{border}};
+    border-radius: 8px;
+    padding: 7px 16px;
+}
+QPushButton#modelListCancelButton:hover {
+    background: {{hoverBg}};
+}

@@ -1,0 +1,46 @@
+/* ==========================================================================
+ * extension-manager.qss — 扩展管理窗口（ExtensionManagerPopup）
+ *
+ * 归属：src/ui/ExtensionManagerPopup.cpp
+ * 约定：一个界面/表面只出现在一个文件里；别的板块的样式不要写进来。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
+ * ========================================================================== */
+/* ===== ExtensionManagerPopup.cpp ===== */
+#extPopupInstallButton, #extPopupRemoveButton, #extPopupRefreshButton {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+#extPopupInstallButton:hover, #extPopupRemoveButton:hover, #extPopupRefreshButton:hover {
+    background: {{border}};
+}
+#extPopupInstallButton:disabled, #extPopupRemoveButton:disabled, #extPopupRefreshButton:disabled {
+    color: {{textSecondary}};
+    background: {{inputBg}};
+}
+QListWidget#extPopupList {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    padding: 8px;
+    font-size: 13px;
+}
+QListWidget#extPopupList::item {
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+QListWidget#extPopupList::item:selected {
+    background: {{activeBg}};
+    color: {{textPrimary}};
+}
+QListWidget#extPopupList::item:hover {
+    background: {{hoverBg}};
+}
+#extPopupStatus {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}

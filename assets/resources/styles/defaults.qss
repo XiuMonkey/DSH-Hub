@@ -1,0 +1,34 @@
+/* ==========================================================================
+ * defaults.qss — 通用控件默认外观（各界面用更具体的选择器覆盖）
+ *
+ * 归属：全局（作用域是主窗口子树 #dshhubCentral）
+ * 约定：只放「任何地方都该长这样」的规则；某个界面的专属样式去它自己的文件。
+ *       各界面覆盖它时靠更具体的选择器（例如带 #modelListEntry 前缀）。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换），规则里不写色值。
+ * ========================================================================== */
+/* 通用输入框（作用于主窗口子树；弹窗内自定义样式优先） */
+#dshhubCentral QLineEdit {
+    background: {{panelBg}};
+    border: 1px solid {{inputBorder}};
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: {{textPrimary}};
+}
+#dshhubCentral QLineEdit:focus {
+    border-color: {{accent}};
+}
+
+/* 通用按钮 */
+#dshhubCentral QPushButton {
+    background: {{buttonBg}};
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    color: {{textPrimary}};
+}
+#dshhubCentral QPushButton:hover {
+    background: {{buttonHover}};
+}
+#dshhubCentral QPushButton:pressed {
+    background: {{buttonPressed}};
+}

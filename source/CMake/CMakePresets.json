@@ -1,0 +1,116 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "displayName": "共享设置（供各平台继承）",
+      "binaryDir": "${sourceDir}/../../build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "windows-ninja",
+      "displayName": "Windows x64 (Ninja Multi-Config, MSVC)",
+      "description": "需要 cl.exe 在 PATH（Developer PowerShell for VS）以及 ninja 在 PATH。若 Qt 不在 D:/Qt/6.11.2/msvc2022_64，改这里的 QTDIR 或加 -DCMAKE_PREFIX_PATH=<Qt 目录>。",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "environment": {
+        "QTDIR": "D:/Qt/6.11.2/msvc2022_64"
+      }
+    },
+    {
+      "name": "linux-ninja",
+      "displayName": "Linux (Ninja Multi-Config)",
+      "description": "Qt 6.5+ 需可被 find_package 找到；否则加 -DCMAKE_PREFIX_PATH=<Qt 目录>。",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "macos-ninja",
+      "displayName": "macOS (Ninja Multi-Config)",
+      "description": "Qt 6.5+ 需可被 find_package 找到；否则加 -DCMAKE_PREFIX_PATH=<Qt 目录>。",
+      "inherits": "base",
+      "generator": "Ninja Multi-Config",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-release",
+      "displayName": "Windows Release",
+      "configurePreset": "windows-ninja",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-debug",
+      "displayName": "Windows Debug",
+      "configurePreset": "windows-ninja",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux Release",
+      "configurePreset": "linux-ninja",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux Debug",
+      "configurePreset": "linux-ninja",
+      "configuration": "Debug"
+    },
+    {
+      "name": "macos-release",
+      "displayName": "macOS Release",
+      "configurePreset": "macos-ninja",
+      "configuration": "Release"
+    },
+    {
+      "name": "macos-debug",
+      "displayName": "macOS Debug",
+      "configurePreset": "macos-ninja",
+      "configuration": "Debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-release",
+      "displayName": "Windows Release 测试",
+      "configurePreset": "windows-ninja",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-debug",
+      "displayName": "Windows Debug 测试",
+      "configurePreset": "windows-ninja",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
