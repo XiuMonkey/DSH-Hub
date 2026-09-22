@@ -1,0 +1,50 @@
+# ==================================================================
+# .gitattributes —— 行尾归一
+# ==================================================================
+# 为什么需要：本地 core.autocrlf=true，而它的规则是**双向**的 ——
+#   add 时 CRLF→LF，**checkout 时 LF→CRLF**。
+# 结果是「入库的内容」与「检出到磁盘的内容」在行尾上不一致：对源码没有语义影响，
+# 但"磁盘文件 == 仓库内容"这个前提不成立 —— 用哈希做还原校验时会一直假阳。
+# 这里按扩展名把源码与文本资源钉成 eol=lf：入库 LF、检出也 LF，两边一致。
+#
+# 刻意不用 `* text=auto`：那会顺带决定二进制资源的处理方式，而本项目资源目录里
+# 混着 .png / .ico / .zip / .qm，交给自动判定不值当。二进制一律不列，走默认（不碰）。
+#
+# 另外刻意**不列** .vcxproj / .slnx / .filters：那三个是 Visual Studio 自己写的，
+# 保持默认处理，免得和 IDE 打架（它们本来也不参与"逐字节还原"这类校验）。
+#
+# 加完本文件后如果发现某些已入库文件显示成"已修改"，那是索引里的行尾还是旧规整
+# 结果，跑一次 `git add --renormalize .` 重新规整即可（内容不变，只动行尾）。
+
+# ---- 本文件自己 ----
+# 不写这条的话，autocrlf 会把 .gitattributes 本身检出成 CRLF —— 一个钉行尾的
+# 文件自己带 CRLF，属自相矛盾（实测：加完前面几条，git 仍会警告这一条）。
+.gitattributes text eol=lf
+
+# ---- C++ 源码与头文件 ----
+*.h        text eol=lf
+*.hpp      text eol=lf
+*.c        text eol=lf
+*.cc       text eol=lf
+*.cpp      text eol=lf
+
+# ---- Qt ----
+*.qml      text eol=lf
+*.qrc      text eol=lf
+*.qss      text eol=lf
+*.ts       text eol=lf
+*.ui       text eol=lf
+
+# ---- 文本资源与文档 ----
+*.json     text eol=lf
+*.json5    text eol=lf
+*.md       text eol=lf
+*.txt      text eol=lf
+
+# ---- 脚本 ----
+# 不含 .bat：批处理在 LF 下的行为（尤其配合 label/goto）不如 CRLF 可靠
+*.sh       text eol=lf
+*.ps1      text eol=lf
+*.js       text eol=lf
+*.mjs      text eol=lf
+*.py       text eol=lf
