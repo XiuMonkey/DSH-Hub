@@ -1,27 +1,8 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// AgentPresetService.h
-// ------------------------------------------------------------------
-// Agent 预设的“功能逻辑”：
-//   - 通过 agentPresets/list 拉取预设；
-//   - 解析成结构化列表（id / 名称 / 是否服务端默认）；
-//   - 从列表里算出“当前该显示哪一个”；
-//   - 把某个预设写进服务端设置文档，作为“此后新建会话”的默认。
-//
-// “默认预设”是**服务端的一个设置字段**，不是预设自身的属性、也不是客户端的记忆：
-//   * 读：agentPresets/list 每行带的 isDefault（服务端按 settings 里那个字段算的）；
-//   * 写：settings/update(ns = "agent-presets", patch = { default: <id> })，
-//     落盘到 <DSH_HOME>/settings.yaml。
-// 这与原版 web 客户端完全一致（见 dsh-client-ui-agent-preset 的 writeDefaultPreset），
-// 所以客户端这边**不保存任何一份本地副本**。
-//
-// 生效范围由服务端定：默认值只在**新建会话**时被解析成初值；
-// 已有会话各自的预设记录在会话日志里（头部 + agent-preset/selected 事件），
-// 服务端不会回头改写它们。也就是说改默认“只影响新会话”。
-//
-// UI 只负责把结果填进列表控件并把选中项显示到按钮上。
-// ------------------------------------------------------------------
+// Agent 预设的功能逻辑：agentPresets/list 拉取并解析（id / 名称 / 是否服务端默认）、算出当前该显示哪一个、把某个预设写成“此后新建会话”的服务端默认。
+// “默认预设”是**服务端设置字段**（settings/update ns = "agent-presets" 的 patch { default: <id> }，落盘 <DSH_HOME>/settings.yaml），客户端不保存任何本地副本。
+// 生效范围：默认值只在新建会话时被解析成初值，已有会话的预设记录在各自会话日志里，服务端不回头改写。
 
 #include "network/DshApiClient.h"
 
@@ -51,8 +32,7 @@ namespace AgentPresetService
 		return patch;
 	}
 
-	// 解析 agentPreset.list 的返回体（presets 数组）。
-	// 纯函数且不依赖 DshApiClient，因此 inline 在头里（便于单测）。
+	// 解析 agentPreset.list 的返回体（presets 数组）；纯函数且不依赖 DshApiClient，故 inline 在头里（便于单测）。
 	inline QVector<AgentPreset> parsePresets(const QJsonObject& value)
 	{
 		QVector<AgentPreset> presets;
@@ -78,13 +58,7 @@ namespace AgentPresetService
 		return presets;
 	}
 
-	// 决定初始选中项：本地记住的 id 优先，其次服务端默认，最后退回第一项。
-	// 列表为空时返回空串。
-	//
-	// 注：本项目的本地记忆已随“默认预设归服务端”一并去掉（调用方传空串），
-	// 所以实际生效的顺序就是“服务端 isDefault → 第一项”。保留这个参数是为了
-	// 让本函数仍可复用于“暂存选择”那类场景（原版新建会话 chip 就是暂存的，
-	// 用完即清、刻意不写默认值）。
+	// 初始选中项：本地记住的 id 优先，其次服务端默认，最后退回第一项；列表为空返回空串（本项目本地记忆已去掉、调用方传空串，故实际顺序就是“isDefault → 第一项”）。
 	inline QString resolveSelectedId(const QVector<AgentPreset>& presets, const QString& savedPresetId)
 	{
 		if (presets.isEmpty())
@@ -104,7 +78,6 @@ namespace AgentPresetService
 				return preset.id;
 		}
 
-		// 记住的预设已不存在（或服务端没有默认项）→ 退回列表第一项
 		return presets.first().id;
 	}
 
@@ -114,12 +87,7 @@ namespace AgentPresetService
 		const std::function<void(const QVector<AgentPreset>& presets)>& onLoaded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);
 
-	// 把某个预设设为服务端默认（原版 web 的“设为默认”就是这一次写入）。
-	//
-	// 只影响此后**新建**的会话：已有会话的预设记录在各自会话日志里，服务端不回头改写。
-	// 服务端对该 namespace 只有 schema 约束（{ default: string }），**不校验 id 是否存在**，
-	// 所以调用方必须保证 presetId 来自 agentPresets/list 的名单 —— 否则之后每一次
-	// 新建会话都会以 agent-preset/not-found 失败。本函数只挡空串。
+	// 把某个预设设为服务端默认；只影响此后新建的会话。服务端对该 namespace 只有 schema 约束（{ default: string }）、**不校验 id 是否存在**，故 presetId 必须来自 agentPresets/list 名单，否则之后每次新建会话都会以 agent-preset/not-found 失败；本函数只挡空串。
 	void persistDefault(
 		DshApiClient* api,
 		const QString& presetId,

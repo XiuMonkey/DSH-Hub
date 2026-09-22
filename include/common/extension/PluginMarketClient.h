@@ -1,19 +1,7 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// PluginMarketClient.h
-// ------------------------------------------------------------------
-// 插件市场（/dsh-market/*）的 HTTP 客户端，从 PluginsManager 弹窗中抽出。
-// 只负责请求与解析，不认识任何控件；失败时自动附带服务端诊断日志。
-//
-// 接口一览：
-//   GET  /dsh-market/registry    -> registryLoaded(plugins, source)
-//   GET  /dsh-market/installed   -> installedLoaded(installed)
-//   POST /dsh-market/install     -> operationCompleted / operationFailed
-//   POST /dsh-market/uninstall
-//   POST /dsh-market/update
-//   POST /dsh-market/restart
-// ------------------------------------------------------------------
+// 插件市场（/dsh-market/*）的 HTTP 客户端（无控件）：只负责请求与解析，失败时自动附带服务端诊断日志。
+// GET registry/installed 与 POST install/uninstall/update/restart；分别以 registryLoaded / installedLoaded / operationCompleted / operationFailed 通知。
 
 #include <QJsonArray>
 #include <QJsonObject>

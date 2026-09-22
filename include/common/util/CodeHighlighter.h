@@ -1,11 +1,6 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// CodeHighlighter.h
-// ------------------------------------------------------------------
-// 根据 highlight_rules.json 中的规则给代码块做语法高亮。
-// 规则在初始化时一次性加载，高亮结果会缓存，避免重复处理。
-// ------------------------------------------------------------------
+// CodeHighlighter：按 highlight_rules.json 的规则给代码块做语法高亮，初始化时一次性加载规则并缓存结果。
 
 #include <QHash>
 #include <QMutex>
@@ -40,7 +35,6 @@ private:
 
 	QHash<QString, QVector<Rule>> m_rules;
 	mutable QHash<QString, QString> m_cache;
-	// 高亮可能被渲染 worker 线程并发调用：规则/缓存读写统一加锁。
-	// 用递归锁：loadFromFile 持锁期间会调用同样加锁的 clearCache()。
+	// ⚠️ 高亮会被渲染 worker 线程并发调用，规则/缓存读写统一加锁；用递归锁是因为 loadFromFile 持锁期间会调用同样加锁的 clearCache()。
 	mutable QRecursiveMutex m_mutex;
 };

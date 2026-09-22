@@ -1,53 +1,8 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// ModelSelectionService.h
-// ------------------------------------------------------------------
-// 会话级“模型 / 思考档位”选择的纯逻辑（不依赖任何 Qt Widget），
-// 供输入框底部的模型选择控件与“设置 → 模型列表”面板使用：
-//   - 解析 session/modelCatalog 的返回体（部署默认选择、可路由提供方、按提供方分组的
-//     模型目录、每个确切模型由适配器公布的思考档位）；
-//   - 解析 session.selectModel 的返回体；
-//   - 派生查询：当前模型的可用档位、当前档位名；
-//   - 解析 llm/listConfigurableProviders（可配置提供方目录）；
-//   - 解析 settings.describe（各 settings 命名空间的分层视图）；
-//   - 把「目录里的模型」与「settings 里声明的模型条目」join 成一行展示数据；
-//   - 通过 settings.mutate 向服务端新增模型条目。
-//
-// 对应 harness 协议（dsh 0.1.5 的 typert 描述符；端点是 `<namespace>/<method>`，
-// 请求体调用方只需给 args 内容，信封由 DshApiClient::callMethod 负责包）：
-//   session/modelCatalog  {} -> { default:{provider,model,reasoningEffort?},
-//                                 routableProviders:[id],
-//                                 groups:[{id,name,models:[{id,name,description?,
-//                                          reasoning:{efforts,defaultEffort?}}]}],
-//                                 failures:[{id,name,message}] }
-//                        注意：catalog 是**部署级**的，default 是部署默认选择；
-//                        会话自己的选择在 session/list 行的
-//                        projections.values.modelSelection（next → lastUsed）里。
-//   session/selectModel   { request:{ sessionId, provider, model, reasoningEffort? } } -> { selected }
-//   llm/listConfigurableProviders {} -> [{ provider, displayName, settingsNs,
-//                                         settingsPath, declared?, error? }]（**裸数组**）
-//   llm/discoverModels    { settingsNs, request:{ provider?, baseURL?, api?, apiKey? } }
-//                         -> [{ id, name?, contextWindow?, maxTokens? }]（**裸数组**）
-//                         "这条路由能服务哪些模型"由适配器回答：命名一条适配器认得的
-//                         路由就用它自己的目录（不联网），否则要 baseURL 才去问端点。
-//                         没注册发现的命名空间会以 llm/model-discovery-rejected 失败。
-//   settings/describe     {} -> { writable, hasDocument, namespaces: [{ ns, schema,
-//                                         value, base?, user?, applies, secrets,
-//                                         revision }] }
-//   settings/mutate       { ns, ops: [{ op, path, value? }], expectedRevision? } -> 命名空间视图
-//   其中 model.reasoning = { efforts: [{ id, name, description? }], defaultEffort? }
-// 回包里按提供方统计的 failures（某个提供方目录加载失败）也会被解析，
-// 供“模型列表”展示加载失败的来源。
-//
-// 「省略 reasoningEffort」表示使用提供方默认档位，与显式选中同名档位
-// 在请求上等价；界面因此把空值显示为该模型的 defaultEffort。
-//
-// 模型信息是服务端的责任：模型目录由适配器公布（session/modelCatalog），
-// 用户新增的模型写在 settings 文档里（llm-deepseek 整节即 profile，
-// 因此 settingsPath 为空；llm-pi-ai 则是 providers.<路由>）。本文件只做
-// “读服务端 / 写服务端”的解析与拼装，不持有任何自己的模型清单。
-// ------------------------------------------------------------------
+// 会话级“模型 / 思考档位”选择的纯逻辑（无 Qt Widget 依赖）：解析 session/modelCatalog、session/selectModel、llm/listConfigurableProviders、llm/discoverModels、settings/describe、credentials/describe 的回包，把「目录里的模型」与「settings 声明的条目」join 成展示行，并通过 settings/mutate 写回新增模型。
+// 协议要点：端点是 `<namespace>/<method>`、请求体只给 args（信封由 DshApiClient::callMethod 包）；session/modelCatalog 是**部署级**的（default = 部署默认选择），会话自己的选择在 session/list 行的 projections.values.modelSelection（next → lastUsed）；llm/listConfigurableProviders 与 llm/discoverModels 都返回**裸数组**。
+// 模型信息归服务端：目录由适配器公布，用户新增的写在 settings 文档里（llm-deepseek 整节即 profile 故 settingsPath 为空，llm-pi-ai 是 providers.<路由>），本文件不持有自己的模型清单。
 
 #include "network/DshApiClient.h"
 
@@ -75,13 +30,7 @@ struct ReasoningMetadata
 	QString defaultLevelId; // 适配器报告的默认档位（可空）
 };
 
-// 适配器没有为某个模型公布思考档位时，界面提供的通用兜底档位。
-//
-// 四档 off/low/high/max：harness 的 THINKING_LEVELS 里最通用的一组，多数路由都认。
-// 有了它，未公布档位的模型仍能调档，而不是只剩一句“未公布”。
-//
-// 返回静态引用：currentLevel() 会返回指向其中元素的指针，地址必须稳定，
-// 不能每次现造一个临时 vector。
+// 适配器没有为某个模型公布思考档位时界面提供的通用兜底四档（off/low/high/max，harness 的 THINKING_LEVELS 里最通用的一组，多数路由都认）；返回静态引用 —— currentLevel() 会返回指向其中元素的指针，地址必须稳定。
 inline const QVector<ReasoningLevel>& fallbackReasoningLevels()
 {
 	static const QVector<ReasoningLevel> levels = [] {
@@ -160,8 +109,7 @@ struct SettingsNamespace
 	QJsonObject user;    // 用户层（可能为空对象 = 没有用户配置）
 	int revision = 0;
 
-	// 按路径取子对象；路径为空时返回自身，找不到（或中间层不存在）返回空对象。
-	// value 与 user 两层共用这一份实现，避免各写一遍路径遍历。
+	// 按路径取子对象；路径为空返回自身，找不到（或中间层不存在）返回空对象；value 与 user 两层共用这一份实现。
 	static QJsonObject objectAtPath(const QJsonObject& root, const QStringList& path)
 	{
 		QJsonObject current = root;
@@ -177,9 +125,7 @@ struct SettingsNamespace
 	QJsonObject userAt(const QStringList& path) const { return objectAtPath(user, path); }
 };
 
-// settings 里显式声明的一个模型条目。
-// 条目之外的未知字段不在结构体里保存：写回时用的是命名空间里那份原始数组
-// （见 modelsForWrite），没被解析的字段因此天然不会丢。
+// settings 里显式声明的一个模型条目；未知字段不入结构体，写回时用的是命名空间里那份原始数组（见 modelsForWrite），因此没被解析的字段天然不会丢。
 struct ConfiguredModel
 {
 	QString id;
@@ -193,8 +139,7 @@ struct ConfiguredModel
 	QVector<QString> reasoningEfforts; // reasoningEfforts 的键（off/minimal/low/medium/high/xhigh/max）
 };
 
-// llm/discoverModels 回来的一个候选模型：端点自称能服务的模型。
-// 除 id 之外都是可选的——多数端点只报 id，容量要用户自己补。
+// llm/discoverModels 回来的候选模型（端点自称能服务的）；除 id 之外都可选 —— 多数端点只报 id，容量要用户自己补。
 struct DiscoveredModel
 {
 	QString id;
@@ -261,8 +206,7 @@ struct SessionModelDirectory
 		return option ? option->reasoning.levels : QVector<ReasoningLevel>();
 	}
 
-	// 界面真正可以选的档位：适配器公布优先；一个都没公布时用通用兜底四档，
-	// 这样“未公布档位”的模型也能调档（见 fallbackReasoningLevels）。
+	// 界面真正可以选的档位：适配器公布优先，一个都没公布时用通用兜底四档（见 fallbackReasoningLevels）。
 	QVector<ReasoningLevel> selectableLevels() const
 	{
 		const QVector<ReasoningLevel> published = currentLevels();
@@ -281,7 +225,6 @@ struct SessionModelDirectory
 		if (!option)
 			return nullptr;
 
-		// 公布为空时改用兜底四档（两者地址都稳定，可以安全取元素指针）
 		const QVector<ReasoningLevel>& levels = option->reasoning.levels.isEmpty()
 			? fallbackReasoningLevels()
 			: option->reasoning.levels;
@@ -344,15 +287,11 @@ struct ServerModelView
 	}
 };
 
-// 写回地址：models.mutate 用
-// ------------------------------------------------------------------
-
 // 某个凭据引用在服务端的状态（credentials.describe 的一行）
 struct CredentialStatus
 {
 	QString ref;
-	// 服务端是否回报了这个引用。false = 还没查回来，或回包没带它。
-	// 界面据此区分“还没问到”与“问到了但只读”——不这样区分就会把未知当只读。
+	// 服务端是否回报了这个引用（false = 还没查回来，或回包没带它）；界面据此区分“还没问到”与“问到了但只读”，不这样区分就会把未知当只读。
 	bool known = false;
 	bool configured = false; // 该引用是否已有值
 	bool writable = false;   // 该引用当前是否可写（部署可能把它交给环境变量管理）
@@ -370,18 +309,14 @@ struct AddModelRequest
 	bool hasMaxTokens = false;
 	int maxTokens = 0;
 
-	// llm-pi-ai 的 reasoningEfforts：空 = 不声明（沿用同 id 已安装条目的档位）
-	// reasoningDisabled = true 时写成 false，表示该模型明确不提供档位
+	// llm-pi-ai 的 reasoningEfforts：空 = 不声明（沿用同 id 已安装条目的档位）；reasoningDisabled = true 时写成 false，表示该模型明确不提供档位。
 	bool reasoningDisabled = false;
 	QVector<QString> reasoningEfforts;
 
 	// llm-deepseek 的 inputModalities
 	bool imageInput = false;
 
-	// 凭据（API Key）随这次新增一起处理：
-	//   apiKeyRef  = 该路由 profile 的 apiKeyEnv，没有时用 <路由>_API_KEY 派生；
-	//   recordApiKeyEnv = profile 原本没写 apiKeyEnv，需要把派生出来的引用记进去，
-	//                     否则这条路由不会去用这把 key。
+	// 凭据（API Key）随这次新增一起处理：apiKeyRef = 该路由 profile 的 apiKeyEnv（没有时用 <路由>_API_KEY 派生）；recordApiKeyEnv = profile 原本没写 apiKeyEnv、需要把派生出来的引用记进去，否则这条路由不会去用这把 key。
 	QString apiKeyRef;
 	bool recordApiKeyEnv = false;
 
@@ -425,7 +360,6 @@ namespace ModelSelectionService
 		return metadata;
 	}
 
-	// 解析 groups 数组
 	inline QVector<ModelProviderGroup> parseGroups(const QJsonArray& groups)
 	{
 		QVector<ModelProviderGroup> parsed;
@@ -473,7 +407,6 @@ namespace ModelSelectionService
 		return parsed;
 	}
 
-	// 解析 failures 数组
 	inline QVector<ModelCatalogFailure> parseFailures(const QJsonArray& failures)
 	{
 		QVector<ModelCatalogFailure> parsed;
@@ -498,12 +431,7 @@ namespace ModelSelectionService
 		return parsed;
 	}
 
-	// 解析 session/modelCatalog 的返回体。
-	//
-	// dsh 0.1.5 的形状（旧 session.models 已被删除，客户端只认这个）：
-	//   default             部署默认的模型选择（会话自己的选择在 session/list 投影里）
-	//   routableProviders   当前可路由的提供方 id 列表
-	//   groups / failures   目录与各提供方的失败原因
+	// 解析 session/modelCatalog 的返回体：default = **部署默认**选择（会话自己的选择在 session/list 投影里），另有 routableProviders、groups（按提供方分组的目录）与 failures（各提供方目录加载失败的原因，供“模型列表”展示失败来源）。
 	inline SessionModelDirectory parseDirectory(const QJsonObject& value)
 	{
 		SessionModelDirectory directory;
@@ -521,13 +449,12 @@ namespace ModelSelectionService
 		return directory;
 	}
 
-	// 解析 llm/listConfigurableProviders 的返回体（0.1.5 是**裸数组**）
 	inline QVector<ModelProviderGroup> parseCatalogGroups(const QJsonObject& value)
 	{
 		return parseGroups(value.value(QStringLiteral("groups")).toArray());
 	}
 
-	// 解析 llm/listConfigurableProviders 的返回体（裸数组，每项一个可配置路由）
+	// 解析 llm/listConfigurableProviders 的返回体（**裸数组**，每项一个可配置路由）
 	inline QVector<ConfigurableProvider> parseProviders(const QJsonArray& array)
 	{
 		QVector<ConfigurableProvider> providers;
@@ -555,7 +482,7 @@ namespace ModelSelectionService
 					provider.settingsPath.append(key);
 			}
 
-			// 0.1.5 的条目没有 active 字段：列出的都是已声明可配置的路由，视为可用
+			// 条目没有 active 字段：列出的都是已声明可配置的路由，视为可用
 			provider.active = object.contains(QStringLiteral("active"))
 				? object.value(QStringLiteral("active")).toBool()
 				: true;
@@ -567,8 +494,7 @@ namespace ModelSelectionService
 		return providers;
 	}
 
-	// 解析 llm/discoverModels 的返回体（裸数组；服务端已按 id 去重）。
-	// id 缺失或非字符串的条目跳过（与服务端同一条规矩：一行的毛病不该毁掉整份清单）。
+	// 解析 llm/discoverModels 的返回体（裸数组，服务端已按 id 去重）；id 缺失或非字符串的条目跳过 —— 与服务端同一条规矩：一行的毛病不该毁掉整份清单。
 	inline QVector<DiscoveredModel> parseDiscoveredModels(const QJsonValue& value)
 	{
 		const QJsonArray array = value.toArray();
@@ -604,14 +530,7 @@ namespace ModelSelectionService
 		return models;
 	}
 
-	// 组装 llm/discoverModels 的 request：把表单此刻的样子描述给服务端。
-	//
-	// 三个字段的来源与理由：
-	//   provider  始终带上——命名了路由，适配器就能用它自己认得的目录回答（不联网），
-	//             而且能带上该路由存好的凭据与 profile headers；
-	//   baseURL/api  只有 profile 里写了才带（随附目录里的路由本来就不需要端点）；
-	//   apiKey    只在用户**此刻在表单里填了** key 时才带：服务端对命名路由会自己去取
-	//             存好的凭据，这里传空即走那条路；表单里刚敲进去的 key 该赢过它。
+	// 组装 llm/discoverModels 的 request：provider 始终带上（命名路由让适配器用自己认得的目录回答、不必联网，并带上该路由存好的凭据与 profile headers）；baseURL/api 只在 profile 写了才带；apiKey 只在用户此刻在表单里填了才带（服务端对命名路由会自己去取存好的凭据，而表单里刚敲进去的 key 该赢过它）。
 	inline QJsonObject buildDiscoveryRequest(
 		const ConfigurableProvider& provider,
 		const SettingsNamespace* namespaceView,
@@ -670,8 +589,7 @@ namespace ModelSelectionService
 		return namespaces;
 	}
 
-	// 模型条目所在的路径：profile 路径 + "models"
-	// （llm-deepseek 整节即 profile，所以路径就是 ["models"]）
+	// 模型条目所在的路径：profile 路径 + "models"（llm-deepseek 整节即 profile，所以就是 ["models"]）
 	inline QStringList modelsPath(const ConfigurableProvider& provider)
 	{
 		QStringList path = provider.settingsPath;
@@ -679,15 +597,9 @@ namespace ModelSelectionService
 		return path;
 	}
 
-	// ------------------------------------------------------------------
-	// 凭据（API Key）
-	// ------------------------------------------------------------------
-	// 服务端把凭据做成“按引用存取”：profile 用 apiKeyEnv 点明这把 key 的引用名，
-	// credentials.set 按引用写入，credentials.describe 按引用回报状态。
-	// 所以“给某个提供方填一把 key”完全落在服务端能力上，客户端不自己存 key。
+	// 服务端凭据按“引用”存取：profile 用 apiKeyEnv 点明这把 key 的引用名，credentials.set 按引用写入、credentials.describe 按引用回报状态；客户端不自己存 key。
 
-	// 由提供方路由派生约定引用名：非字母数字一律换成下划线，再补 _API_KEY。
-	// 与 harness 的约定一致（siliconflow-cn -> SILICONFLOW_CN_API_KEY）。
+	// 由提供方路由派生约定引用名：非字母数字一律换成下划线、去掉首尾下划线、再补 _API_KEY（与 harness 一致：siliconflow-cn -> SILICONFLOW_CN_API_KEY）。
 	inline QString deriveKeyRef(const QString& provider)
 	{
 		QString normalized;
@@ -721,10 +633,7 @@ namespace ModelSelectionService
 		return declared.isEmpty() ? deriveKeyRef(provider) : declared;
 	}
 
-	// 解析 credentials/describe 的回包。
-	//
-	// dsh 0.1.5 的形状是"引用名 -> {configured, source?, writable}"的直接映射。
-	// 回包里没有这个引用时 known 保持 false —— 调用方不能把它当成“只读”。
+	// 解析 credentials/describe 的回包（形状是“引用名 -> {configured, source?, writable}”的直接映射）；回包里没有这个引用时 known 保持 false，调用方不能把它当成“只读”。
 	inline CredentialStatus parseCredential(const QString& ref, const QJsonObject& value)
 	{
 		CredentialStatus status;
@@ -795,26 +704,16 @@ namespace ModelSelectionService
 		return ns.objectAt(settingsPath).value(QStringLiteral("models")).toArray();
 	}
 
-	// 该路由的用户层是否自己写了 models 列表。
-	// 这决定新增一条的后端语义：数组是整体替换，用户层一旦声明 models，
-	// 该路由公布的就只有这一份列表（随附 catalog 不再参与）。
+	// 该路由的用户层是否自己写了 models 列表；这决定新增一条的后端语义 —— 数组是整体替换，用户层一旦声明 models（含空数组 = 该路由不公布任何模型，写回时不该被随附列表填回来），该路由公布的就只有这一份列表（随附 catalog 不再参与）。
 	inline bool userDeclaresModels(const SettingsNamespace& ns, const QStringList& settingsPath)
 	{
 		return ns.userAt(settingsPath).value(QStringLiteral("models")).isArray();
 	}
 
-	// 写回时用的基准数组：优先取用户层自己写的那一份。
-	//
-	// settings 的 value 是分层合并、并按适配器 schema 补过默认值的结果
-	// （真实回包里 siliconflow-cn 的 value 条目带着 input: [] 与
-	// compat.chatTemplateKwargs: {}，用户层那一份只有 id）。整份 value 写进用户层
-	// 会把解析出来的默认值固化下来，配置会越改越胖；用户层有数组时就以它为准。
-	// 用户层没有（首次新增）时才退回 value —— 那份正是当前生效的列表。
+	// 写回时用的基准数组：优先取用户层自己写的那一份 —— settings 的 value 是分层合并、并按适配器 schema 补过默认值的结果（真实回包里 siliconflow-cn 的 value 条目带着 input: [] 与 compat.chatTemplateKwargs: {}，用户层那份只有 id），整份 value 写进用户层会把解析出的默认值固化、配置越改越胖；用户层没有（首次新增）时才退回 value。
 	inline QJsonArray modelsForWrite(const SettingsNamespace& ns, const QStringList& settingsPath)
 	{
 		if (userDeclaresModels(ns, settingsPath)) {
-			// 用户层显式写了 models（含空数组）就以它为准：
-			// 空数组表示“这个路由不公布任何模型”，写回时不该被随附列表填回来
 			return ns.userAt(settingsPath).value(QStringLiteral("models")).toArray();
 		}
 
@@ -846,8 +745,7 @@ namespace ModelSelectionService
 		info.settingsPath = entry.settingsPath;
 		info.settingsWritable = writable;
 
-		// settings 只写了档位名；没有适配器公布的展示名与默认档位，
-		// 因此把它们保持为空，界面按“只声明了档位”显示。
+		// settings 只写了档位名，没有适配器公布的展示名与默认档位，因此保持为空（界面按“只声明了档位”显示）。
 		for (const QString& level : model.reasoningEfforts) {
 			ReasoningLevel reasoning;
 			reasoning.id = level;
@@ -874,11 +772,7 @@ namespace ModelSelectionService
 		return info;
 	}
 
-	// 把目录、可配置提供方目录、settings 命名空间 join 成设置面板要显示的行。
-	//
-	// 顺序：先按目录的分组顺序输出适配器公布的模型，再补上“只在 settings 里
-	// 声明、目录尚未公布”的模型（刚新增、或该路由此刻加载失败时会出现），
-	// 这样用户新增完能立刻在列表里看到自己填的那一条。
+	// 把目录、可配置提供方目录、settings 命名空间 join 成设置面板要显示的行：先按目录分组顺序输出适配器公布的模型，再补上“只在 settings 里声明、目录尚未公布”的模型（刚新增或该路由此刻加载失败时会出现），让用户新增完能立刻在列表里看到那一条。
 	inline QVector<ModelInfo> buildModelInfos(const ServerModelView& view)
 	{
 		QVector<ModelInfo> rows;
@@ -944,9 +838,7 @@ namespace ModelSelectionService
 		return rows;
 	}
 
-	// 拼一条新的模型条目（纯函数，便于单测）。
-	// piAi = true 走 llm-pi-ai 的字段（reasoningEfforts / input），
-	// 否则走 llm-deepseek 的字段（inputModalities）。
+	// 拼一条新的模型条目（纯函数，便于单测）；piAi = true 走 llm-pi-ai 的字段（reasoningEfforts / input），否则走 llm-deepseek 的 inputModalities。
 	inline QJsonObject buildModelEntry(const AddModelRequest& request, bool piAi)
 	{
 		QJsonObject entry;
@@ -987,8 +879,7 @@ namespace ModelSelectionService
 		return entry;
 	}
 
-	// 把新条目追加到已有数组末尾；同 id 已存在时原地替换（保持原来的位置）。
-	// `models` 是数组、写入即整体替换，所以必须是“整份数组 + 新条目”一起写回。
+	// 把新条目追加到已有数组末尾，同 id 已存在时原地替换（保持原来的位置）；`models` 是数组、写入即整体替换，所以必须“整份数组 + 新条目”一起写回。
 	inline QJsonArray upsertModelEntry(const QJsonArray& existing, const QJsonObject& entry)
 	{
 		const QString id = entry.value(QStringLiteral("id")).toString();
@@ -1035,7 +926,7 @@ namespace ModelSelectionService
 		const std::function<void(const SessionModelDirectory& directory)>& onLoaded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);
 
-	// 提交完整选择（换思考档位时沿用当前的 provider/model）
+	// 提交完整选择（换思考档位时沿用当前的 provider/model）；省略 reasoningEffort 表示用提供方默认档位，与显式选中同名档位在请求上等价，界面因此把空值显示为该模型的 defaultEffort。
 	void select(
 		DshApiClient* api,
 		const QString& sessionId,
@@ -1043,19 +934,13 @@ namespace ModelSelectionService
 		const std::function<void(const ModelSelection& selected)>& onSelected,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);
 
-	// 拉取“服务端模型视图”：session/modelCatalog + llm/listConfigurableProviders + settings/describe。
-	// session/modelCatalog 失败才算整体失败；providers / settings 失败按“暂时读不到”降级，
-	// 目录仍然显示（新增模型会因缺写回地址而被禁用）。
+	// 拉取“服务端模型视图”（session/modelCatalog + llm/listConfigurableProviders + settings/describe）；只有 session/modelCatalog 失败才算整体失败，providers / settings 失败按“暂时读不到”降级 —— 目录仍然显示，但新增模型会因缺写回地址而被禁用。
 	void fetchView(
 		DshApiClient* api,
 		const std::function<void(const ServerModelView& view)>& onLoaded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);
 
-	// 向某个 settings 命名空间的适配器发现问"这条路由能服务哪些模型"
-	// （llm/discoverModels）。request 由 buildDiscoveryRequest 组装。
-	// 回包是候选清单，服务端不写任何配置——采纳与否完全在调用方。
-	// 该命名空间没注册发现时服务端会以 llm/model-discovery-rejected 失败
-	// （例如 deepseek 系路由：它的模型清单只能由 settings 声明）。
+	// 问某个 settings 命名空间的适配器“这条路由能服务哪些模型”（llm/discoverModels，request 由 buildDiscoveryRequest 组装）；回包只是候选清单、服务端不写任何配置，采纳与否在调用方；该命名空间没注册发现时会以 llm/model-discovery-rejected 失败（例如 deepseek 系路由：它的模型清单只能由 settings 声明）。
 	void discoverModels(
 		DshApiClient* api,
 		const QString& settingsNs,
@@ -1063,10 +948,7 @@ namespace ModelSelectionService
 		const std::function<void(const QVector<DiscoveredModel>& models)>& onLoaded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);
 
-	// 向 settings 追加一个模型条目（读-改-写整份 models 数组）。
-	// 若 request.apiKeyRef 非空且 recordApiKeyEnv 为真，会在同一次 mutate 里
-	// 额外写入 profile 的 apiKeyEnv，使这条路由真的去用那把 key。
-	// onAdded 带回写回后的命名空间视图（可直接用来刷新展示）。
+	// 向 settings 追加一个模型条目（读-改-写整份 models 数组）；若 request.apiKeyRef 非空且 recordApiKeyEnv 为真，会在同一次 mutate 里额外写入 profile 的 apiKeyEnv，使这条路由真的去用那把 key；onAdded 带回写回后的命名空间视图（可直接用来刷新展示）。
 	void addModel(
 		DshApiClient* api,
 		const ConfigurableProvider& provider,
@@ -1075,9 +957,7 @@ namespace ModelSelectionService
 		const std::function<void(const SettingsNamespace& updated)>& onAdded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);
 
-	// 向 settings 删掉一个模型条目。与新增同样走“读-改-写整份 models 数组”
-	// （数组写入即整体替换，没有按元素删除的写法）。
-	// 目标 id 本来就不在这份列表里时，不写服务端，直接把当前视图回报给 onRemoved。
+	// 向 settings 删掉一个模型条目（同样读-改-写整份 models 数组，没有按元素删除的写法）；目标 id 本来就不在这份列表里时不写服务端，直接把当前视图回报给 onRemoved。
 	void removeModel(
 		DshApiClient* api,
 		const ConfigurableProvider& provider,

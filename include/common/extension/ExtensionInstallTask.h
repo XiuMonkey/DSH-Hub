@@ -1,13 +1,7 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// ExtensionInstallTask.h
-// ------------------------------------------------------------------
-// 把“后台解压 + 安装 .ext 扩展”的任务封装起来（不含任何控件）：
-//   - start()  在 worker 线程跑 ExtensionLoader::loadAndInstall；
-//   - tryFinish() 在 UI 定时器里非阻塞取结果（只成功返回一次）；
-//   - waitForFinished() 供弹窗关闭时等待，避免任务写到已销毁的对象。
-// ------------------------------------------------------------------
+// 把“后台解压 + 安装 .ext 扩展”封装成任务（无控件）：start() 在 worker 线程跑 ExtensionLoader::loadAndInstall，结果由 tryFinish() 在 UI 定时器里非阻塞取（只成功返回一次）。
+// waitForFinished() 供弹窗关闭时等待，避免任务写到已销毁的对象。
 
 #include "ExtensionSystem/ExtensionLoader.h"
 

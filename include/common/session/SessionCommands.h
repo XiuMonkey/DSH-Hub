@@ -1,20 +1,8 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// SessionCommands.h
-// ------------------------------------------------------------------
-// DSH RPC 请求载荷与常见会话操作的统一构造入口。
-// 把散落在 DSHHub 各回调里的 JSON payload 拼装收敛到这里，
-// 控制器只负责编排（何时调用、成功后怎么改 UI），不再手搓载荷。
-// 纯 header + inline，无额外链接依赖。
-//
-// dsh 0.1.5 约定（重要）：
-//   * endpoint 是 `<namespace>/<method>`（斜杠），不再用点号；
-//   * 请求体 payload 恰好只有一个 `args` 对象，DshApiClient 负责包这一层；
-//   * 因此本文件里的构造函数返回的都是 **args 的内容**，键名必须是描述符里的
-//     wire 名（多数方法是 `request`，session/list 是 `_request`，
-//     无参方法是空对象，agentPresets/select 是 `agentId` + `agentPreset`）。
-// ------------------------------------------------------------------
+// DSH RPC 请求载荷的统一构造入口（纯 header + inline）：JSON payload 拼装收敛到这里，控制器只负责编排。
+// 约定：endpoint 是 `<namespace>/<method>`（斜杠，不是点号）；请求体恰好只有一个 `args` 对象，信封由 DshApiClient 包。
+// 因此这里返回的都是 **args 的内容**，键名必须是描述符里的 wire 名（多数是 `request`，session/list 是 `_request`，无参是空对象，agentPresets/select 是 `agentId` + `agentPreset`）。
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -23,8 +11,7 @@
 
 namespace SessionCommands
 {
-	// 无参端点的 args：session/modelCatalog、agentPresets/list、
-	// llm/listProviders、llm/listConfigurableProviders、settings/describe 等
+	// 无参端点的 args：session/modelCatalog、agentPresets/list、llm/listProviders、llm/listConfigurableProviders、settings/describe 等
 	inline QJsonObject emptyArgs()
 	{
 		return QJsonObject();
@@ -64,14 +51,7 @@ namespace SessionCommands
 		return args;
 	}
 
-	// session/page -> args { request: { address, throughSeq, beforeSeq?, maxMessages? } }
-	//
-	// 这是 0.1.5 唯一的"读历史"入口，两个用途共用本函数：
-	//   * 首屏上翻（"加载更多"）：beforeSeq = 当前内容里最早一条的 seq
-	//   * 预取/首屏回落：不传 beforeSeq，语义是"throughSeq 往前最近一页"
-	// throughSeq 必填（服务端缺它会回 gateway/input-invalid），来源二选一：
-	//   follow 快照的 cursor，或 session/list 行的 projections.asOfSeq（两者相等）。
-	// maxMessages 数的是**消息**而不是事件（一条消息通常含十几条事件记录）。
+	// session/page -> args { request: { address, throughSeq, beforeSeq?, maxMessages? } }；throughSeq 必填（缺则回 gateway/input-invalid），取 follow 快照的 cursor 或 session/list 行的 projections.asOfSeq（两者相等）；不传 beforeSeq = 预取“throughSeq 往前最近一页”，传 = 首屏上翻（取当前内容里最早一条的 seq）；maxMessages 数的是**消息**而不是事件。
 	inline QJsonObject sessionPage(const QString& sessionId, int throughSeq,
 		int maxMessages = 0, int beforeSeq = 0)
 	{
@@ -92,8 +72,7 @@ namespace SessionCommands
 		return args;
 	}
 
-	// session/page 与 session/follow 的记录都是 {type:"event", event:{…}}；
-	// 渲染路径只认裸事件对象，所以统一用这里取出内层事件。
+	// session/page 与 session/follow 的记录都是 {type:"event", event:{…}}，渲染路径只认裸事件对象，故统一在此取出内层事件。
 	inline QJsonArray eventsFromRecords(const QJsonArray& records)
 	{
 		QJsonArray events;
@@ -105,8 +84,7 @@ namespace SessionCommands
 		return events;
 	}
 
-	// session/prompt -> args { request: { requestId, sessionId, mode, content } }
-	// 0.1.5 起 requestId 是必填：客户端铸一个 id，服务端把它落到那条用户消息上。
+	// session/prompt -> args { request: { requestId, sessionId, mode, content } }；requestId 必填，由客户端铸 id、服务端把它落到那条用户消息上。
 	inline QJsonObject sessionPrompt(const QString& sessionId, const QString& text)
 	{
 		QJsonArray content;
@@ -149,16 +127,7 @@ namespace SessionCommands
 		return args;
 	}
 
-	// agentPresets/select -> args { agentId, agentPreset }
-	// 注意：这不是 `request` 包装，而是两个平铺的 wire 名；agentId 就是 sessionId
-	// （服务端用 agent lookup 把 SessionId 解析成活的 Agent）。
-	//
-	// 语义是"改这个会话当前跑的预设"，且**只在空白期可用**（会话跑过任一轮就
-	// 永久锁定，服务端回 agent-preset/locked）。原版 web 用它承载"新建会话 chip
-	// 的暂存选择"（用完即清、刻意不写默认值）。
-	//
-	// Hub 目前没有调用点：设置页改的是**默认值**（走 settings/update），
-	// 不该顺手改当前会话。这里保留是作为协议收录，将来要做"临时换模式"时用得上。
+	// agentPresets/select -> args { agentId, agentPreset }（不是 `request` 包装，agentId 就是 sessionId）；只在会话空白期可用，跑过任一轮即永久锁定（服务端回 agent-preset/locked）；Hub 暂无调用点，保留作协议收录。
 	inline QJsonObject agentPresetSelect(const QString& sessionId, const QString& presetId)
 	{
 		QJsonObject args;
@@ -167,7 +136,7 @@ namespace SessionCommands
 		return args;
 	}
 
-	// session/selectModel -> args { request: { sessionId, provider, model, reasoningEffort? } }
+	// session/selectModel -> args { request: { sessionId, provider, model, reasoningEffort? } }；省略 reasoningEffort = 用提供方默认档位。
 	inline QJsonObject sessionSelectModel(const QString& sessionId,
 		const QString& provider,
 		const QString& model,
@@ -177,7 +146,6 @@ namespace SessionCommands
 		request.insert(QStringLiteral("sessionId"), sessionId);
 		request.insert(QStringLiteral("provider"), provider);
 		request.insert(QStringLiteral("model"), model);
-		// 省略即提供方默认档位；显式档位才写入
 		if (!reasoningEffort.isEmpty())
 			request.insert(QStringLiteral("reasoningEffort"), reasoningEffort);
 
@@ -195,14 +163,7 @@ namespace SessionCommands
 		return args;
 	}
 
-	// settings/update -> args { ns, patch, expectedRevision? }
-	//
-	// 与 mutate 的区别：这条是"把 patch 并进该命名空间的 user 段"（浅合并），
-	// 不是按路径寻址的增删改。原版 web 客户端写默认预设用的就是这条：
-	//   settings.update("agent-presets", { default: id }, undefined)
-	//
-	// expectedRevision 描述符里标了 acceptsUndefined，整条省掉即"无条件写"
-	// （不做乐观并发校验）—— 与原版传 undefined 等价。
+	// settings/update -> args { ns, patch, expectedRevision? }；把 patch 浅合并进该 ns 的 user 段（与 mutate 的按路径寻址不同）；整条省掉 expectedRevision 即无条件写（描述符标了 acceptsUndefined，不做乐观并发校验）。
 	inline QJsonObject settingsUpdate(const QString& ns, const QJsonObject& patch)
 	{
 		QJsonObject args;
@@ -211,14 +172,7 @@ namespace SessionCommands
 		return args;
 	}
 
-	// llm/discoverModels -> args { settingsNs, request: { provider?, baseURL?, api?, apiKey? } }
-	//
-	// 两个平铺参数（描述符里就是 settingsNs + request，不是 `request` 包一层）：
-	// settingsNs 决定"谁来回答"——该命名空间注册的适配器发现；request 描述这次要问的
-	// 东西：命名一条已存在的路由（适配器认得就自己回答，不必联网），或给出端点/协议
-	// 与一次性凭据（路由还不存在时用）。
-	// 回包是**裸数组** [{ id, name?, contextWindow?, maxTokens? }]，所以调用方要用
-	// callMethodValue 接。
+	// llm/discoverModels -> args { settingsNs, request: { provider?, baseURL?, api?, apiKey? } }（两个平铺参数，不是 `request` 包一层）；settingsNs 决定由哪个命名空间的适配器来回答，回包是**裸数组** [{ id, name?, contextWindow?, maxTokens? }]，调用方要用 callMethodValue 接。
 	inline QJsonObject llmDiscoverModels(const QString& settingsNs, const QJsonObject& request)
 	{
 		QJsonObject args;

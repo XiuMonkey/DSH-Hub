@@ -1,20 +1,10 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// SessionService.h
-// ------------------------------------------------------------------
-// 会话相关的“功能逻辑”统一入口（不依赖任何 Qt Widget）：
-//   - 拉取 session.list 并解析进 SessionCatalog；
-//   - 触发侧栏重建与自动选中；
-//   - session.create、session.list 标题回填；
-//   - 清空 DSH home 下的会话数据。
-//
-// UI 层（Sidebar）只保留“结果回来后怎么改界面”，不再手搓 RPC 与 JSON。
+// 会话相关“功能逻辑”的统一入口（无 Qt Widget 依赖）：拉取并解析 session.list、触发侧栏重建与自动选中、session.create、标题回填、清空 DSH home 会话数据。
 // 回调都在主线程触发（DshApiClient 的回调本来就在主线程）。
-// ------------------------------------------------------------------
 
 #include "common/session/SessionCatalog.h"
-// 回调签名里用到 DshApiClient::RpcError（嵌套类型），因此需要完整定义
+// 回调签名用到 DshApiClient::RpcError（嵌套类型），因此需要完整定义
 #include "network/DshApiClient.h"
 
 #include <QString>
@@ -23,10 +13,7 @@
 class SessionService
 {
 public:
-	// 拉取 session.list 并写入 catalog（会话/归档状态；工作区由 workspace/follow 提供）：
-	//   1) 把结果写入 catalog；
-	//   2) 回调 onReady(autoSelectSessionId) 或 onError(error)。
-	// session/list 失败才走 onError，且此时不会写入会话列表。
+	// 拉取 session.list 并写入 catalog（不含工作区，后者由 workspace/follow 提供）；成功回调 onReady(autoSelectSessionId)，失败回调 onError 且此时不写会话列表。
 	static void refreshSessions(
 		DshApiClient* api,
 		SessionCatalog* catalog,
