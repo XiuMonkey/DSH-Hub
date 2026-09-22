@@ -141,6 +141,11 @@ if(WIN32)
 # 加/换 DLL 时清单与依赖声明的 version 都要改。
 if (MSVC)
     target_link_options(dshhub PRIVATE "/MANIFESTINPUT:${DSHHUB_ROOT}/dependence.deps.manifest")
+    # 构建后把运行库收进 dependence\（私有程序集要求清单与 dll 同在）。
+    # CMake 的构建目录里本来没有 Qt dll，所以让脚本从 QTDIR\bin 取（见 misc/tools/rebuild.sh）。
+    add_custom_command(TARGET dshhub POST_BUILD
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${DSHHUB_ROOT}/../misc/tools/make-dependence.ps1" -Target "$<TARGET_FILE_DIR:dshhub>"
+        COMMENT "把运行库收进 dependence`（私有程序集）")
 endif()
 endif()
 
@@ -242,6 +247,11 @@ if(DSHHUB_BUILD_TESTS)
 # 加/换 DLL 时清单与依赖声明的 version 都要改。
 if (MSVC)
     target_link_options(dshhub_tests PRIVATE "/MANIFESTINPUT:${DSHHUB_ROOT}/dependence.deps.manifest")
+    # 构建后把运行库收进 dependence\（私有程序集要求清单与 dll 同在）。
+    # CMake 的构建目录里本来没有 Qt dll，所以让脚本从 QTDIR\bin 取（见 misc/tools/rebuild.sh）。
+    add_custom_command(TARGET dshhub_tests POST_BUILD
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${DSHHUB_ROOT}/../misc/tools/make-dependence.ps1" -Target "$<TARGET_FILE_DIR:dshhub_tests>"
+        COMMENT "把运行库收进 dependence`（私有程序集）")
 endif()
 	target_compile_definitions(dshhub_tests PRIVATE QT_NO_DEPRECATED_WARNINGS)
 

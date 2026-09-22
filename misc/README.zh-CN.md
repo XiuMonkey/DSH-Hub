@@ -102,11 +102,19 @@ x64\Release\
 
 ⚠️ **两条维护约定**：
 
-1. **加/换 DLL 必须同步改 `source/dependence.manifest` 的 `<file>` 列表**，并让它与
-   `dependence.deps.manifest` 里的 `version` 保持一致 —— 漏一条就是启动即失败。
+1. **加/换 DLL 必须同步改清单的 `<file>` 列表** —— Release 改 `source/dependence.manifest`、
+   Debug 改 `source/dependence.debug.manifest`（Debug 链接的是带 `d` 后缀的 Qt，名字不同；
+   而 MSVC 的调试版 CRT 由 Visual Studio 运行环境提供、不在 exe 目录里，所以那份**不列 CRT**）。
+   两份的 `version` 都要与 `dependence.deps.manifest` 一致 —— 漏一条就是启动即失败。
    目录名必须**恰好**等于程序集名 `dependence`。
-2. 部署到新目录后跑一次 `misc/tools/make-dependence.ps1 -Target <目录>`：DLL 名单**从清单里读**
-   （清单即事实来源），把 dll 收进 `dependence/` 并把清单本身也拷过去。漏了哪个它会告警。
+2. **构建后会自动部署**，不需要手工记得：两个工程都挂了构建后事件
+   （vcxproj 的 `<PostBuildEvent>`、CMake 的 `POST_BUILD`），跑的是
+   `misc/tools/make-dependence.ps1`。它按 `$(Configuration)` 选清单，DLL 名单**从清单里读**
+   （清单即事实来源），把 dll 收进 `dependence/` 并拷入清单本身。
+   CMake 构建目录里本来没有这些 dll（Qt 靠 PATH），所以脚本会从 `QTDIR\bin` 与 VS 的
+   redist 目录补齐；补不齐时它**只会告警、不会让构建失败**，并且**不会留下半份清单**
+   （清单在、dll 缺会让加载器直接报 SxS，比"dll 散在旁边"更难查）。
+   手工调用：`misc/tools/make-dependence.ps1 -Target <目录> [-Config Debug|Release] [-QtBin ..] [-CrtBin ..]`。
 
 ## 环境要求
 

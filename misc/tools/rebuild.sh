@@ -61,6 +61,7 @@ export INCLUDE="$MSVC_WIN/include;$KITS_WIN/Include/$SDK_VER/ucrt;$KITS_WIN/Incl
 export LIB="$MSVC_WIN/lib/x64;$KITS_WIN/Lib/$SDK_VER/ucrt/x64;$KITS_WIN/Lib/$SDK_VER/um/x64"
 # 注意：除了 MSVC 的 Hostx64/x64，还必须把 SDK 的 bin/x64 加进来，
 # 否则 rc.exe 找不到，CMake 的编译器自检会直接失败。
+export QTDIR="D:/Qt/6.11.2/msvc2022_64"   # 与 CMakePresets 的约定一致；make-dependence.ps1 用它取 Qt dll
 export PATH="$MSVC_MSYS/bin/Hostx64/x64:$KITS_MSYS/bin/$SDK_VER/x64:/d/Qt/Tools/Ninja:/d/Qt/Tools/CMake_64/bin:/d/Qt/6.11.2/msvc2022_64/bin:$PATH"
 
 TARGET="${1:-dshhub}"

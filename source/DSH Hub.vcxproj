@@ -75,6 +75,12 @@
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)dependence.deps.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
     </Manifest>
+    <!-- 每次构建后把运行库收进 dependence\：那个私有程序集要求「清单与 dll 必须同在」，
+         漏一个就是启动即失败（SxS），所以不能靠手工记得。缺 dll 时脚本只告警、不让构建失败。 -->
+    <PostBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)..\misc\tools\make-dependence.ps1" -Target "$(OutDir)." -Config $(Configuration)</Command>
+      <Message>把运行库收进 dependence\（私有程序集）</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
   </PropertyGroup>

@@ -106,13 +106,22 @@ assembly**:
 
 ⚠️ **Two maintenance rules**:
 
-1. Whenever a DLL is added or replaced, update the `<file>` list in `source/dependence.manifest`
-   and keep its `version` in sync with `dependence.deps.manifest` -- one missing entry means the
-   app will not start. The directory name must be exactly the assembly name, `dependence`.
-2. After deploying to a new directory, run
-   `misc/tools/make-dependence.ps1 -Target <dir>`. It reads the DLL list **from the manifest** (the
-   manifest is the source of truth), collects the DLLs into `dependence/` and copies the manifest
-   itself. It warns about any DLL that is neither in place nor found.
+1. Whenever a DLL is added or replaced, update the `<file>` list in the right manifest -- Release
+   edits `source/dependence.manifest`, Debug edits `source/dependence.debug.manifest` (a Debug
+   build links the `d`-suffixed Qt DLLs, and the MSVC debug CRT comes from the Visual Studio
+   environment rather than the exe directory, so that manifest lists no CRT at all). Keep both
+   `version` values in sync with `dependence.deps.manifest` -- one missing entry means the app
+   will not start. The directory name must be exactly the assembly name, `dependence`.
+2. **Deployment is automatic** -- both projects run `misc/tools/make-dependence.ps1` after the
+   build (vcxproj `<PostBuildEvent>`, CMake `POST_BUILD`), so there is nothing to remember. It
+   picks the manifest by configuration, reads the DLL list **from that manifest** (the manifest is
+   the source of truth), collects the DLLs into `dependence/` and copies the manifest in.
+   A CMake build directory has none of these DLLs (Qt comes from PATH), so the script fills them in
+   from `QTDIR\bin` and the VS redist directory; when it cannot, it only warns -- it never fails
+   the build, and it never leaves a half-written manifest, because a manifest whose DLLs are
+   missing makes the loader fail with an SxS error that is harder to diagnose than loose DLLs.
+   To run it by hand: `misc/tools/make-dependence.ps1 -Target <dir> [-Config Debug|Release]
+   [-QtBin ..] [-CrtBin ..]`.
 
 ## Requirements
 
