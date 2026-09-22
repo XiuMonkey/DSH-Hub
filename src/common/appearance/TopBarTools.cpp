@@ -14,7 +14,7 @@ namespace
 {
 	// 与 resources/ToolsFilterPlugin/index.js 注册的路由一致
 	const char* const kEndpointPath = "/api/tools-filter";
-	// 程序自动建立的目录名。**历史版本叫 "tools"**，见 normalizedDirectoryName()
+	// 程序自动建立的目录名（历史版本叫 "tools"，见 normalizedDirectoryName()）
 	const char* const kDefaultDirectoryName = "Default";
 	const char* const kLegacyDirectoryName = "tools";
 
@@ -34,11 +34,7 @@ namespace
 		return QString();
 	}
 
-	/**
-	 * 插件那边的假标记集合（FALSE / 0 / no / off，不分大小写；布尔与数字按
-	 * String(value) 的路子算）。界面必须与它同款：插件的判定才是真正生效的那个，
-	 * 界面读得不一样就会在勾选框上撒谎。
-	 */
+	// 插件那边的假标记集合（FALSE / 0 / no / off，不分大小写；布尔与数字按 String(value) 的路子算）；界面必须与它同款 —— 插件的判定才是真正生效的那个，读得不一样就会在勾选框上撒谎。
 	bool flagIsFalse(const QJsonValue& value)
 	{
 		if (value.isBool())
@@ -63,14 +59,7 @@ namespace
 		return !flagIsFalse(row.toObject().value(QStringLiteral("IsVisible")));
 	}
 
-	/**
-	 * 目录名归一：
-	 *   · 空名 → Default（配置里没写 DirectoryName 的目录在界面上得有个标题）；
-	 *   · 历史自动建立的 "tools" → Default（那时还没有目录界面，程序建的目录叫
-	 *     tools；不归一的话老会话的窗口里会显示一个叫 tools 的目录，而用户看到的
-	 *     "从 tools 改成 Default" 只对新会话生效）。
-	 * 名字只是给人看的标签 —— 插件那边的目录名不参与任何判定。
-	 */
+	// 目录名归一：空名 → Default（配置里没写 DirectoryName 的目录在界面上得有个标题）；历史自动建立的 "tools" → Default（不归一的话老会话的窗口里会显示一个叫 tools 的目录）；名字只是给人看的标签，插件那边的目录名不参与任何判定。
 	QString normalizedDirectoryName(const QString& raw)
 	{
 		const QString name = raw.trimmed();
@@ -87,10 +76,7 @@ namespace
 		return normalizedDirectoryName(name).toLower();
 	}
 
-	/**
-	 * 原版自带工具的功能目录。插件返回的 `directory` 字段缺失时（旧插件版本、
-	 * 纯函数单测），用它保证初始文档最少也能按功能分组；未知工具再回退 Default。
-	 */
+	// 原版自带工具的功能目录：插件返回的 `directory` 字段缺失时（旧插件版本、纯函数单测），用它保证初始文档最少也能按功能分组；未知工具再回退 Default。
 	QString builtinFunctionDirectory(const QString& toolName)
 	{
 		if (toolName.isEmpty())
@@ -166,12 +152,7 @@ QString ToolsFilter::defaultDirectoryName()
 	return QLatin1String(kDefaultDirectoryName);
 }
 
-/**
- * 由 baseUrl 拼出接口地址：**只借它的 scheme/host/port**，path 重设、query 与
- * fragment 清掉。理由同 PluginMarketClient::endpointUrl：ServerManager 交出来的
- * baseUrl 是"带启动令牌"的那条（…/?token=…），直接拼 path 会把接口地址当成 token
- * 的参数值、请求落到 `GET /`，于是拿回一份 HTML 而不是 JSON。
- */
+// 由 baseUrl 拼出接口地址：只借它的 scheme/host/port，path 重设、query 与 fragment 清掉；ServerManager 交出来的 baseUrl 是带启动令牌的那条（…/?token=…），直接拼 path 会把接口地址当成 token 的参数值、请求落到 `GET /`，于是拿回一份 HTML 而不是 JSON（理由同 PluginMarketClient::endpointUrl）。
 QUrl ToolsFilter::endpointUrl() const
 {
 	QUrl url = m_baseUrl;
@@ -180,10 +161,6 @@ QUrl ToolsFilter::endpointUrl() const
 	url.setFragment(QString());
 	return url;
 }
-
-// ------------------------------------------------------------------
-// GET
-// ------------------------------------------------------------------
 
 void ToolsFilter::fetch(const QString& sessionId, std::function<void(const ToolFilterCatalog&)> done)
 {
@@ -276,9 +253,7 @@ void ToolsFilter::ensureSession(const QString& sessionId,
 			return;
 		}
 
-		// 还没有配置文件：用工具名建一份初始版（描述与参数不写进去）。
-		// buildDirectories() 会按插件返回的 `directory` 元数据分组；插件工具各归
-		// 其插件，原版工具按功能分目录。
+		// 还没有配置文件：用工具名建一份初始版（描述与参数不写进去）；分组交给 buildDirectories()，它按插件返回的 `directory` 元数据分（插件工具各归其插件，原版工具按功能分目录）。
 		QVector<ToolFilterDirectory> allVisible = catalog.directories;
 		for (ToolFilterDirectory& directory : allVisible) {
 			directory.expanded = true;
@@ -293,10 +268,6 @@ void ToolsFilter::ensureSession(const QString& sessionId,
 			});
 		});
 }
-
-// ------------------------------------------------------------------
-// POST
-// ------------------------------------------------------------------
 
 void ToolsFilter::save(const QString& sessionId, const QVector<ToolFilterDirectory>& directories,
 	bool dropGuidance, const QStringList& hideContexts,
@@ -353,10 +324,6 @@ void ToolsFilter::save(const QString& sessionId, const QVector<ToolFilterDirecto
 		});
 }
 
-// ------------------------------------------------------------------
-// 纯函数
-// ------------------------------------------------------------------
-
 QVector<ToolFilterDirectory> ToolsFilter::buildDirectories(const QJsonArray& tools, const QJsonObject& storedConfig)
 {
 	QVector<ToolFilterDirectory> directories;
@@ -378,8 +345,7 @@ QVector<ToolFilterDirectory> ToolsFilter::buildDirectories(const QJsonArray& too
 		return directories.size() - 1;
 		};
 
-	// 1) 目录骨架：按存储顺序，**空目录也留着** —— 配置文件里声明过的目录都要在
-	//    界面上露面（用户自己写进去的分组不能因为"暂时没有工具"就消失）。
+	// 1) 目录骨架：按存储顺序，**空目录也留着** —— 配置文件里声明过的目录都要在界面上露面（用户自己写进去的分组不能因为"暂时没有工具"就消失）。
 	const QJsonArray filterList = storedConfig.value(QStringLiteral("FilterList")).toArray();
 	const bool autoGroup = filterList.isEmpty();
 	for (const QJsonValue& directoryValue : filterList) {
@@ -404,24 +370,21 @@ QVector<ToolFilterDirectory> ToolsFilter::buildDirectories(const QJsonArray& too
 			const QString toolName = rowToolName(row);
 			if (toolName.isEmpty())
 				continue;
-			// 归属：同一个工具出现在多个目录里时，**第一个**认领它的目录说话
-			// （界面上一个工具只能有一行）；可见性相反，按插件语义"后写覆盖先写"。
+			// 归属：同一个工具出现在多个目录里时，**第一个**认领它的目录说话（界面上一个工具只能有一行）；可见性相反，按插件语义"后写覆盖先写"。
 			if (!directoryOfTool.contains(toolName))
 				directoryOfTool.insert(toolName, key);
 			storedVisible.insert(toolName, rowVisible(row));
 		}
 	}
 
-	// 2) 没有存储配置时，插件随 tools 一起返回的 `directory` 就是初始目录：
-	//    插件工具各归其插件，原版工具按功能分组。没有该字段时才回退 Default。
+	// 2) 没有存储配置时，插件随 tools 一起返回的 `directory` 就是初始目录：插件工具各归其插件，原版工具按功能分组。没有该字段时才回退 Default。
 	const QString defaultKey = directoryKey(defaultDirectoryName());
 	int defaultIndex = -1;
 	if (!autoGroup) {
 		defaultIndex = ensureDirectory(defaultDirectoryName());
 	}
 
-	// 3) 工具归位：顺序跟着插件返回的目录（名字 → 描述 → 参数），
-	//    这样同一个工具在界面上总是同一行。
+	// 3) 工具归位：顺序跟着插件返回的目录（名字 → 描述 → 参数），这样同一个工具在界面上总是同一行。
 	for (const QJsonValue& value : tools) {
 		const QJsonObject tool = value.toObject();
 		ToolFilterEntry entry;
@@ -509,8 +472,7 @@ QJsonObject ToolsFilter::buildDocument(const QVector<ToolFilterDirectory>& direc
 	QJsonArray filterList;
 	for (const ToolFilterDirectory& directory : directories) {
 		QJsonObject payload;
-		// IsExpanded 是**筛选语义**（"False" = 插件整组隐藏），界面上的展开/收起
-		// 不写在这里 —— 所以这里原样带回读到的值，默认新建的目录写 "True"。
+		// IsExpanded 是**筛选语义**（"False" = 插件整组隐藏），界面上的展开/收起不写在这里 —— 所以这里原样带回读到的值，默认新建的目录写 "True"。
 		payload.insert(QStringLiteral("IsExpanded"),
 			directory.expanded ? QStringLiteral("True") : QStringLiteral("False"));
 		payload.insert(QStringLiteral("DirectoryName"),

@@ -36,16 +36,7 @@
 #include <future>
 #include <utility>
 
-// ------------------------------------------------------------------
-// 私有静态：常量与无状态工具
-// ------------------------------------------------------------------
-// 这一组原先是本文件匿名命名空间里的自由常量/函数。挪进类只是为了让拼写归到
-// 类命名空间下（ThemeManager::substituteWith 比文件里的裸名字好找），可见性
-// 一律 private —— 对外没有入口，插件更拿不到（插件手里只有 VirtualTheme 接口）。
-//
-// 常量刻意做成"返回引用的函数"而不是 static 数据成员：类/命名空间作用域的
-// QString、QStringList 会在**静态初始化期**构造（main 之前就分配堆内存），是
-// Qt 的老坑；函数内 static 推迟到首次调用，且初始化线程安全。
+// 常量刻意做成"返回引用的函数"而不是 static 数据成员：类/命名空间作用域的 QString、QStringList 会在静态初始化期构造（main 之前就分配堆内存），是 Qt 的老坑；函数内 static 推迟到首次调用，且初始化线程安全。
 
 const QString& ThemeManager::resourcePrefix()
 {
@@ -55,25 +46,20 @@ const QString& ThemeManager::resourcePrefix()
 
 const QStringList& ThemeManager::modules()
 {
-	// 各板块样式文件（与 resources/styles 下的默认模板一一对应）。
-	//
-	// 组织约定：一个文件 = 一个界面/表面，文件名就是它负责的那个界面；
-	// 每个文件的头部注释写明「归属」与「别把别的板块写进来」。
-	// 顺序 = 级联顺序（同优先级的选择器后来者胜），所以下面这份列表的顺序有意义：
-	// 全局默认（外壳/通用控件/滚动条）在前，各界面在后，便于界面覆盖默认。
+	// 各板块样式文件（与 resources/styles 下的默认模板一一对应）：一个文件 = 一个界面/表面；顺序 = 级联顺序（同优先级的选择器后来者胜），所以全局默认（外壳/通用控件/滚动条）在前、各界面在后，便于界面覆盖默认。
 	static const QStringList list = {
 		QStringLiteral("main-window.qss"),      // 主窗口外壳与自绘标题栏
 		QStringLiteral("defaults.qss"),         // 通用控件默认外观（各界面覆盖它）
 		QStringLiteral("scrollbars.qss"),       // 全局滚动条（唯一一份滚动条规则）
-		QStringLiteral("chat.qss"),             // 对话列
+		QStringLiteral("chat.qss"),
 		QStringLiteral("sidebar.qss"),          // 左侧会话栏
 		QStringLiteral("popups.qss"),           // 浮层与各窗口遮罩、弹窗外壳
 		QStringLiteral("tooltip.qss"),          // 悬浮提示气泡（同为浮层，紧跟弹窗外壳）
-		QStringLiteral("extension-manager.qss"),// 扩展管理窗口
+		QStringLiteral("extension-manager.qss"),
 		QStringLiteral("topbar.qss"),           // 对话顶栏与工具过滤窗口
-		QStringLiteral("settings.qss"),         // 设置窗口
+		QStringLiteral("settings.qss"),
 		QStringLiteral("model-list.qss"),       // 模型列表面板（设置 → 模型列表）
-		QStringLiteral("plugin-market.qss"),    // 插件市场窗口
+		QStringLiteral("plugin-market.qss"),
 	};
 	return list;
 }
@@ -83,7 +69,6 @@ QString ThemeManager::resourcePath(const QString& fileName)
 	return resourcePrefix() + fileName;
 }
 
-// 两套主题预合成缓存的键（light / dark）
 QString ThemeManager::modeKey(Mode mode)
 {
 	return mode == Mode::Dark ? QStringLiteral("dark") : QStringLiteral("light");
@@ -139,17 +124,11 @@ QString ThemeManager::token(const QHash<QString, QString>& palette, const QStrin
 	return it == palette.constEnd() ? fallback : it.value();
 }
 
-// 生成并应用与当前主题一致的 QPalette：QSS 没覆盖到的默认文字/底色
-// （输入框文字、列表项、上下文菜单等）在暗色模式下会退化成 Qt 默认的
-// 亮色调色板（黑字），这里统一按当前色板修正。
-//
-// ⚠️ 它有副作用（换掉整个应用的 QPalette），所以刻意留在 private：外部只能
-// 通过 setMode()/reload() 间接触发，任何调用方都不该自己去"给应用换色"。
+// 生成并应用与当前主题一致的 QPalette：QSS 没覆盖到的默认文字/底色（输入框文字、列表项、上下文菜单等）在暗色模式下会退化成 Qt 默认的亮色调色板（黑字），这里统一按当前色板修正。它有副作用（换掉整个应用的 QPalette），所以刻意留在 private，外部只能通过 setMode()/reload() 间接触发。
 void ThemeManager::installPaletteFor(const QHash<QString, QString>& palette)
 {
 	QPalette pal = QApplication::palette();
-	// 色板值可能是 CSS 的 rgba(...)，QColor 的字符串构造不认那种写法（会得到无效色）
-	// —— 一律走 CardShadow::parseColor（它两种写法都认，是 QColor 的超集）。
+	// 色板值可能是 CSS 的 rgba(...)，QColor 的字符串构造不认那种写法（会得到无效色），一律走 CardShadow::parseColor（两种写法都认，是 QColor 的超集）。
 	const QColor window(CardShadow::parseColor(token(palette, QStringLiteral("windowBg"), QStringLiteral("#FFFFFF"))));
 	const QColor panel(CardShadow::parseColor(token(palette, QStringLiteral("panelBg"), QStringLiteral("#FFFFFF"))));
 	const QColor text(CardShadow::parseColor(token(palette, QStringLiteral("textPrimary"), QStringLiteral("#000000"))));
@@ -188,10 +167,7 @@ void ThemeManager::installPaletteFor(const QHash<QString, QString>& palette)
 
 ThemeManager& ThemeManager::instance()
 {
-	// 刻意不析构：本对象是 QObject，而它会在 init() 里被登记进 CommonRegistry
-	// （那个单例自己也是"刻意不析构"，见 CommonRegistry.cpp）。静态析构顺序无从
-	// 保证，与其留一个"注册表里还指着已析构对象、插件刚好这时调进来"的窗口，
-	// 不如让它跟注册表一样长存。
+	// 刻意不析构：本对象是 QObject，且会在 init() 里被登记进 CommonRegistry（那个单例自己也是"刻意不析构"，见 CommonRegistry.cpp）；静态析构顺序无从保证，与其留一个"注册表里还指着已析构对象、插件刚好这时调进来"的窗口，不如让它跟注册表一样长存。
 	static ThemeManager* const inst = new ThemeManager();
 	return *inst;
 }
@@ -200,10 +176,6 @@ ThemeManager::ThemeManager() = default;
 
 ThemeManager::~ThemeManager() = default;
 
-// ------------------------------------------------------------------
-// 私有：模板释放 / 读取 / 合成 / 缓存
-// ------------------------------------------------------------------
-
 QString ThemeManager::paletteFileFor(Mode m) const
 {
 	return m == Mode::Dark
@@ -211,12 +183,7 @@ QString ThemeManager::paletteFileFor(Mode m) const
 		: QStringLiteral("theme-light.json");
 }
 
-// 释放默认模板：stylesDir 里缺失的文件从 qrc 拷出；已存在不覆盖
-// （用户定制优先）。
-//
-// 代价是：程序发布的新版模板会被旧的同名外部文件盖住——界面看不出报错，
-// 只是新控件的样式一直不生效。这里对“已存在但与内置模板不同”的文件打一条
-// 提示（不覆盖，也不删用户的东西），把这种沉默的失效变成可查的日志。
+// 释放默认模板：stylesDir 里缺失的文件从 qrc 拷出，已存在不覆盖（用户定制优先）。代价是程序发布的新版模板会被旧的同名外部文件盖住 —— 界面看不出报错，只是新控件的样式一直不生效；这里对"已存在但与内置模板不同"的文件打一条提示（不覆盖，也不删用户的东西），把这种沉默的失效变成可查的日志。
 void ThemeManager::ensureDefaults()
 {
 	QDir dir(m_stylesDir);
@@ -245,8 +212,7 @@ void ThemeManager::ensureDefaults()
 			if (readable)
 				existing.close();
 
-			// 与内置模板不一致时，这份外部文件会在 loadText() 里胜出。
-			// 只提示，不动它：它可能是用户自己改的。
+			// 与内置模板不一致时，这份外部文件会在 loadText() 里胜出；只提示，不动它（它可能是用户自己改的）。
 			if (current != data) {
 				qInfo().noquote()
 					<< "[Theme] external style differs from the shipped default:"
@@ -352,7 +318,6 @@ void ThemeManager::ensureCached(Mode m)
 	m_qssCache.insert(key, result.second);
 }
 
-// 把某个主题的缓存镜像到当前生效成员
 void ThemeManager::activate(Mode m)
 {
 	m_mode = m;
@@ -360,12 +325,7 @@ void ThemeManager::activate(Mode m)
 	m_qss = m_qssCache.value(modeKey(m));
 }
 
-// 全局兜底：任何滚动区**首次显示**时补一次滚动条解析。
-//   · 有了它，"新加滚动区忘了调 ThemeManager::instance().repolishScrollArea()"
-//     不会再变成视觉 bug；
-//   · 显式调用仍然有意义：它在第一次绘制前就弄对了，不会闪一下。
-// 挂在 qApp 上（见 init()），只在 Show 事件上做一次廉价的 qobject_cast。
-// （repolishScrollArea 的声明在头文件里，所以这里定义在它之前也没问题。）
+// 全局兜底：任何滚动区**首次显示**时补一次滚动条解析 —— 有了它，"新加滚动区忘了调 ThemeManager::instance().repolishScrollArea()"不会再变成视觉 bug；显式调用仍然有意义：它在第一次绘制前就弄对了，不会闪一下。挂在 qApp 上（见 init()），只在 Show 事件上做一次廉价的 qobject_cast。
 namespace
 {
 	class ScrollAreaShowFilter : public QObject
@@ -378,9 +338,7 @@ namespace
 		{
 			if (event->type() == QEvent::Show) {
 				if (auto* area = qobject_cast<QAbstractScrollArea*>(watched)) {
-					// Show 派发期间重新解析会搅乱事件流：排到本轮之后；以控件自身为
-					// 上下文，控件先销毁时这次调用自动作废。
-					// repolishScrollArea 自带"每个控件只挂一次补丁"的标记，重复调用无害。
+					// Show 派发期间重新解析会搅乱事件流：排到本轮之后；以控件自身为上下文，控件先销毁时这次调用自动作废；repolishScrollArea 自带"每个控件只挂一次补丁"的标记，重复调用无害。
 					QMetaObject::invokeMethod(area, [area]() {
 						ThemeManager::instance().repolishScrollArea(area);
 						}, Qt::QueuedConnection);
@@ -401,20 +359,13 @@ void ThemeManager::init(const QString& stylesDir, Mode mode)
 
 	setMode(mode);
 
-	// 全局兜底：滚动区首次显示时补一次滚动条解析（见 ScrollAreaShowFilter）。
-	// 这样"新加滚动区忘了调 ThemeManager::instance().repolishScrollArea()"
-	// 不会再退回原生老式滚动条。
 	static bool showFilterInstalled = false;
 	if (!showFilterInstalled && qApp) {
 		showFilterInstalled = true;
 		qApp->installEventFilter(new ScrollAreaShowFilter(qApp));
 	}
 
-	// 登记进全局注册表：客户端扩展按 index 取到本对象，再转成 VirtualTheme*
-	// 调 ExternalApplyToWindow（同 TopBar/VirtualTopBar 那套，见 HostExports.h）。
-	//
-	// 放在最后一步：登记出去的对象必须已经可用 —— qss 已合成，插件这时候调进来
-	// 才不会被 applyToWindow 的空样式表闸门挡回。
+	// 登记进全局注册表：客户端扩展按 index 取到本对象，再转成 VirtualTheme* 调 ExternalApplyToWindow（同 TopBar/VirtualTopBar 那套，见 HostExports.h）。放在最后一步：登记出去的对象必须已经可用 —— qss 已合成，插件这时候调进来才不会被 applyToWindow 的空样式表闸门挡回。
 	CommonRegistry::instance().AddToRegistry(DshHostIndex::kThemeManager, this);
 
 	qInfo().noquote() << "[Theme] styles initialized from:" << m_stylesDir
@@ -432,16 +383,13 @@ void ThemeManager::setMode(Mode mode)
 		<< "qssBytes=" << m_qss.size();
 }
 
-// 把当前合成样式表安装到单个窗口（及其子树）。
-// 各顶层窗口（主窗 / 弹窗 / 主题切换卡）自行调用；切主题时旧窗口不再全局重 polish。
+// 把当前合成样式表安装到单个窗口（及其子树）；各顶层窗口（主窗 / 弹窗 / 主题切换卡）自行调用，切主题时旧窗口不再全局重 polish。
 void ThemeManager::applyToWindow(QWidget* window)
 {
 	if (!window)
 		return;
 
-	// 没 init 过（或模板全缺）时 m_qss 是空的：setStyleSheet("") 等于把窗口上已有的
-	// 样式**清掉**，比什么都不做糟得多。插件拿到注册表对象后可能在任何时刻调进来，
-	// 所以这道闸门必须留在函数里，不能只靠"调用方都记得先 init"。
+	// 没 init 过（或模板全缺）时 m_qss 是空的：setStyleSheet("") 等于把窗口上已有的样式清掉，比什么都不做糟得多；插件拿到注册表对象后可能在任何时刻调进来，所以这道闸门必须留在函数里，不能只靠"调用方都记得先 init"。
 	if (m_qss.isEmpty()) {
 		qWarning().noquote() << "[Theme] applyToWindow before init (empty qss), skipped";
 		return;
@@ -452,30 +400,22 @@ void ThemeManager::applyToWindow(QWidget* window)
 
 void ThemeManager::ExternalApplyToWindow(QWidget* window)
 {
-	// VirtualTheme 接口的实现就是转发：插件与宿主内部走的必须是同一条路，
-	// 别在这里加任何额外语义（否则"插件挂的样式"和"宿主挂的样式"会分家）。
+	// VirtualTheme 接口的实现就是转发：插件与宿主内部走的必须是同一条路，别在这里加任何额外语义（否则"插件挂的样式"和"宿主挂的样式"会分家）。
 	applyToWindow(window);
 }
 
 bool ThemeManager::ExternalReloadStyles()
 {
-	// 未 init 时没有可信的样式目录：这种情况下 reload() 只会把缓存刷成"仅 qrc 兜底"
-	// 的那一份，还会顺手 activate(m_mode) 把生效镜像换掉。与 applyToWindow 的空样式表
-	// 闸门同理 —— 这道闸必须留在函数里，不能指望调用方都记得先 init。
+	// 未 init 时没有可信的样式目录：这种情况下 reload() 只会把缓存刷成"仅 qrc 兜底"的那一份，还会顺手 activate(m_mode) 把生效镜像换掉；与 applyToWindow 的空样式表闸门同理 —— 这道闸必须留在函数里，不能指望调用方都记得先 init。
 	if (m_stylesDir.isEmpty()) {
 		qWarning().noquote() << "[Theme] ExternalReloadStyles before init, refused";
 		return false;
 	}
 
-	// 典型用法：插件先覆盖 <exe>/styles/*.qss，再调这里 —— reload() 重新读文件、
-	// 重新合成亮/暗两套、换 QPalette，并把新样式表挂回所有顶层窗口。
-	//
-	// 它不重建窗口：主题相关但**构造期就已固化**的东西（例如按 isDark() 选的 logo
-	// 资源，见 TitleBar/Sidebar/Main 的构造）不会跟着变。
+	// 典型用法：插件先覆盖 <exe>/styles/*.qss，再调这里 —— reload() 重新读文件、重新合成亮/暗两套、换 QPalette，并把新样式表挂回所有顶层窗口。它不重建窗口：主题相关但构造期就已固化的东西（例如按 isDark() 选的 logo 资源，见 TitleBar/Sidebar/Main 的构造）不会跟着变。
 	reload();
 
-	// 空样式表 = 一份都没读到（写失败 / 路径不对 / 权限不足）。如实回给插件，
-	// 别让它对着一个"看起来调成功了"的 void 去排查。
+	// 空样式表 = 一份都没读到（写失败 / 路径不对 / 权限不足）。如实回给插件，别让它对着一个"看起来调成功了"的 void 去排查。
 	if (m_qss.isEmpty()) {
 		qWarning().noquote() << "[Theme] ExternalReloadStyles composed an empty stylesheet;"
 			" nothing was readable under:" << m_stylesDir;
@@ -542,22 +482,7 @@ QString ThemeManager::textSecondary() const { return color(QStringLiteral("textS
 QString ThemeManager::inputBg() const { return color(QStringLiteral("inputBg")); }
 QString ThemeManager::accent() const { return color(QStringLiteral("accent")); }
 
-// 见头文件注释：滚动条是基类构造时建好的，那时子类的 objectName 还没设，
-// QStyleSheetStyle 会把"匹配不到规则"缓存下来。
-//
-// 光在构造后解析一次还不够：样式表是**按顶层窗口**挂的（见 applyToWindow），
-// 控件在构造时可能还没接进那个窗口（预构建的控件树、先建后插的卡片都属于这种），
-// 或者那条规则要等滚动条真的出现才谈得上。表现就是"首次渲染是原生老式滚动条，
-// 重启/切主题后又好了"——重启会重新 setStyleSheet，整棵子树被重新解析。
-//
-// 所以这里一次挂好两个只跑一次的补丁：
-//   1) 首次 Show 之后再解析一次（那时控件一定已经在带样式表的窗口里）；
-//   2) 任一滚动条第一次真的有范围（= 它真的会出现）时再解析一次。
-// 补丁跑完自动摘掉，对滚动列表没有持续开销。
-//
-// 另有一层全局兜底 ScrollAreaShowFilter（见 init()）：任何滚动区首次显示都会被
-// 抓一次，所以**新控件忘记调用也不会再退回原生滚动条**；显式调用仍然值得做，
-// 它让控件在第一次绘制之前就已经是对的样子。
+// 见头文件注释：滚动条是基类构造时建好的，那时子类的 objectName 还没设，QStyleSheetStyle 会把"匹配不到规则"缓存下来。光在构造后解析一次还不够：样式表是按顶层窗口挂的（见 applyToWindow），控件在构造时可能还没接进那个窗口（预构建的控件树、先建后插的卡片都属于这种），或者那条规则要等滚动条真的出现才谈得上 —— 表现就是"首次渲染是原生老式滚动条，重启/切主题后又好了"（重启会重新 setStyleSheet，整棵子树被重新解析）。所以这里一次挂好两个只跑一次的补丁：1) 首次 Show 之后再解析一次（那时控件一定已经在带样式表的窗口里）；2) 任一滚动条第一次真的有范围（= 它真的会出现）时再解析一次；补丁跑完自动摘掉，对滚动列表没有持续开销。另有一层全局兜底 ScrollAreaShowFilter（见 init()）：任何滚动区首次显示都会被抓一次，所以新控件忘记调用也不会再退回原生滚动条；显式调用仍然值得做，它让控件在第一次绘制之前就已经是对的样子。
 namespace
 {
 	class ScrollBarRepolisher : public QObject
@@ -643,8 +568,7 @@ void ThemeManager::repolishScrollArea(QWidget* widget)
 		}
 	}
 
-	// 构造期解析可能太早（那时还没接进带样式表的窗口）：挂上"首次显示/首次
-	// 真出现滚动条"的补丁（每个控件只挂一次）
+	// 构造期解析可能太早（那时还没接进带样式表的窗口）：挂上"首次显示 / 首次真出现滚动条"的补丁（每个控件只挂一次）
 	static const char* const kHooked = "dshScrollAreaRepolishHooked";
 	if (area->property(kHooked).toBool())
 		return;
@@ -654,8 +578,7 @@ void ThemeManager::repolishScrollArea(QWidget* widget)
 
 void ThemeManager::switchTheme(QWidget* currentWindow)
 {
-	// 先构造并显示“切换中”过渡卡片（使用当前主题），确保点击后立刻出现，
-	// 而不是等 setMode（重建 + 全应用重设样式表，较耗时）做完才显示。
+	// 先构造并显示“切换中”过渡卡片（使用当前主题），确保点击后立刻出现，而不是等 setMode（重建 + 全应用重设样式表，较耗时）做完才显示。
 	auto* popup = new QWidget(nullptr, Qt::FramelessWindowHint | Qt::Dialog);
 	popup->setAttribute(Qt::WA_TranslucentBackground);
 
@@ -701,9 +624,7 @@ void ThemeManager::switchTheme(QWidget* currentWindow)
 	// 强制先画出一帧（否则会与下方 setMode 的耗时操作同一帧出现，观感仍是“卡”）
 	QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 
-	// 趁旧窗口还活着，记下它的窗口状态与几何：新窗口是**重新构造**的，构造函数里
-	// 会 resize 成默认尺寸（见 Main.cpp），不接过来就等于把用户调好的大小、位置、
-	// 最大化状态一起重置掉。
+	// 趁旧窗口还活着，记下它的窗口状态与几何：新窗口是重新构造的，构造函数里会 resize 成默认尺寸（见 Main.cpp），不接过来就等于把用户调好的大小、位置、最大化状态一起重置掉。
 	const Qt::WindowStates oldState =
 		currentWindow ? currentWindow->windowState() : Qt::WindowStates(Qt::WindowNoState);
 	const QRect oldGeometry = currentWindow ? currentWindow->geometry() : QRect();
@@ -714,9 +635,7 @@ void ThemeManager::switchTheme(QWidget* currentWindow)
 	// 再切换主题：预合成缓存命中，主线程只做缓存取用，不再重建字符串
 	const Mode nextMode = isDark() ? Mode::Light : Mode::Dark;
 
-	// 记进 AppearanceSetting.json：用户已经显式选过主题了，下次启动就照它，
-	// 不再跟随系统（把 system 固化成明确的 light/dark）。写在 setMode 之前，
-	// 免得后面重建窗口若出岔子，用户的选择反而丢了。
+	// 记进 AppearanceSetting.json：用户已经显式选过主题了，下次启动就照它，不再跟随系统（把 system 固化成明确的 light/dark）；写在 setMode 之前，免得后面重建窗口若出岔子、用户的选择反而丢了。
 	AppearanceSetting::setThemeMode(nextMode == Mode::Dark
 		? AppearanceSetting::ThemeMode::Dark
 		: AppearanceSetting::ThemeMode::Light);
@@ -729,8 +648,7 @@ void ThemeManager::switchTheme(QWidget* currentWindow)
 	QUrl oldBaseUrl;
 	QProcess* oldServerProcess = nullptr;
 	if (auto* oldHub = qobject_cast<DSHHub*>(currentWindow)) {
-		// 带令牌的 URL：0.1.5 的 /api 需要 cookie，而 cookie 只能用启动令牌换，
-		// 只传域名端口的话新窗口会 401（表现为"切主题后窗口不再出现"）。
+		// 带令牌的 URL：0.1.5 的 /api 需要 cookie，而 cookie 只能用启动令牌换；只传域名端口的话新窗口会 401（表现为"切主题后窗口不再出现"）。
 		oldBaseUrl = oldHub->authenticatedBaseUrl();
 		oldServerProcess = oldHub->takeServerProcess();
 	}
@@ -745,13 +663,7 @@ void ThemeManager::switchTheme(QWidget* currentWindow)
 		if (currentWindow)
 			currentWindow->deleteLater();
 
-		// 把旧窗口的"窗口状态"和几何接过来：新窗口是重新构造的，构造函数里会
-		// resize 成默认尺寸，不显式恢复的话，用户调好的大小 / 位置 / 最大化就全丢了。
-		//
-		// 三种情形分开处理，别混：
-		//   · 最大化 / 全屏：交给 showMaximized()/showFullScreen() —— 这时候再去
-		//     setGeometry 会和窗口管理器打架（那两句话把几何交给系统算）
-		//   · 普通：先摆几何再 show —— 隐藏的窗口上摆好，出现时不闪
+		// 把旧窗口的"窗口状态"和几何接过来：新窗口是重新构造的，构造函数里会 resize 成默认尺寸，不显式恢复的话用户调好的大小 / 位置 / 最大化就全丢了。三种情形分开处理，别混：最大化 / 全屏交给 showMaximized()/showFullScreen() —— 这时候再去 setGeometry 会和窗口管理器打架（那两句话把几何交给系统算）；普通情形先摆几何再 show —— 隐藏的窗口上摆好，出现时不闪。
 		if (oldState & Qt::WindowMaximized) {
 			newWindow->showMaximized();
 		}

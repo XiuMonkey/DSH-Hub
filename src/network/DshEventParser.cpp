@@ -1,9 +1,5 @@
-// ------------------------------------------------------------------
 // DshEventParser.cpp
-// ------------------------------------------------------------------
-// DSH Mux 流 JSON 解析接口实现。
-// 这些函数不依赖任何 UI 类，可以单独复用。
-// ------------------------------------------------------------------
+// DSH Mux 流 JSON 解析接口实现；不依赖任何 UI 类，可单独复用。
 
 #include "network/DshEventParser.h"
 
@@ -15,7 +11,6 @@ QString extractEventText(const QJsonObject& event)
 	const QString type = event.value(QStringLiteral("type")).toString();
 	const QJsonObject data = event.value(QStringLiteral("data")).toObject();
 
-	// 完整消息：assistant/message、user/message
 	if (type == QStringLiteral("assistant/message")
 		|| type == QStringLiteral("user/message")) {
 		QJsonObject message = data.value(QStringLiteral("message")).toObject();
@@ -42,7 +37,6 @@ QString extractEventText(const QJsonObject& event)
 		}
 	}
 
-	// 流式增量：assistant/chunk
 	if (type == QStringLiteral("assistant/chunk")) {
 		const QJsonValue chunk = data.value(QStringLiteral("chunk"));
 		if (chunk.isString())

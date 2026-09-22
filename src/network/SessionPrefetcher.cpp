@@ -15,12 +15,7 @@ void SessionPrefetcher::setApi(DshApiClient* api)
 	m_api = api;
 }
 
-/**
- * 预取一个会话的最近一页历史。
- *
- * 走 DshApiClient::callMethod（异步）：请求排队 → 响应到达 → 线程池解析 JSON →
- * 主线程回调。所以这里只需要发出去，不需要线程也不需要阻塞等待。
- */
+// 预取一个会话的最近一页历史：callMethod 全程异步（排队 → 响应 → 线程池解析 JSON → 主线程回调），这里发出去即可，不需要线程也不需要阻塞等待。
 void SessionPrefetcher::prefetch(const QString& sessionId, int throughSeq, int maxMessages)
 {
 	if (!m_api || sessionId.isEmpty())

@@ -1,14 +1,5 @@
-// ------------------------------------------------------------------
 // DshApiClient.cpp
-// ------------------------------------------------------------------
-// DshApiClient 的实现。
-//
-// 职责：
-//   - 维护 HTTP 请求和 WebSocket 连接；
-//   - 自动为每个 RPC 请求生成 rpcId；
-//   - 把 HTTP 响应解析成业务成功/失败回调；
-//   - 把 WebSocket 收到的 JSON 帧原样通过信号抛给界面层。
-// ------------------------------------------------------------------
+// DshApiClient 的实现。职责：维护 HTTP 请求和 WebSocket 连接；自动为每个 RPC 请求生成 rpcId；把 HTTP 响应解析成业务成功/失败回调；把 WebSocket 收到的 JSON 帧原样通过信号抛给界面层。
 
 #include "network/DshApiClient.h"
 
@@ -35,8 +26,7 @@ DshApiClient::JsonParseRunnable::JsonParseRunnable(
 {
 }
 
-// 在线程池 worker 中执行：只做纯 JSON 解析，不触碰任何回调；
-// 完成后把文档回投到主线程的 handleParsedResponse() 再拆信封、调回调。
+// 在线程池 worker 中执行：只做纯 JSON 解析，不触碰任何回调；完成后把文档回投到主线程的 handleParsedResponse() 再拆信封、调回调。
 void DshApiClient::JsonParseRunnable::run()
 {
 	const QJsonDocument doc = QJsonDocument::fromJson(m_body);
@@ -51,14 +41,7 @@ void DshApiClient::JsonParseRunnable::run()
 		Qt::QueuedConnection);
 }
 
-/**
- * 构造函数。
- *
- * 初始化：
- * - QNetworkAccessManager：用于发送 HTTP POST 请求；
- * - QWebSocket m_stream：0.1.5 唯一的一条流通道 /api/remote.mux，
- *   所有逻辑流（$events、workspace/follow、session/follow）都跑在它上面。
- */
+// 构造函数：建 QNetworkAccessManager（发 HTTP POST）与 QWebSocket m_stream —— 后者是 0.1.5 唯一的一条流通道 /api/remote.mux，所有逻辑流（$events、workspace/follow、session/follow）都跑在它上面。
 DshApiClient::DshApiClient(QObject* parent)
 	: QObject(parent)
 	, m_nam(new QNetworkAccessManager(this))
@@ -81,8 +64,7 @@ DshApiClient::DshApiClient(QObject* parent)
 		m_workspaceStreamId = nextStreamId(QStringLiteral("workspace"));
 		sendStreamOpen(QStringLiteral("$events"), m_eventsStreamId);
 		sendStreamOpen(QStringLiteral("workspace/follow"), m_workspaceStreamId);
-		// session/control：主机级实时控制流（会话投影变化、队列、作业）。
-		// 输入区那行统计小灰字靠它做实时更新 —— 服务端现算现推，客户端不读任何缓存。
+		// session/control：主机级实时控制流（会话投影变化、队列、作业）；输入区那行统计小灰字靠它做实时更新 —— 服务端现算现推，客户端不读任何缓存。
 		m_controlStreamId = nextStreamId(QStringLiteral("control"));
 		sendStreamOpen(QStringLiteral("session/control"), m_controlStreamId);
 		// 换了连接代次，当前会话的 follow 流要重新开
@@ -104,17 +86,13 @@ DshApiClient::DshApiClient(QObject* parent)
 		qInfo().noquote() << "[DshApi] DSH stream disconnected closeCode=" << code
 			<< "reason=" << reason << "wasConnected=" << wasConnected;
 
-		// 断线必须自愈：服务端在收到重复 streamId / 非法帧时会主动关掉整条 mux
-		// （close 1008），不重连的话所有逻辑流都再也开不出来。
+		// 断线必须自愈：服务端在收到重复 streamId / 非法帧时会主动关掉整条 mux（close 1008），不重连的话所有逻辑流都再也开不出来。
 		if (wasConnected)
 			scheduleReconnect();
 		});
 }
 
-/**
- * 析构函数。
- * 先关闭流通道，再释放 QWebSocket 对象。
- */
+// 析构：先关闭流通道，再释放 QWebSocket 对象。
 DshApiClient::~DshApiClient()
 {
 	m_destroyed = true;
@@ -127,13 +105,7 @@ DshApiClient::~DshApiClient()
 	delete m_stream;
 }
 
-/**
- * 设置 DSH 服务基础 URL。
- * 后续所有 HTTP 和 WebSocket 请求都会基于这个地址拼接。
- *
- * dsh 0.1.5 起服务端打印的是认证 URL（http://127.0.0.1:<port>/?token=<令牌>）：
- * 这里把令牌单独保存，基础 URL 保持干净，避免把 ?token= 拼到每个请求上。
- */
+// 设置 DSH 服务基础 URL，后续所有 HTTP/WebSocket 请求都基于它拼接；dsh 0.1.5 起服务端打印的是认证 URL（http://127.0.0.1:<port>/?token=<令牌>），这里把令牌单独保存、基础 URL 保持干净，避免把 ?token= 拼到每个请求上。
 void DshApiClient::setBaseUrl(const QUrl& url)
 {
 	m_launchToken.clear();
@@ -152,20 +124,12 @@ void DshApiClient::setBaseUrl(const QUrl& url)
 		<< "launchToken:" << (m_launchToken.isEmpty() ? QStringLiteral("(none)") : QStringLiteral("present"));
 }
 
-/** 返回当前设置的基础 URL。 */
 QUrl DshApiClient::baseUrl() const
 {
 	return m_baseUrl;
 }
 
-/**
- * 用启动令牌换取认证 cookie。
- *
- * GET http://127.0.0.1:<port>/?token=<令牌>
- *   -> 303 + Set-Cookie: dsh-auth-<authority 哈希>=<签名值>
- * 必须禁止自动跟随重定向，否则拿不到这一步的 Set-Cookie。
- * 成功后把 cookie 存进 m_authCookie 并继续 openStreams()。
- */
+// 用启动令牌换取认证 cookie：GET http://127.0.0.1:<port>/?token=<令牌> -> 303 + Set-Cookie: dsh-auth-<authority 哈希>=<签名值>；必须禁止自动跟随重定向，否则拿不到这一步的 Set-Cookie；成功后把 cookie 存进 m_authCookie 并继续 openStreams()。
 void DshApiClient::startAuthHandshake()
 {
 	if (m_destroyed || m_authInFlight)
@@ -178,8 +142,7 @@ void DshApiClient::startAuthHandshake()
 	}
 
 	m_authInFlight = true;
-	// 这一代握手的编号：回包时对不上就说明是"上一代（多半是重启前的旧地址）"的迟到回包，
-	// 直接丢掉 —— 否则它会清掉新一轮的在途标记，甚至把旧服务端的 cookie 覆盖进来。
+	// 这一代握手的编号：回包时对不上就说明是"上一代（多半是重启前的旧地址）"的迟到回包，直接丢掉 —— 否则它会清掉新一轮的在途标记，甚至把旧服务端的 cookie 覆盖进来。
 	const quint64 attempt = ++m_authAttempt;
 
 	QUrl url = m_baseUrl;
@@ -191,8 +154,7 @@ void DshApiClient::startAuthHandshake()
 	QNetworkRequest request(url);
 	request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
 		QVariant::fromValue(QNetworkRequest::ManualRedirectPolicy));
-	// 握手必须有超时：没有超时时连接会一直挂着，m_authInFlight 永远为真、
-	// 后续重试全被挡掉（表现是"卡在没认证"再也起不来）。
+	// 握手必须有超时：没有超时时连接会一直挂着，m_authInFlight 永远为真、后续重试全被挡掉（表现是"卡在没认证"再也起不来）。
 	request.setTransferTimeout(5000);
 
 	qInfo().noquote() << "[DshApi] auth handshake ->" << url.toString(QUrl::RemoveQuery) << "(token hidden)";
@@ -208,11 +170,7 @@ void DshApiClient::startAuthHandshake()
 		if (header.isEmpty()) {
 			qWarning().noquote() << "[DshApi] auth handshake failed: HTTP" << status << reply->errorString();
 
-			// HTTP 0（连接被拒/超时）＝传输层就没连上：服务端正在重启（扩展安装、插件市场
-			// 装完、手动重启都会触发）时旧地址必然是这个结果，属于预期瞬态。
-			// 这里只记日志 + 安排重连（ServerManager 给出新地址后会立刻重试），
-			// **不往聊天区丢错误** —— 以前就是这么弹出一条
-			// "传输错误[auth]: DSH 认证失败：服务端未返回 Set-Cookie(HTTP 0)" 的。
+			// HTTP 0（连接被拒/超时）＝传输层就没连上：服务端正在重启（扩展安装、插件市场装完、手动重启都会触发）时旧地址必然是这个结果，属于预期瞬态；这里只记日志 + 安排重连（ServerManager 给出新地址后会立刻重试），不往聊天区丢错误 —— 以前就是这么弹出一条"传输错误[auth]: DSH 认证失败：服务端未返回 Set-Cookie(HTTP 0)"的。
 			if (status == 0) {
 				qInfo().noquote() << "[DshApi] auth handshake 瞬态失败（服务端多半在重启），稍后重试";
 				scheduleReconnect();
@@ -240,10 +198,7 @@ void DshApiClient::startAuthHandshake()
 		});
 }
 
-/**
- * 认证就绪：把挂起的 RPC 按顺序补发。
- * 补发走的还是 post()，此时 m_authenticated 已为真，不会再入队。
- */
+// 认证就绪：把挂起的 RPC 按顺序补发；补发走的还是 post()，此时 m_authenticated 已为真，不会再入队。
 void DshApiClient::flushAuthQueue()
 {
 	if (m_authQueue.isEmpty())
@@ -270,11 +225,7 @@ void DshApiClient::failAuthQueue(const QString& code, const QString& message)
 	}
 }
 
-/**
- * 打开 mux 和 host 两条 WebSocket 事件流。
- * 如果尚未设置 baseUrl，则直接返回。
- * 带令牌但尚未换到 cookie 时先做认证握手（握手成功会再回到这里）。
- */
+// 打开 WebSocket 事件流；尚未设置 baseUrl 就直接返回，带令牌但还没换到 cookie 时先做认证握手（握手成功会再回到这里）。
 void DshApiClient::openStreams()
 {
 	if (m_baseUrl.isEmpty()) {
@@ -301,21 +252,14 @@ void DshApiClient::openStreams()
 	qInfo().noquote() << "[DshApi] opening mux stream:" << m_baseUrl.toString();
 }
 
-/**
- * 生成一条逻辑流 id：每次 open 都必须唯一。
- * 服务端在收到重复 streamId 时会 throw，而外层 catch 会 close(1008) 把整条 mux 关掉，
- * 所以复用 id（例如切会话时仍用 "session"）代价极高。
- */
+// 生成一条逻辑流 id：每次 open 都必须唯一 —— 服务端在收到重复 streamId 时会 throw，而外层 catch 会 close(1008) 把整条 mux 关掉，所以复用 id（例如切会话时仍用 "session"）代价极高。
 QString DshApiClient::nextStreamId(const QString& prefix)
 {
 	++m_streamSeq;
 	return QStringLiteral("%1-%2").arg(prefix).arg(m_streamSeq);
 }
 
-/**
- * 断线重连：延迟一小段时间后重新认证并打开 mux（重连成功会重开
- * $events / workspace/follow，并重新跟随当前会话）。
- */
+// 断线重连：延迟一小段时间后重新认证并打开 mux（重连成功会重开 $events / workspace/follow，并重新跟随当前会话）。
 void DshApiClient::scheduleReconnect()
 {
 	if (!m_reconnectTimer) {
@@ -341,9 +285,6 @@ void DshApiClient::scheduleReconnect()
 	m_reconnectTimer->start(delayMs);
 }
 
-/**
- * 关闭流通道，并重置连接/逻辑流状态标记。
- */
 void DshApiClient::closeStreams()
 {
 	qInfo().noquote() << "[DshApi] closing stream channel";
@@ -365,10 +306,7 @@ void DshApiClient::closeStreams()
 	m_followedSessionId.clear();
 }
 
-/**
- * 在 mux 上打开一条逻辑流。
- * 帧格式（0.1.5）：{"type":"open","streamId":…,"endpoint":…,"payload":{"args":{…}}}
- */
+// 在 mux 上打开一条逻辑流；帧格式（0.1.5）：{"type":"open","streamId":…,"endpoint":…,"payload":{"args":{…}}}
 void DshApiClient::sendStreamOpen(const QString& endpoint, const QString& streamId, const QJsonObject& args)
 {
 	if (!m_streamConnected || !m_stream || streamId.isEmpty()) {
@@ -401,10 +339,7 @@ void DshApiClient::sendStreamCancel(const QString& streamId)
 	m_stream->sendTextMessage(QString::fromUtf8(QJsonDocument(frame).toJson(QJsonDocument::Compact)));
 }
 
-/**
- * 跟随一个会话：换掉旧的 session/follow 流，按 SessionFollowRequest 发地址。
- * 参数形状：{"request":{"address":{"kind":"session","sessionId":…}}}
- */
+// 跟随一个会话：换掉旧的 session/follow 流，按 SessionFollowRequest 发地址；参数形状 {"request":{"address":{"kind":"session","sessionId":…}}}。
 void DshApiClient::followSession(const QString& sessionId)
 {
 	if (sessionId.isEmpty() || sessionId == m_followedSessionId)
@@ -418,9 +353,7 @@ void DshApiClient::followSession(const QString& sessionId)
 
 	QJsonObject request;
 	request.insert(QStringLiteral("address"), address);
-	// 0.1.5：模型增量是**订阅式**的——不带这个参数，follow 流只发"已提交的持久事件"
-	// （assistant/message 整段），于是界面只能等输出完才显示。带上它，服务端会把
-	// agent/assistant-stream 的实时分片以 {type:'assistant-stream', frame} 推过来。
+	// 0.1.5：模型增量是订阅式的 —— 不带这个参数，follow 流只发"已提交的持久事件"（assistant/message 整段），于是界面只能等输出完才显示；带上它，服务端会把 agent/assistant-stream 的实时分片以 {type:'assistant-stream', frame} 推过来。
 	request.insert(QStringLiteral("assistantStream"), true);
 
 	QJsonObject args;
@@ -431,7 +364,6 @@ void DshApiClient::followSession(const QString& sessionId)
 	sendStreamOpen(QStringLiteral("session/follow"), m_sessionStreamId, args);
 }
 
-/** 关闭当前的 session/follow 流。 */
 void DshApiClient::unfollowSession()
 {
 	if (!m_sessionStreamId.isEmpty())
@@ -440,28 +372,13 @@ void DshApiClient::unfollowSession()
 	m_followedSessionId.clear();
 }
 
-/**
- * 返回当前是否已连接 DSH。
- * 判定：mux WebSocket 已打开，且 $events 逻辑流已收到 ready 帧。
- */
+// 是否已连接 DSH：mux WebSocket 已打开，且 $events 逻辑流已收到 ready 帧。
 bool DshApiClient::isConnected() const
 {
 	return m_streamConnected && m_eventsReady;
 }
 
-/**
- * 发送一元 RPC 请求。
- *
- * 构造的请求体：
- * {
- *   "type": "client-request",
- *   "rpcId": "<随机 UUID>",
- *   "method": "<方法名>",
- *   "payload": { ... }
- * }
- *
- * 然后 POST 到 /api/<method>。
- */
+// 发送一元 RPC 请求：请求体 {"type":"client-request","rpcId":<随机 UUID>,"method":<方法名>,"payload":{...}}，然后 POST 到 /api/<method>。
 void DshApiClient::callMethod(
 	const QString& method,
 	const QJsonObject& payload,
@@ -490,10 +407,7 @@ void DshApiClient::callMethod(
 		std::move(onError));
 }
 
-/**
- * 同 callMethod，但成功回调拿裸 JSON 值。
- * 用于返回数组的端点（例如 llm/listConfigurableProviders）。
- */
+// 同 callMethod，但成功回调拿裸 JSON 值；用于返回数组的端点（例如 llm/listConfigurableProviders）。
 void DshApiClient::callMethodValue(
 	const QString& method,
 	const QJsonObject& payload,
@@ -516,29 +430,13 @@ void DshApiClient::callMethodValue(
 	post(QStringLiteral("/api/") + method, body, std::move(onSuccess), std::move(onError));
 }
 
-/**
- * 应答审批/提问请求。
- *
- * dsh 0.1.5 的通道是 POST /api/$events/result，args 形状：
- * {
- *   "clientId": "<$events 流 ready 帧给的 id>",
- *   "eventId":  "<waterfall 帧里的 eventId>",
- *   "outcome":  { "kind": "result", "value": { ... } }
- * }
- * 传进来的 @p rpcId 就是帧里的 eventId（帧被翻译成旧形状时放在 rpcId 位置）。
- *
- * 返回的回执是普通的 server-response 信封，因此直接走 callMethod；
- * 旧的 /api/respond 端点已随 0.1.5 删除。
- */
+// 应答审批/提问请求：dsh 0.1.5 的通道是 POST /api/$events/result，args 形状 = {"clientId": <$events 流 ready 帧给的 id>, "eventId": <waterfall 帧里的 eventId>, "outcome": {"kind":"result","value":{...}}}；传进来的 rpcId 就是帧里的 eventId（帧被翻译成旧形状时放在 rpcId 位置）。返回的回执是普通 server-response 信封，故直接走 callMethod；旧的 /api/respond 端点已随 0.1.5 删除。
 void DshApiClient::respond(
 	const QString& rpcId,
 	const QJsonObject& value,
 	std::function<void(const QJsonObject& receipt)> onSuccess,
 	std::function<void(const RpcError& error)> onError)
 {
-	// dsh 0.1.5：/api/respond 已被删除。审批/提问是 $events 流上的 waterfall 帧，
-	// 回执要 POST /api/$events/result，args = {clientId, eventId, outcome:{kind:"result", value}}。
-	// 传进来的 rpcId 就是帧里的 eventId。
 	if (m_clientId.isEmpty()) {
 		qWarning().noquote() << "[DshApi] respond ignored: $events stream not ready";
 		if (onError) {
@@ -563,13 +461,7 @@ void DshApiClient::respond(
 	callMethod(QStringLiteral("$events/result"), args, onSuccess, onError);
 }
 
-/**
- * 把 HTTP 基础 URL 转换为对应的 WebSocket URL。
- *
- * 例如：
- *   http://127.0.0.1:3080  ->  ws://127.0.0.1:3080/api/remote.mux
- *   https://example.com     ->  wss://example.com/api/remote.mux
- */
+// 把 HTTP 基础 URL 转换为对应的 WebSocket URL：http://127.0.0.1:3080 -> ws://127.0.0.1:3080/api/remote.mux，https://example.com -> wss://example.com/api/remote.mux。
 QUrl DshApiClient::makeUrl(const QString& path) const
 {
 	QUrl url = m_baseUrl;
@@ -581,23 +473,14 @@ QUrl DshApiClient::makeUrl(const QString& path) const
 	return url;
 }
 
-/**
- * 发送 HTTP POST JSON 请求。
- *
- * 1. 从请求体里取出 rpcId；
- * 2. 把回调保存到 m_pending，供响应回来时匹配；
- * 3. 使用 QNetworkAccessManager 发起异步 POST；
- * 4. 在 reply 上记录 rpcId，finished 时交给 onReplyFinished 统一处理。
- */
+// 发送 HTTP POST JSON 请求：先从请求体取出 rpcId，把回调保存到 m_pending 供响应回来时匹配，再异步 POST，并在 reply 上记录 rpcId，finished 时交给 onReplyFinished 统一处理。
 void DshApiClient::post(
 	const QString& path,
 	const QJsonObject& body,
 	std::function<void(const QJsonValue& value)> onSuccess,
 	std::function<void(const RpcError& error)> onError)
 {
-	// 认证还没就绪（启动早期 / 服务端刚重启）：先挂起来，等握手完成再补发。
-	// 直发必然 401（0.1.5 的 /api 在认证围栏后面），用户看到的就是
-	// "发出去的消息莫名失败"。ServerManager 重启服务端、扩展安装触发重启时都会走这里。
+	// 认证还没就绪（启动早期 / 服务端刚重启）：先挂起来，等握手完成再补发；直发必然 401（0.1.5 的 /api 在认证围栏后面），用户看到的就是"发出去的消息莫名失败"。ServerManager 重启服务端、扩展安装触发重启时都会走这里。
 	if (!m_authenticated && !m_launchToken.isEmpty()) {
 		static constexpr int kMaxQueuedCalls = 256;
 		if (m_authQueue.size() >= kMaxQueuedCalls) {
@@ -640,16 +523,7 @@ void DshApiClient::post(
 	connect(reply, &QNetworkReply::finished, this, &DshApiClient::onReplyFinished);
 }
 
-/**
- * 所有 HTTP 请求的 finished 统一处理函数。
- *
- * 处理步骤：
- * 1. 从 reply 上取回 rpcId；
- * 2. 在 m_pending 中找到对应的回调；
- * 3. 先检查 HTTP 传输层错误；
- * 4. 再解析 JSON 响应体；
- * 5. 按 server-response 的 result.ok 判断业务成功/失败。
- */
+// 所有 HTTP 请求的 finished 统一处理：从 reply 上取回 rpcId → 在 m_pending 中找到对应回调 → 先检查 HTTP 传输层错误 → 再解析 JSON 响应体 → 按 server-response 的 result.ok 判断业务成功/失败。
 void DshApiClient::onReplyFinished()
 {
 	QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
@@ -685,8 +559,7 @@ void DshApiClient::onReplyFinished()
 		return;
 	}
 
-	// 传输成功：把响应体解析挪到线程池 worker（大回包如 session/page 的历史页
-	// 可达几百 KB~1MB，避免 fromJson 卡主线程），完成后回投 handleParsedResponse。
+	// 传输成功：把响应体解析挪到线程池 worker（大回包如 session/page 的历史页可达几百 KB~1MB，避免 fromJson 卡主线程），完成后回投 handleParsedResponse。
 	const QByteArray body = reply->readAll();
 	reply->deleteLater();
 
@@ -695,9 +568,7 @@ void DshApiClient::onReplyFinished()
 	QThreadPool::globalInstance()->start(task);
 }
 
-/**
- * 主线程：处理线程池解析完成的 HTTP 响应（拆 result 信封并调用回调）。
- */
+// 主线程：处理线程池解析完成的 HTTP 响应（拆 result 信封并调用回调）。
 void DshApiClient::handleParsedResponse(
 	const QString& rpcId, const QJsonDocument& doc)
 {
@@ -732,16 +603,7 @@ void DshApiClient::handleParsedResponse(
 	}
 }
 
-/**
- * mux WebSocket 收到文本消息。
- * 把 JSON 解析成 QJsonObject 后通过 muxFrameReceived 信号发出。
- */
- /**
-  * $events 逻辑流的一项。
-  * ready -> 记下 clientId 并宣告 connected；
-  * emit -> 单向事件（当前 UI 用不到，留好分发点）；
-  * waterfall -> 需要回执的审批/提问，翻成旧帧形状交给 UI（rpcId 位置放 eventId）。
-  */
+// $events 逻辑流的一项：ready -> 记下 clientId 并宣告 connected；emit -> 单向事件（当前 UI 用不到，留好分发点）；waterfall -> 需要回执的审批/提问，翻成旧帧形状交给 UI（rpcId 位置放 eventId）。
 void DshApiClient::handleEventsItem(const QJsonValue& value)
 {
 	const QJsonObject item = value.toObject();
@@ -826,22 +688,10 @@ void DshApiClient::handleWorkspaceItem(const QJsonValue& value)
 		return;
 	}
 
-	// 其余帧（当前协议里没有）忽略
 }
 
-/**
- * session/control：主机级实时控制流。
- *
- * 帧形状（服务端 SessionControlController）：
- *   {type:"baseline",   value:{queues, jobs, projections:{<sessionId>:{asOfSeq, values}}}}
- *   {type:"projection", sessionId, key, value, seq}   // 某个会话的某个投影键变了
- *   {type:"queue"|"jobs", …}                          // 本客户端还没有消费方
- *
- * baseline 里的投影是"活会话"的现算快照（registry.snapshot），之后的 projection 帧是
- * 变化推送 —— 全程服务端现算现推，客户端不读任何缓存。
- * 注意 baseline 只覆盖当前活着的会话：只是打开看看、还没附着 Agent 的会话不在里面，
- * 那种情况由 session/follow 快照里的投影兜底（同样是服务端从日志现折叠）。
- */
+// session/control：主机级实时控制流。帧形状（服务端 SessionControlController）：{type:"baseline", value:{queues, jobs, projections:{<sessionId>:{asOfSeq, values}}}}、{type:"projection", sessionId, key, value, seq}（某个会话的某个投影键变了）、{type:"queue"|"jobs", …}（本客户端还没有消费方）。
+// baseline 里的投影是"活会话"的现算快照（registry.snapshot），之后的 projection 帧是变化推送 —— 全程服务端现算现推，客户端不读任何缓存；baseline 只覆盖当前活着的会话，只是打开看看、还没附着 Agent 的会话不在里面，那种情况由 session/follow 快照里的投影兜底（同样是服务端从日志现折叠）。
 void DshApiClient::handleControlItem(const QJsonValue& value)
 {
 	const QJsonObject frame = value.toObject();
@@ -871,10 +721,7 @@ void DshApiClient::handleControlItem(const QJsonValue& value)
 	// queue / jobs：忽略
 }
 
-/**
- * session/follow：snapshot（初始记录 + cursor）/ event（实时日志事件）。
- * 记录按顺序翻成旧的 session/event 帧，复用既有渲染路径。
- */
+// session/follow：snapshot（初始记录 + cursor）/ event（实时日志事件）；记录按顺序翻成旧的 session/event 帧，复用既有渲染路径。
 void DshApiClient::handleSessionItem(const QJsonValue& value)
 {
 	const QJsonObject frame = value.toObject();
@@ -889,8 +736,7 @@ void DshApiClient::handleSessionItem(const QJsonValue& value)
 		qInfo().noquote() << "[DshApi] session snapshot sessionId=" << sessionId
 			<< "cursor=" << cursor << "records=" << records.size() << "hasMore=" << hasMore;
 
-		// 快照帧还带着一份"全量折叠"的会话投影（projectionMode: all，直接从日志算）：
-		// 冷会话也能立刻拿到整条日志的累计值，交给窗口侧去显示（会话统计小灰字）。
+		// 快照帧还带着一份"全量折叠"的会话投影（projectionMode: all，直接从日志算）：冷会话也能立刻拿到整条日志的累计值，交给窗口侧去显示（会话统计小灰字）。
 		const QJsonObject projections = frame.value(QStringLiteral("projections")).toObject();
 		if (!projections.isEmpty()) {
 			emit sessionProjectionsReady(sessionId,
@@ -898,8 +744,7 @@ void DshApiClient::handleSessionItem(const QJsonValue& value)
 				projections.value(QStringLiteral("values")).toObject());
 		}
 
-		// 快照记录不逐条走流式渲染：整包交给 HistoryLoader 批量播种
-		// （sessionSnapshotReady -> seedFromSnapshot），否则历史会被渲染两遍。
+		// 快照记录不逐条走流式渲染：整包交给 HistoryLoader 批量播种（sessionSnapshotReady -> seedFromSnapshot），否则历史会被渲染两遍。
 		emit sessionSnapshotReady(sessionId, cursor, records, hasMore);
 		return;
 	}
@@ -911,10 +756,7 @@ void DshApiClient::handleSessionItem(const QJsonValue& value)
 		return;
 	}
 
-	// 0.1.5 的实时分片：{type:'assistant-stream', frame:{type:'start'|'chunk'|'end',…}}。
-	// 其中 chunk 帧的 chunk 就是 LLM 的原始增量（text-delta / reasoning-delta /
-	// block-start|end / usage），翻成既有的 assistant/chunk 事件后，渲染路径与
-	// 历史回放完全共用——于是"逐字输出"在实时流上就自然成立了。
+	// 0.1.5 的实时分片：{type:'assistant-stream', frame:{type:'start'|'chunk'|'end',…}}。其中 chunk 帧的 chunk 就是 LLM 的原始增量（text-delta / reasoning-delta / block-start|end / usage），翻成既有的 assistant/chunk 事件后，渲染路径与历史回放完全共用 —— 于是"逐字输出"在实时流上就自然成立了。
 	if (type == QStringLiteral("assistant-stream")) {
 		const QJsonObject streamFrame = frame.value(QStringLiteral("frame")).toObject();
 		if (streamFrame.value(QStringLiteral("type")).toString() == QStringLiteral("chunk")) {
@@ -954,7 +796,6 @@ void DshApiClient::onStreamTextMessage(const QString& message)
 		return;
 	}
 	if (!frame.isEmpty())
-		// 按逻辑流分发（m_eventsStreamId / m_workspaceStreamId / m_sessionStreamId）
 		if (streamType == QStringLiteral("item")) {
 			const QJsonValue streamValue = frame.value(QStringLiteral("value"));
 			if (streamId == m_eventsStreamId)
