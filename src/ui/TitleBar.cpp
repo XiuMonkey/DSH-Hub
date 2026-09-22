@@ -100,7 +100,7 @@ TitleBar::TitleBar(QWidget* parent)
 	// 图标右侧：产品名 + 版本号。两者各语言写法一致，所以不走 qtTrId，
 	// 和上面的图标兜底文字同一个取舍；颜色与字号在 QSS（#windowTitleText）。
 	// 文案不需要运行期更新，因此不留成员指针。
-	auto* titleText = new QLabel(QStringLiteral("DSH Hub Alpha 1.5.0"), this);
+	auto* titleText = new QLabel(QStringLiteral("DSH Hub Alpha 1.5.1"), this);
 	titleText->setObjectName(QStringLiteral("windowTitleText"));
 	titleText->setAttribute(Qt::WA_TranslucentBackground, true);
 	layout->addSpacing(kLogoTextGap);
