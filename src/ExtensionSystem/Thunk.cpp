@@ -219,7 +219,6 @@ namespace Thunk
 			return false;
 		}
 
-		X86Writer writer(static_cast<std::uint8_t*>(m_code));
 		if (!emitMachineCode(signature, target)) {
 			m_errorString = QStringLiteral("emitMachineCode failed");
 			VirtualFree(m_code, 0, MEM_RELEASE);
@@ -227,7 +226,9 @@ namespace Thunk
 			return false;
 		}
 
-		m_codeSize = writer.size();
+		// ⚠️ 不要在这里再赋值 m_codeSize：它由 emitMachineCode() 末尾设置（那边有它
+		// 自己的 X86Writer）。原先这里写的是 m_codeSize = writer.size()，可是外层那个
+		// writer 一个字节都没 emit 过 ⇒ 长度被覆盖成 0 ⇒ 下面刷新 0 字节。
 		FlushInstructionCache(GetCurrentProcess(), m_code, m_codeSize);
 		return true;
 	}
