@@ -393,3 +393,64 @@
 
 - `PopupWindow`：无系统边框（无原生边框/圆角/白底/灰细边框/右上角关闭按钮）；空标题显示**可翻译的默认名**；语言切换后标题与关闭提示要跟着换。
 - `ExtensionManagerPopup` 继承 `StatusPopupWindow` 是为了与插件弹窗样式一致；逻辑分工：`extensions.json`/扩展目录/`cordis.patch.yml` → `ExtensionRegistry`，后台解压与安装 → `ExtensionInstallTask`。交互上**不直接弹文件选择框**，而是先打开管理窗口在其中安装。
+
+---
+
+## `include/network/DshApiClient.h`（原 36 行说明书，最重要的一份协议知识）
+
+- **RPC 协议形状**：endpoint 是 `<namespace>/<method>`（0.1.5 起用**斜杠**，不再是点号）；body 固定 `{type:"client-request", rpcId, method, payload:{args:{…}}}`，其中 `payload` **必须恰好只有一个 `args` 对象**，键名是描述符里的 wire 名（`session/list`→`_request`、`session/create`→`request`、`agentPresets/list`→无参）；应答统一 `{type:"server-response", rpcId, result:{ok, value|error}}` —— **HTTP 成功也可能 `ok == false`**。返回裸数组的端点（如 `llm/listConfigurableProviders`）要用 `callMethodValue`。
+- **认证围栏全链路**：启动令牌只出现在服务端打印的认证 URL（`http://127.0.0.1:<port>/?token=…`）；`GET` 它返回 **303 + `Set-Cookie: dsh-auth-<authority 哈希>=<签名值>`**；此后**所有 HTTP 请求与 WebSocket 握手都必须带该 cookie**，否则一律 401 ⇒ 所以顺序固定为 `setBaseUrl()` 取令牌 → `startAuthHandshake()` 换 cookie → `openStreams()`。
+- **mux 拓扑**：单条 `/api/remote.mux` 上跑三条逻辑流 —— `$events`（首帧 `{type:"ready", clientId, host}`；waterfall 审批/提问帧**必须回执**：`respond()` 发 `POST /api/$events/result`，`args={clientId, eventId, outcome:{kind:"result", value}}`）、`workspace/follow`（baseline/upsert/remove/order/archived）、`session/follow`（首帧 snapshot = cursor + records + hasMore 播种首屏，之后 event 帧才是实时日志）。
+- **`muxFrameReceived` 为什么存在**：0.1.5 线上帧形状变了，这里把新帧**翻译成旧形状**再发，好让 `DSHHub::handleMuxFrame` 与 `InteractionHandler` 保持不动。翻译表：`session/follow` 的 event/snapshot → `{payload:{type:"session/event", sessionId, event}}`；`$events` 的 waterfall `approval/request` → `{rpcId:<eventId>, payload:{type:"approval/requested", …}}`；`user-questions/request` → `{type:"question/requested", …}`。
+- ⚠️ **逻辑流 id 必须唯一**：服务端遇到重复 id 会 `close(1008)` 关掉**整条 mux**（不只是那条流），所以每次 open 都走 `nextStreamId()`；断线由 `scheduleReconnect()` 自愈并重开三条流。
+- ⚠️ `muxFrameReceived` 里的 rpcId 用的是 0.1.5 的 `eventId`，`respond()` 会把它原样发回 `/api/$events/result` —— 即"**旧形状里塞的其实是新 id**"。
+- **三条异步/竞态设计的理由**：① `QueuedCall` —— 服务端刚重启（扩展安装、插件市场装完、手动重启都会触发）那一两秒里"没有 cookie 就直发"必然 401，用户点发送就撞上，故先挂起、握手完成后按序补发；② `m_authAttempt`（认证代次）—— 服务端重启后旧地址那次握手会**晚一步失败**，靠它把过期回包丢掉，不让它清掉新一轮的在途标记、也不让它覆盖 cookie；③ `JsonParseRunnable` —— 大 JSON 回包不在主线程 `fromJson`，解析完经 queued `invokeMethod` 回投主线程。
+- **`sessionProjectionsReady` 值得单独一个信号**：快照这条路上服务端用 `projectionMode:"all"` 做**全量折叠、直接从日志算**，所以"没被 Agent 附着"的会话（只是打开看看）也能立刻拿到整条日志的累计值；而 `session/list` 行给的是**投影缓存里的检查点，可能为空或很旧**（缓存按 200 事件 / 5s 落盘）。
+- 沿革：旧的 `/api/events.mux`、`/api/events.host`、`POST /api/respond` 在 0.1.5 已不存在；本客户端**不支持 0.1.1 及更早**的服务端。
+
+## `include/network/SessionPrefetcher.h`
+
+- **为什么必须走一元 `session/page` 而不能开流**：`session/follow` 会在快照后 **promote** 该会话（激活 Agent + 常驻 follower），给 N 个会话开流等于激活 N 个会话。
+- 为什么复用 `DshApiClient` 而不是自建 `QNAM`：要在认证栅栏下自带认证 cookie 与 `args` 信封，否则 401。
+- 结果去向：`historyFetched` 交给 `DSHHub` 入库（`CacheManager`），并可选地预构建控件树。
+
+## `include/common/appearance/ThemeManager.h`
+
+- **为何必须是 QObject 单例**：扩展（QPlugin DLL）只能经 `CommonRegistry` 按 index 取对象再转接口 —— 命名空间与自由函数**没有 QObject 身份、够不到**。
+- **`init()` 的调用窗口**：**QApplication 创建之后、主窗口创建之前**；释放默认模板 → 按 mode 读调色板 → 合成 QSS → 登记进全局注册表。mode 优先用 `AppearanceSetting.json` 的显式选择，未设置（System）才跟随系统。
+- **`ExternalApplyToWindow` 为何要额外的"外部名字"**：转换走 `obj->qt_metacast(IID)`，跨边界传的是**字符串**、插件侧零宿主符号；接口虚函数走 vtable 同样不产生外部符号 ⇒ **接口一旦发布只能增不能改**；`External*` 与宿主内部 API 刻意分开。
+- **`ExternalReloadStyles()` 的边界**：它**不重建窗口**，构造期就已固化的东西（如按 `isDark()` 选的 logo）不会跟着变 —— 要那种一致得走 `switchTheme()` 那条重建窗口的路。返回值 `false` 基本只有一种成因（文件根本没读到），故也充当事后自检。
+- **常量为何做成"返回引用的函数"而不是 static 数据成员**：类/命名空间作用域的 `QString`/`QStringList` 会在**静态初始化期构造**，`main` 之前就分配堆内存；而 `installPaletteFor` 有副作用（换掉整个应用的 `QPalette`），只允许被 `setMode()`/`reload()` 间接调用。
+- **`repolishScrollArea` 的完整成因**：`QAbstractScrollArea` 的滚动条在**基类构造**里创建并首次解析规则，那时子类构造函数体的 `setObjectName(...)` 还没执行，`QStyleSheetStyle` 就把"匹配不到 `#objectName QScrollBar`"**缓存**了下来；之后再设 objectName 不会触发重新匹配 ⇒ 凡是"先建控件、后设 objectName"的滚动区都要在设完名字后补调一次。
+- `switchTheme` 是"用户显式选定主题"的**唯一入口**，会把新主题写进 `AppearanceSetting.json` —— 之后启动**不再跟随系统**。
+
+## `include/common/appearance/TranslationManager.h`
+
+- `.ts` 的正式文件**不维护 `<source>`**，写了也会被 `tools/release-translations.ps1` 删掉；原文由 `zh_CN` 的 `<translation>` 承担。
+- **"查不到就显示代号"是刻意保留的**：缺哪条一眼可见；唯一例外是 `TranslationUi.cpp`（空译文被挡下）。改文案必须同步更新语言包。
+- **"就地换文案"有两块明确不覆盖**：用 `arg()` 拼出来的**动态文案**（如"共 3 个模型，1 个提供方。"）不是整串文案、匹配不上；已渲染进 HTML 的**历史消息**（如思考块标题）。这两处要随语言变就得各自的重建/重渲染路径。
+- `apply()` 在没找到对应 `.qm` 时会**退回源语言并返回 false**（不只是"失败"）。
+
+## `include/common/util/`
+
+- `CodeHighlighter.h`：高亮会被**渲染 worker 线程并发调用**，规则/缓存读写统一加锁；**用递归锁**是因为 `loadFromFile` 持锁期间会调用同样加锁的 `clearCache()`。
+- `MarkdownPreprocess.h`：Qt 6 的 Markdown 导入器遇到 **`<br>` 会丢弃其后同一行/单元格的所有内容**导致表格截断，而 **U+2028 会被渲染成真正换行且不破坏表格解析**。
+- `CommonRegistry.h`：本文件的方法刻意**不析构**（必须活得比所有被登记对象更久）；`Find<T>` 已移除（`RegType` 方案随之废弃），取对象走 `FindFromRegistry`。
+
+## `include/common/extension/`
+
+- `ExtensionRegistry.h`：`ensurePatchEntry` 的 **id 与 name 分开传**是因为两者不总相等（如 `session-stats` 的 id 是短名、name 是包名）；**判重看 name 行**；`comment` 非空时写成一行 **ASCII** 注释 —— 该文件常被别的工具读，无 BOM 的中文注释容易显示成乱码。
+- `PluginMarketClient.h`：`registryLoaded` 的 `source` 可能是 `snapshot` / `cache` / 其它（实时数据）；`fetchDiagnosticLogs` 在 **5xx / 传输错误时自动触发**；`endpointUrl` **只借 baseUrl 的 scheme/host/port** 拼接口地址。
+- `PluginMarketInstaller.h`：PATH 里没有 pnpm 时**生成 pnpm shim** 用本地 node 跑 `pnpm.cjs`；以 `DSH_HOME`/`PATH` 环境变量启动 `pnpm add dshmarket`；装完把 dshmarket 写进 profile 的 `dependencies` + `dsh.profile.bundles`；`installFinished(true)` 表示**退出码 0 且 profile 清单已更新**。
+- `ExtensionInstallTask.h`：`tryFinish()` **只成功返回一次**；`waitForFinished()` 存在的理由是**弹窗关闭时等待，避免任务写到已销毁的对象**。
+
+## `include/common/settings/`
+
+- `ClientSettings.h`：明文文件 vs 注册表的取舍、可被 `DSHHUB_CLIENT_SETTING_DIR` 覆盖、`QSaveFile` 原子替换 —— **手改坏一个字符只会丢设置，不会让客户端起不来**。
+- `SettingsStore.h`：键名**只允许出现在这里**；界面语言与主题**不在** QSettings；默认 Agent 预设归服务端设置、客户端刻意不留副本；`main.cpp` 未设 org/appName 所以 `server/url` 也存不住。
+
+## `include/core/`（残留）
+
+- `MessageHost.h`：`cancelBuild()` 在**切会话、丢弃会话**时都要调；`onPrefetched()` 的三分支恰好对应 `PrefetchOutcome` 的三个枚举值；`syncLoadingGeometry()` 只在**窗口尺寸变化**时用；`swapInBuilt()` 把离屏构建好的列表换成当前列表，`handOffToCache()` 把当前实例**与分页元数据**一起交给缓存。
+- `HostExports.h`：`findObject()` 的完整返回语义 —— **符号取不到 / index 为空 / 不在主线程 → 空**；返回 `QPointer`，故长期持有也不会成野指针。
+- `DSHHub.h`：VirtualWindow 的三条口头约定（**窗口要先建好**、**show/hide 必须成对**、**遮罩只留一层、按 owner 记名**）；`workspace/follow` 的 order 与 archived 帧都是**整体替换**（不是增量打点）；小灰字**每次变化整包重算一行文本**、**换会话时连同 `asOfSeq` 一起清空**、**无当前会话时擦掉文字但高度照旧占着**（防布局跳动）。
