@@ -112,7 +112,6 @@ public:
 	QString sessionId() const;
 
 	// 原始完整标题
-	QString fullTitle() const;
 
 	// 更新显示标题（内部会重新计算省略号文本）
 	void setSessionTitle(const QString& title);
@@ -175,7 +174,6 @@ public:
 
 	// 数据源：由 SessionService 在刷新时写入
 	SessionCatalog& catalog();
-	const SessionCatalog& catalog() const;
 
 	// 按 catalog 的当前内容整体重建（清空后重新创建分组与按钮）
 	void rebuildFromCatalog();

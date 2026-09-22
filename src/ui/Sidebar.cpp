@@ -167,11 +167,6 @@ QString SessionButton::sessionId() const
 	return m_sessionId;
 }
 
-QString SessionButton::fullTitle() const
-{
-	return m_fullTitle;
-}
-
 void SessionButton::setSessionTitle(const QString& title)
 {
 	m_fullTitle = title.isEmpty() ? m_sessionId : title;
@@ -348,11 +343,6 @@ WorkspaceList::WorkspaceList(QWidget* parent)
 }
 
 SessionCatalog& WorkspaceList::catalog()
-{
-	return m_catalog;
-}
-
-const SessionCatalog& WorkspaceList::catalog() const
 {
 	return m_catalog;
 }

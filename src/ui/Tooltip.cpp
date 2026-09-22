@@ -497,24 +497,4 @@ namespace Tooltip
 		qApp->installEventFilter(new TipFilter(qApp));
 	}
 
-	void hide()
-	{
-		if (g_tip)
-			g_tip->hideNow();
-	}
-
-	bool isVisible()
-	{
-		return g_tip && g_tip->isVisible();
-	}
-
-	QString currentText()
-	{
-		return g_tip ? g_tip->text() : QString();
-	}
-
-	QWidget* windowForTest()
-	{
-		return g_tip;
-	}
 }

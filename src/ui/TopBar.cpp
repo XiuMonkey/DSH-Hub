@@ -288,11 +288,6 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 		});
 }
 
-QString ToolsFilterDirectoryEntry::directoryName() const
-{
-	return m_name;
-}
-
 bool ToolsFilterDirectoryEntry::isExpanded() const
 {
 	return m_expanded;

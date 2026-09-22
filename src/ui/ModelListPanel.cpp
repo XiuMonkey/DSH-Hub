@@ -109,47 +109,6 @@ namespace
 		return lines.join(QLatin1Char('\n'));
 	}
 
-	// ------------------------------------------------------------------
-	// 临时诊断：查"点获取模型时界面上下抖一下"到底是谁在动。
-	// 一次点击后 0.5 秒内每 10ms 输出一行几何（qDebug -> logs\model\debug.log）。
-	// 问题定位后整块删掉，连同 fetchModels / showFetchedMenu 里的 traceLayout 调用。
-	// ------------------------------------------------------------------
-	void traceLayout(const char* where, const QWidget* form, const QScrollArea* scroll,
-		const QWidget* idEdit, const QWidget* button, const QWidget* popup)
-	{
-		const auto span = [](const QWidget* w) {
-			if (!w)
-				return QStringLiteral("-");
-			const int top = w->mapToGlobal(QPoint(0, 0)).y();
-			return QStringLiteral("%1..%2").arg(top).arg(top + w->height());
-			};
-
-		QStringList parts;
-		parts << QStringLiteral("form=") + span(form);
-		parts << QStringLiteral("id=") + span(idEdit);
-		parts << QStringLiteral("btn=") + span(button);
-		parts << QStringLiteral("win=") + span(form ? form->window() : nullptr);
-		if (scroll) {
-			const QScrollBar* bar = scroll->verticalScrollBar();
-			parts << QStringLiteral("scroll=%1/%2 vp=%3")
-				.arg(bar->value()).arg(bar->maximum()).arg(scroll->viewport()->height());
-		}
-		if (popup)
-			parts << QStringLiteral("popup=") + span(popup)
-			+ QStringLiteral(" vis=%1").arg(popup->isVisible() ? 1 : 0);
-
-		if (QWidget* tip = Tooltip::windowForTest()) {
-			if (tip->isVisible())
-				parts << QStringLiteral("tip=") + span(tip);
-		}
-
-		const QWidget* focus = QApplication::focusWidget();
-		parts << QStringLiteral("focus=%1")
-			.arg(focus && !focus->objectName().isEmpty() ? focus->objectName() : QStringLiteral("?"));
-
-		qInfo().noquote() << QStringLiteral("[ModelList/trace] %1 %2")
-			.arg(QLatin1String(where), parts.join(QLatin1Char(' ')));
-	}
 }
 
 // ------------------------------------------------------------------
@@ -1407,13 +1366,11 @@ void ModelListPanel::fetchModels()
 {
 	// 临时诊断：点下去起 0.5 秒采样几何（含弹窗 exec 期间的嵌套事件循环）。
 	// 放在最前面，好分辨"没点"与"点了但被挡住"。
-	traceLayout("click", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 	{
 		auto ticks = std::make_shared<int>(0);
 		auto* sampler = new QTimer(this);
 		sampler->setInterval(10);
 		connect(sampler, &QTimer::timeout, this, [this, sampler, ticks]() {
-			traceLayout("tick", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 			if (++(*ticks) >= 50) {
 				sampler->stop();
 				sampler->deleteLater();
@@ -1423,14 +1380,12 @@ void ModelListPanel::fetchModels()
 	}
 
 	if (m_fetching || !m_fetchButton || !m_fetchButton->isEnabled()) {
-		traceLayout("blocked", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 		return;
 	}
 
 	const ConfigurableProvider* provider = selectedProvider();
 	if (!provider) {
 		setFeedback(qtTrId("model_select_provider_first"));
-		traceLayout("no-provider", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 		return;
 	}
 
@@ -1438,7 +1393,6 @@ void ModelListPanel::fetchModels()
 	if (!ns) {
 		setFeedback(qtTrId("model_write_namespace_missing_fmt")
 			.arg(provider->settingsNs));
-		traceLayout("no-namespace", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 		return;
 	}
 
@@ -1454,7 +1408,6 @@ void ModelListPanel::fetchModels()
 	m_fetching = true;
 	updateFetchButton();
 	setFeedback(qtTrId("model_fetch_running"));
-	traceLayout("posted", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 
 	QPointer<ModelListPanel> self(this);
 
@@ -1477,15 +1430,11 @@ void ModelListPanel::fetchModels()
 
 			if (models.isEmpty()) {
 				self->setFeedback(qtTrId("model_fetch_empty"));
-				traceLayout("loaded-empty", self->m_form, self->m_scroll, self->m_idEdit,
-					self->m_fetchButton, self->m_fetchedMenu);
 				return;
 			}
 
 			// 下拉本身就是结果，反馈行不用再重复一句
 			self->clearFeedback();
-			traceLayout("loaded", self->m_form, self->m_scroll, self->m_idEdit,
-				self->m_fetchButton, self->m_fetchedMenu);
 			self->showFetchedMenu(models);
 		},
 		[self, providerId](const DshApiClient::RpcError& error) {
@@ -1511,8 +1460,6 @@ void ModelListPanel::fetchModels()
 			if (self->m_feedback)
 				self->m_feedback->setToolTip(raw);
 
-			traceLayout("failed", self->m_form, self->m_scroll, self->m_idEdit,
-				self->m_fetchButton, self->m_fetchedMenu);
 		});
 }
 
@@ -1566,9 +1513,7 @@ void ModelListPanel::showFetchedMenu(const QVector<DiscoveredModel>& models)
 	}
 
 	m_fetchedMenu->move(pos);
-	traceLayout("menu-open", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 	m_fetchedMenu->exec();
-	traceLayout("menu-closed", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 
 	const QString chosen = m_fetchedMenu->chosenId();
 	if (chosen.isEmpty())
@@ -1578,7 +1523,6 @@ void ModelListPanel::showFetchedMenu(const QVector<DiscoveredModel>& models)
 	m_idEdit->setText(chosen);
 	m_idEdit->setFocus();
 	clearFeedback();
-	traceLayout("picked", m_form, m_scroll, m_idEdit, m_fetchButton, m_fetchedMenu);
 }
 
 void ModelListPanel::submitForm()

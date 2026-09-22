@@ -43,15 +43,11 @@ namespace Tooltip
 
 	// 立刻收掉当前气泡（切主题、切语言、要清场时用）。
 	// 尚未创建过气泡时是空操作。
-	void hide();
 
 	// 当前是否有气泡正在显示（调试与测试用）
-	bool isVisible();
 
 	// 当前气泡的文案；未显示时为空串（调试与测试用）
-	QString currentText();
 
 	// 气泡窗口本身，供测试与调试取几何信息；尚未创建过时返回 nullptr。
 	// 正常业务代码不需要它 —— 全部交互都由 install() 装的过滤器驱动。
-	QWidget* windowForTest();
 }

@@ -103,7 +103,6 @@ public:
 	void clearStats();
 
 	// 当前这一行的完整文本
-	QString lineText() const { return m_lineText; }
 
 protected:
 	void paintEvent(QPaintEvent* event) override;

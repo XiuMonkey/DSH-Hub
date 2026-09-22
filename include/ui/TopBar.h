@@ -58,7 +58,6 @@ class ToolsFilterDirectoryEntry : public QWidget
 public:
 	explicit ToolsFilterDirectoryEntry(const ToolFilterDirectory& directory, QWidget* parent = nullptr);
 
-	QString directoryName() const;
 	bool isExpanded() const;
 	void setExpanded(bool expanded);
 	// 按当前的勾选状态刷新表头计数（"N 个工具 · 已隐藏 M 个"）
