@@ -1,25 +1,8 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// TitleBar.h
-// ------------------------------------------------------------------
-// 自绘标题栏（**只画，不做决定**）：左侧应用图标 + 产品名/版本文字，右侧
-// 最小化 / 最大化 / 关闭三个按钮。按钮被点击时只发出“意图”信号，具体动作
-// （最小化/最大化/关闭窗口）由 common/WindowFrame 落地，接线在 DSHHub 构造函数。
-//
-// 三个按钮是普通 QPushButton，**外观全部走 QSS**（resources/styles/main-window.qss
-// 里的 #windowMinButton / #windowMaxButton / #windowCloseButton 规则），
-// 这里只负责换字形（最大化 ↔ 还原）与发意图信号。
-//
-// 拖动窗口、双击最大化、贴边吸附、右键系统菜单都不在这里实现：命中测试
-// 把本控件覆盖的区域（按钮除外）当成系统标题栏交回系统处理，
-// 见 common/WindowFrame.cpp。
-//
-// 两条对外约定：
-//   * objectName 固定为 windowTitleBar（拖动区/遮罩范围按它算）
-//   * 三个窗口按钮带动态属性 dshWindowControl=true（命中测试时排除，
-//     否则点按钮会变成拖窗口）
-// ------------------------------------------------------------------
+// 自绘标题栏（**只画，不做决定**）：左侧应用图标 + 产品名/版本，右侧最小化/最大化/关闭；按钮只发"意图"信号，动作由 common/WindowFrame 落地。
+// 三个按钮是普通 QPushButton，外观全部走 QSS（#windowMinButton / #windowMaxButton / #windowCloseButton）；
+// 两条硬约定：objectName 固定为 windowTitleBar（拖动区/遮罩范围按它算）；三个窗口按钮带动态属性 dshWindowControl=true（命中测试要排除，否则点按钮会变成拖窗口）。
 
 #include <QWidget>
 
@@ -56,6 +39,6 @@ private:
 	QPushButton* m_minimizeButton = nullptr;
 	QPushButton* m_maximizeButton = nullptr;
 	QPushButton* m_closeButton = nullptr;
-	// 记住最大化状态：语言切换后要按同一状态重设“最大化/还原”的提示与字形
+	// 语言切换后要按同一状态重设最大化/还原的提示与字形
 	bool m_maximized = false;
 };

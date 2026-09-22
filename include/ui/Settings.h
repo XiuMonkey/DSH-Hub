@@ -20,38 +20,15 @@ class QListWidget;
 class DshApiClient;
 class ModelListPanel;
 
-// ------------------------------------------------------------------
-// Settings —— “设置系统”整体类（不是一次性的窗口实例）
-// ------------------------------------------------------------------
-// Settings 是随主窗口（DSHHub）创建后一直存在的常驻对象，负责：
-//   1) 设置界面的搭建与交互（模型列表、API Key、Agent 预设、Server 地址、外观）；
-//   2) 设置窗口本身的开关管理：灰色遮罩、居中、判重、关闭清理。
-//
-// 与设置相关的“功能逻辑”不在这里：
-//   - Agent 预设拉取/解析/选中决策  -> AgentPresetService   (common)
-//   - 模型目录读取/新增模型写回     -> ModelSelectionService (common)
-//   - QSettings 键的读写            -> SettingsStore        (common)
-//   - 模型列表与新增表单            -> ModelListPanel       (ui)
-//
-// 模型与凭据一律只与“当前所连服务端”打交道：客户端不做任何本地配置读写，
-// 也不针对某个具体提供方写死任何东西（引用名由服务端的 profile 给出）。
-//
-// 打开/关闭窗口统一走 openSettings() / closeSettings()：
-//   - 主窗口只保留少量调用（例如把侧边栏的 settingsRequested
-//     信号直接连到 openSettings()），不再在 DSHHub 里管理遮罩成员；
-//   - 遮罩是窗口级的（settings/插件/扩展管理/工具过滤共用同一层，由
-//     WindowFrame::showOverlay/hideOverlay 持有）：打开时申请、关闭时归还，
-//     宿主窗口 resize 时通过 syncOverlayToHost() 保持铺满（由主窗口 resizeEvent 调用）；
-//   - 右上角关闭按钮 / ESC 关闭时也会自动归还遮罩（PopupWindow
-//     的 closed 信号 -> closeSettings()）。
-// ------------------------------------------------------------------
+// “设置系统”整体类：与 PluginsManager 同思路的常驻对象，管设置界面的搭建与交互（模型列表、API Key、Agent 预设、Server 地址、外观）以及窗口本身的开关（遮罩、居中、判重、关闭清理）。
+// 功能逻辑不在这里：Agent 预设 -> AgentPresetService，模型目录读写 -> ModelSelectionService，QSettings -> SettingsStore，模型列表 UI -> ModelListPanel。
+// 模型与凭据一律只与“当前所连服务端”打交道：客户端不做任何本地配置读写，也不针对具体提供方写死任何东西（引用名由服务端的 profile 给出）。
 class Settings : public PopupWindow
 {
 	Q_OBJECT
 
 public:
-	// api  ：DshApiClient，读写 Agent 预设、模型目录与凭据
-	// host ：宿主主窗口（用于定位遮罩与居中）
+	// api = DshApiClient（读写 Agent 预设、模型目录与凭据）；host = 宿主主窗口（用于定位遮罩与居中）
 	explicit Settings(DshApiClient* api, QWidget* host);
 
 	// 打开设置窗口（幂等：已打开则直接返回；每次打开前刷新数据）
@@ -64,8 +41,7 @@ public:
 	void syncOverlayToHost();
 
 signals:
-	// 用户把某个 Agent 预设设为了默认，且**服务端已经写入成功**。
-	// 生效范围由服务端定：只影响此后新建的会话，已有会话不受影响。
+	// 用户把某个 Agent 预设设为默认且**服务端已写入成功**；生效范围由服务端定，只影响此后新建的会话
 	void agentPresetChanged(const QString& presetId);
 
 	// 服务端新增（或覆盖）了一个模型条目

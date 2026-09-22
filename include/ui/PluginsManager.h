@@ -19,39 +19,15 @@ class QTimer;
 class PluginMarketClient;
 class PluginMarketInstaller;
 
-// ------------------------------------------------------------------
-// PluginsManager —— “插件管理”界面（不是一次性的窗口实例）
-// ------------------------------------------------------------------
-// 与 Settings 同一思路：PluginsManager 是随主窗口（DSHHub）创建后一直
-// 存在的常驻对象，负责：
-//   1) 插件市场 / 已安装列表的绘制与交互（卡片、分页、状态栏）；
-//   2) 窗口本身的开关管理：灰色遮罩、居中、判重、关闭清理。
-//
-// 与界面无关的逻辑都在 common：
-//   - HTTP（registry/installed/install/uninstall/update/restart）
-//       -> PluginMarketClient
-//   - 市场包缺失时的自动安装（pnpm + profile 清单）
-//       -> PluginMarketInstaller
-//   - registry JSON 解析、关键词过滤、分页切片
-//       -> PluginMarketModel
-//
-// 打开/关闭统一走 openPlugins() / closePlugins()：
-//   - 主窗口只保留少量调用（把侧边栏 pluginsRequested 信号直接连到
-//     openPlugins()），不再在 DSHHub 里管理遮罩成员；
-//   - 遮罩是窗口级的（设置/插件/扩展管理/工具过滤共用同一层，由
-//     WindowFrame::showOverlay/hideOverlay 持有）：打开时申请、关闭时归还，
-//     宿主 resize 时通过 syncOverlayToHost() 保持铺满（由主窗口 resizeEvent 调用）；
-//   - 每次打开时 refreshOnOpen() 重新拉取市场/已安装数据，
-//     避免常驻对象在服务端未就绪时就联网请求；
-//   - 右上角 ✕ 关闭时自动归还遮罩并隐藏（closed -> closePlugins()）。
-// ------------------------------------------------------------------
+// “插件管理”界面：与 Settings 同思路的常驻对象，管插件市场/已安装列表的绘制与交互，外加窗口本身的开关（遮罩、居中、判重、关闭清理）。
+// 与界面无关的逻辑都在 common：HTTP -> PluginMarketClient，市场包缺失时的自动安装（pnpm + profile 清单）-> PluginMarketInstaller，
+// registry JSON 解析 / 关键词过滤 / 分页切片 -> PluginMarketModel；遮罩是窗口级共用的那一层，打开时申请、关闭时归还。
 class PluginsManager : public StatusPopupWindow
 {
 	Q_OBJECT
 
 public:
-	// baseUrl：DSH 服务地址（后续可经 setBaseUrl 更新）
-	// host   ：宿主主窗口（用于定位遮罩与居中）
+	// baseUrl = DSH 服务地址（后续可经 setBaseUrl 更新）；host = 宿主主窗口（用于定位遮罩与居中）
 	explicit PluginsManager(const QUrl& baseUrl, QWidget* host);
 
 	void setBaseUrl(const QUrl& url);

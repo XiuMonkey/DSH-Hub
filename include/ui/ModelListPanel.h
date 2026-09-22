@@ -1,24 +1,8 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// ModelListPanel.h
-// ------------------------------------------------------------------
-// 「设置 → 模型列表」面板：
-//   - 列出服务端公布的模型（session/modelCatalog 的目录），每个成员是一行可展开的表头，
-//     点击展开后显示该模型的详细信息（提供方路由、模型 id、容量、思考档位、
-//     是否在 settings 里显式声明、写回地址等）；
-//   - 底部“添加模型”按钮按下后，在列表滚动区里拉出填写表单（提供方路由 +
-//     模型信息 + API Key），提交时经 ModelSelectionService 走 credentials.set
-//     与 settings.mutate 写到服务端，成功后刷新列表；
-//   - 表单里模型 ID 右侧的“获取模型”按钮按当前路由问一次 llm/discoverModels，
-//     取回的候选在输入框下方展开成下拉，点一条即回填模型 ID（只读，不写配置）。
-//
-// 表单放在滚动区内部（而不是窗口底部）：这样面板的高度不随表单开合变化，
-// “添加模型”按钮也就不会跟着上下跳；表单本身用滚动条到达。
-//
-// 数据与写入都在服务端：本面板只负责画和把表单内容交给 ModelSelectionService，
-// 自己不保存任何模型清单（刷新即重新向服务端要）。
-// ------------------------------------------------------------------
+// 「设置 → 模型列表」面板：列出服务端公布的模型（可展开表头 + 详情），底部“添加模型”就地拉出填写表单。
+// 表单里“获取模型”按当前路由问一次 llm/discoverModels，候选铺成下拉回填模型 ID（只读，不写配置）。
+// 表单放在滚动区内部而非窗口底部，面板高度才不随表单开合变化（按钮不会上下跳）；数据与写入都在服务端，本面板不缓存清单。
 
 #include "common/session/ModelSelectionService.h"
 
@@ -72,7 +56,6 @@ private:
 	QWidget* m_detail = nullptr;
 };
 
-// 模型列表面板本体
 class ModelListPanel : public QWidget
 {
 	Q_OBJECT
@@ -84,7 +67,6 @@ public:
 	void refresh();
 
 signals:
-	// 新增模型已写入服务端
 	void modelAdded(const QString& provider, const QString& modelId);
 
 private:
@@ -93,7 +75,7 @@ private:
 	void populateRows();
 	void updateStatus();
 
-	// ---------------- 添加模型的表单 ----------------
+	// 添加模型的表单
 	void buildForm(QWidget* parent);
 	void openForm();
 	void closeForm();
@@ -107,9 +89,7 @@ private:
 	void setFeedback(const QString& text);
 	void clearFeedback();
 
-	// ---------------- 获取模型（llm/discoverModels） ----------------
-	// 按当前路由向服务端要"这条路由能服务哪些模型"，结果落进模型 ID 输入框下方的
-	// 下拉里，点一条即回填。
+	// 按当前路由问一次 llm/discoverModels，候选落进模型 ID 输入框下方的下拉，点一条即回填
 	void fetchModels();
 	// 把刚取回的候选铺成下拉并等用户选；选了就写进输入框
 	void showFetchedMenu(const QVector<DiscoveredModel>& models);

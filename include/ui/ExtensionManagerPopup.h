@@ -1,17 +1,7 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// ExtensionManagerPopup.h
-// ------------------------------------------------------------------
-// 扩展管理弹窗：
-//   - 不直接弹出文件选择框，而是先打开管理窗口
-//   - 窗口中可以安装 .ext 扩展、查看已安装扩展、移除扩展
-//   - 继承 StatusPopupWindow，样式与插件弹窗保持一致
-//
-// 与界面无关的逻辑都在 common：
-//   - extensions.json / 扩展目录 / cordis.patch.yml -> ExtensionRegistry
-//   - 后台解压与安装任务                          -> ExtensionInstallTask
-// ------------------------------------------------------------------
+// 扩展管理弹窗：不直接弹文件选择框，而是先开管理窗口，在其中安装 .ext、查看已安装、移除扩展；继承 StatusPopupWindow 以与插件弹窗样式一致。
+// 与界面无关的逻辑都在 common：extensions.json / 扩展目录 / cordis.patch.yml -> ExtensionRegistry，后台解压与安装 -> ExtensionInstallTask。
 
 #include "ui/StatusPopupWindow.h"
 

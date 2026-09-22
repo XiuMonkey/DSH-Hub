@@ -1,20 +1,7 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// Sidebar.h
-// ------------------------------------------------------------------
-// 左侧边栏相关类：
-//   - SidebarLogo：Logo 控件
-//   - NewWorkspaceButton：新建工作区按钮
-//   - ClearSessionButton：清空会话按钮
-//   - SidebarSettingsButton：设置按钮
-//   - WorkspaceButton：工作区按钮
-//   - WorkspaceList：工作区列表视图，把 SessionCatalog 的数据画成会话按钮
-//   - Sidebar：左侧边栏，统筹管理 Logo、按钮和 WorkspaceList，并转发会话相关信号
-//
-// 会话/工作区的数据与 RPC 逻辑在 common（SessionCatalog / SessionService），
-// 本文件只保留控件与绘制。
-// ------------------------------------------------------------------
+// 左侧边栏控件：Logo、各功能按钮、WorkspaceList 与 Sidebar 本体。
+// 会话/工作区的数据与 RPC 逻辑在 common（SessionCatalog / SessionService），本文件只保留控件与绘制。
 
 #include "common/session/SessionCatalog.h"
 
@@ -36,7 +23,6 @@ class QResizeEvent;
 class QContextMenuEvent;
 class DshApiClient;
 
-// 左侧边栏 Logo
 class SidebarLogo : public QLabel
 {
 	Q_OBJECT
@@ -45,7 +31,6 @@ public:
 	explicit SidebarLogo(QWidget* parent = nullptr);
 };
 
-// “新建工作区”按钮，独立成类
 class NewWorkspaceButton : public QPushButton
 {
 	Q_OBJECT
@@ -54,7 +39,6 @@ public:
 	explicit NewWorkspaceButton(QWidget* parent = nullptr);
 };
 
-// “清空会话”按钮，独立成类
 class ClearSessionButton : public QPushButton
 {
 	Q_OBJECT
@@ -63,7 +47,6 @@ public:
 	explicit ClearSessionButton(QWidget* parent = nullptr);
 };
 
-// 左侧边栏“设置”按钮，独立成类
 class SidebarSettingsButton : public QPushButton
 {
 	Q_OBJECT
@@ -72,7 +55,6 @@ public:
 	explicit SidebarSettingsButton(QWidget* parent = nullptr);
 };
 
-// 左侧边栏“插件”按钮，独立成类
 class SidebarPluginsButton : public QPushButton
 {
 	Q_OBJECT
@@ -81,7 +63,6 @@ public:
 	explicit SidebarPluginsButton(QWidget* parent = nullptr);
 };
 
-// 左侧边栏“主题”按钮，独立成类
 class SidebarThemeButton : public QPushButton
 {
 	Q_OBJECT
@@ -90,7 +71,6 @@ public:
 	explicit SidebarThemeButton(QWidget* parent = nullptr);
 };
 
-// 左侧边栏“Extension 管理”按钮，独立成类
 class SidebarExtensionButton : public QPushButton
 {
 	Q_OBJECT
@@ -111,16 +91,12 @@ public:
 
 	QString sessionId() const;
 
-	// 原始完整标题
-
 	// 更新显示标题（内部会重新计算省略号文本）
 	void setSessionTitle(const QString& title);
 
-	// 设置当前选中状态
 	void setSelected(bool selected);
 
 signals:
-	// 点击该会话按钮时发出
 	void sessionClicked(const QString& sessionId);
 	// 右键菜单请求删除会话
 	void deleteRequested(const QString& sessionId);
@@ -139,7 +115,7 @@ private:
 	QString m_fullTitle;
 };
 
-// 工作区按钮：点击可折叠/展开该工作区下的会话，右侧绘制加号
+// 工作区按钮：点击折叠/展开该工作区下的会话，右侧绘制加号
 class WorkspaceButton : public QPushButton
 {
 	Q_OBJECT
@@ -163,8 +139,7 @@ private:
 	bool m_plusHovered = false;
 };
 
-// 工作区列表：按工作区分组渲染会话按钮。
-// 数据（分组/标题/归档状态）来自 SessionCatalog（common），本类只负责画。
+// 工作区列表：按工作区分组渲染会话按钮，数据（分组/标题/归档状态）来自 SessionCatalog，本类只负责画。
 class WorkspaceList : public QWidget
 {
 	Q_OBJECT
@@ -175,7 +150,7 @@ public:
 	// 数据源：由 SessionService 在刷新时写入
 	SessionCatalog& catalog();
 
-	// 按 catalog 的当前内容整体重建（清空后重新创建分组与按钮）
+	// 按 catalog 的当前内容整体重建
 	void rebuildFromCatalog();
 
 	void addSession(const QString& sessionId, const QString& title);
@@ -231,13 +206,11 @@ public:
 	// 新建会话成功后，在侧边栏添加并选中该会话
 	void addCreatedSession(const QString& sessionId, const QString& workspaceId = QString());
 
-	// 刷新工作区/会话列表：数据解析由 SessionService 负责，本类只把
-	// 结果映射成界面状态并转发信号
+	// 数据解析由 SessionService 负责，本类只把结果映射成界面状态并转发信号
 	void refreshSessions(DshApiClient* api);
 	void createSession(DshApiClient* api, const QString& workspaceId = QString());
 
-	// 清空全部会话：文件与目录清理由 SessionService 负责，
-	// 会话列表的清理由 WorkspaceList（catalog）负责
+	// 文件与目录清理由 SessionService 负责，会话列表的清理由 WorkspaceList（catalog）负责
 	void clearAllSessions(
 		const QString& dshHome,
 		const std::function<void()>& onCleared,
