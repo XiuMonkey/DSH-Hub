@@ -1,4 +1,5 @@
 #include "ui/PluginsManager.h"
+#include "ui/LayoutUtils.h"
 
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
@@ -20,13 +21,10 @@
 
 namespace
 {
-	void clearLayout(QLayout* layout)
+	// 整块换内容，可见性由调用方管。
+	void clearCards(QLayout* layout)
 	{
-		while (QLayoutItem* item = layout->takeAt(0)) {
-			if (QWidget* widget = item->widget())
-				widget->deleteLater();
-			delete item;
-		}
+		LayoutUtils::clearLayout(layout, LayoutUtils::ClearMode::DeferOnly);
 	}
 }
 
@@ -353,7 +351,7 @@ void PluginsManager::populateMarket()
 
 void PluginsManager::renderMarketPage()
 {
-	clearLayout(m_marketCardsLayout);
+	clearCards(m_marketCardsLayout);
 
 	const PluginMarketModel::Page page = PluginMarketModel::paginate(
 		m_filteredPlugins.size(), m_pageSize, m_currentPage);
@@ -371,7 +369,7 @@ void PluginsManager::renderMarketPage()
 
 void PluginsManager::populateInstalled()
 {
-	clearLayout(m_installedCardsLayout);
+	clearCards(m_installedCardsLayout);
 	for (auto it = m_installed.begin(); it != m_installed.end(); ++it) {
 		m_installedCardsLayout->addWidget(createInstalledCard(it.key(), it.value().toString()));
 	}

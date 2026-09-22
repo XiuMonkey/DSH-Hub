@@ -1,5 +1,6 @@
 #include "ui/TopBar.h"
 
+#include "ui/LayoutUtils.h"
 #include "common/appearance/CardShadow.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
@@ -493,16 +494,8 @@ void ToolsFilterPopup::rebuild()
 
 	m_updating = true;
 
-	// 只 deleteLater() 的话旧行在真正销毁前仍是子控件，会被一并显示出来，
-	// 于是列表里出现重复目录 —— 这里立刻从控件树上摘下来（同 ModelListPanel）。
-	while (QLayoutItem* item = m_listLayout->takeAt(0)) {
-		if (QWidget* widget = item->widget()) {
-			widget->hide();
-			widget->setParent(nullptr);
-			widget->deleteLater();
-		}
-		delete item;
-	}
+	// 重建后马上 show()，所以要立刻摘离 —— 否则列表里会出现重复目录。
+	LayoutUtils::clearLayout(m_listLayout);
 
 	for (const ToolFilterDirectory& directory : m_directories) {
 		auto* entry = new ToolsFilterDirectoryEntry(directory, m_listContent);

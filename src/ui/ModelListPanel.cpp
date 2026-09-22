@@ -1,4 +1,5 @@
 #include "ui/ModelListPanel.h"
+#include "ui/LayoutUtils.h"
 
 #include "network/DshApiClient.h"
 #include "common/appearance/ThemeManager.h"
@@ -375,16 +376,8 @@ public:
 private:
 	void clear()
 	{
-		// 与模型选择器菜单同理：只 deleteLater() 的话旧行在真正销毁前仍是子控件，
-		// 下次 show() 会被一并显示出来——这里立刻从控件树上摘下来。
-		while (QLayoutItem* item = m_rows->takeAt(0)) {
-			if (QWidget* widget = item->widget()) {
-				widget->hide();
-				widget->setParent(nullptr);
-				widget->deleteLater();
-			}
-			delete item;
-		}
+		// 重建后马上 show()，所以要立刻摘离 —— 否则旧行会被一并显示出来。
+		LayoutUtils::clearLayout(m_rows);
 	}
 
 	QWidget* m_body = nullptr;
@@ -508,16 +501,8 @@ private:
 
 	void clear()
 	{
-		// 与右键菜单同理：只 deleteLater() 的话旧行在真正销毁前仍是子控件，
-		// 下次 show() 会被一并显示出来——这里立刻从控件树上摘下来。
-		while (QLayoutItem* item = m_rows->takeAt(0)) {
-			if (QWidget* widget = item->widget()) {
-				widget->hide();
-				widget->setParent(nullptr);
-				widget->deleteLater();
-			}
-			delete item;
-		}
+		// 重建后马上 show()，所以要立刻摘离 —— 否则旧行会被一并显示出来。
+		LayoutUtils::clearLayout(m_rows);
 
 		// 清空后把高度约束放开，避免上一次的固定尺寸残留到这一份内容上
 		m_scroll->setMinimumHeight(0);
@@ -687,16 +672,8 @@ void ModelListPanel::clearRows()
 	if (!m_listLayout)
 		return;
 
-	// 只 deleteLater() 的话旧行在真正销毁前仍是子控件，会被一并显示出来，
-	// 于是列表里出现重复成员——这里立刻从控件树上摘下来。
-	while (QLayoutItem* item = m_listLayout->takeAt(0)) {
-		if (QWidget* widget = item->widget()) {
-			widget->hide();
-			widget->setParent(nullptr);
-			widget->deleteLater();
-		}
-		delete item;
-	}
+	// 重建后马上 show()，所以要立刻摘离 —— 否则列表里会出现重复成员。
+	LayoutUtils::clearLayout(m_listLayout);
 }
 
 void ModelListPanel::populateRows()

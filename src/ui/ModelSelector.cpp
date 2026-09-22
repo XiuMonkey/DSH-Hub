@@ -1,4 +1,5 @@
 #include "ui/ModelSelector.h"
+#include "ui/LayoutUtils.h"
 
 #include <algorithm>
 
@@ -264,19 +265,10 @@ public:
 
 	void clearOptions()
 	{
-		// 关键：只 deleteLater() 的话，旧行在被真正销毁前仍是子控件，
-		// 弹窗再次 show() 时会被一并显示出来——同一份菜单里就会出现多行勾选。
-		// 这里立刻从控件树上摘下来（setParent(nullptr)）并隐藏，确保不会再被显示。
-		for (QVBoxLayout* rows : { m_modelRows, m_levelRows }) {
-			while (QLayoutItem* item = rows->takeAt(0)) {
-				if (QWidget* widget = item->widget()) {
-					widget->hide();
-					widget->setParent(nullptr);
-					widget->deleteLater();
-				}
-				delete item;
-			}
-		}
+		// 只 deleteLater() 的话旧行在被真正销毁前仍是子控件，弹窗再次 show() 时会被
+		// 一并显示出来（同一份菜单里出现多行勾选），所以这里立刻摘离。
+		for (QVBoxLayout* rows : { m_modelRows, m_levelRows })
+			LayoutUtils::clearLayout(rows);
 
 		// 清空后把高度约束放开，避免上一次的固定高度残留到这一份内容上
 		// （buildMenu 结束前会再按新内容 fitContent() 一次）

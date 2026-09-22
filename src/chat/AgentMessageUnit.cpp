@@ -7,6 +7,7 @@
 // ------------------------------------------------------------------
 
 #include "chat/AgentMessageUnit.h"
+#include "ui/LayoutUtils.h"
 #include "chat/CodeBlockView.h"
 #include "common/util/CodeHighlighter.h"
 #include "common/util/MarkdownPreprocess.h"
@@ -286,14 +287,8 @@ void AgentMessageUnit::resizeEvent(QResizeEvent* event)
 
 void AgentMessageUnit::clearParts()
 {
-	QLayoutItem* item = nullptr;
-	while ((item = m_partsLayout->takeAt(0)) != nullptr) {
-		if (QWidget* widget = item->widget()) {
-			widget->hide();          // 先移出可视区
-			widget->deleteLater();   // 延迟删除：可能正处在自身 anchorClicked 信号处理中
-		}
-		delete item;
-	}
+	// 不摘离控件树：这里可能正处在某个子控件的 anchorClicked 处理中。
+	LayoutUtils::clearLayout(m_partsLayout, LayoutUtils::ClearMode::HideThenDefer);
 	m_proseViews.clear();
 }
 

@@ -1,4 +1,5 @@
 #include "ui/PopupWindow.h"
+#include "ui/LayoutUtils.h"
 #include "ui/ShadowPanel.h"
 #include "common/appearance/ThemeManager.h"
 
@@ -99,11 +100,7 @@ void PopupWindow::setContent(QWidget* content)
 		return;
 
 	// 移除旧内容
-	while (QLayoutItem* item = m_contentLayout->takeAt(0)) {
-		if (QWidget* w = item->widget())
-			w->deleteLater();
-		delete item;
-	}
+	LayoutUtils::clearLayout(m_contentLayout, LayoutUtils::ClearMode::DeferOnly);
 
 	m_contentLayout->addWidget(content);
 }

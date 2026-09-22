@@ -233,6 +233,7 @@
     <ClInclude Include="include\common\session\SessionService.h" />
     <ClInclude Include="include\common\settings\SettingsStore.h" />
     <ClInclude Include="include\ui\Tooltip.h" />
+    <ClInclude Include="include\ui\LayoutUtils.h" />
     <ClInclude Include="include\common\settings\ClientSettings.h" />
     <ClInclude Include="include\common\session\AgentPresetService.h" />
     <ClInclude Include="include\common\extension\PluginMarketModel.h" />
