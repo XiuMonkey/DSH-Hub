@@ -2,6 +2,7 @@
 #include "ui/LayoutUtils.h"
 #include "ui/ShadowPanel.h"
 #include "common/appearance/ThemeManager.h"
+#include "common/appearance/WindowFrame.h"
 
 #include <QCloseEvent>
 #include <QEvent>
@@ -103,6 +104,34 @@ void PopupWindow::setContent(QWidget* content)
 	LayoutUtils::clearLayout(m_contentLayout, LayoutUtils::ClearMode::DeferOnly);
 
 	m_contentLayout->addWidget(content);
+}
+
+void PopupWindow::openHosted()
+{
+	if (!m_popupHost || isVisible())
+		return;
+
+	// 铺遮罩 + 居中 + 显示自己：背靠背完成，两者落在同一帧
+	//（见 WindowFrame::showOverlayWithPopup —— 合成器要求在一个函数里发出去）。
+	WindowFrame::showOverlayWithPopup(m_popupHost, this, this);
+
+	// 数据随后异步加载，刻意放在 show() 之后：refreshOnOpen() 往往是打开流程里最耗时的
+	// 一步（设置要拉预设与模型目录，插件管理要先 ensureInstalled() 解包落盘），放前面会让
+	// 点击后"卡一下才出现"；放这里既不延迟弹窗出现，也不打断上面那两步的背靠背。
+	refreshOnOpen();
+}
+
+void PopupWindow::closeHosted()
+{
+	// 先收遮罩、再隐藏自己：收遮罩那一步会同步重绘一次主窗口，两件事落在同一帧上。
+	// 反过来（或让遮罩等下一帧重绘）观感就是"窗口没了、遮罩还留一拍"。
+	WindowFrame::hideOverlay(m_popupHost, this);
+	hide();
+}
+
+void PopupWindow::syncOverlayToHost()
+{
+	WindowFrame::syncOverlay(m_popupHost);
 }
 
 void PopupWindow::closeEvent(QCloseEvent* event)

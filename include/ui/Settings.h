@@ -37,9 +37,6 @@ public:
 	// 关闭设置窗口并归还遮罩（幂等）
 	void closeSettings();
 
-	// 宿主窗口 resize 后调用，让遮罩重新铺满宿主（未打开时为空操作）
-	void syncOverlayToHost();
-
 signals:
 	// 用户把某个 Agent 预设设为默认且**服务端已写入成功**；生效范围由服务端定，只影响此后新建的会话
 	void agentPresetChanged(const QString& presetId);
@@ -57,10 +54,9 @@ private:
 	void saveServerSettings();
 
 	// 打开前刷新需要每次同步的数据（Server 地址、预设列表、模型列表）
-	void refreshOnOpen();
+	void refreshOnOpen() override;
 
 	DshApiClient* m_api = nullptr;
-	QWidget* m_host = nullptr;            // 宿主主窗口（遮罩/居中定位）
 	QLineEdit* m_serverUrlEdit = nullptr;
 	ModelListPanel* m_modelList = nullptr;
 	QPushButton* m_agentPresetButton = nullptr;

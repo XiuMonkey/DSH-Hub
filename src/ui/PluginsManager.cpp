@@ -30,10 +30,10 @@ namespace
 
 PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	: StatusPopupWindow(host)
-	, m_host(host)
 	, m_market(new PluginMarketClient(this))
 	, m_installer(new PluginMarketInstaller(this))
 {
+	setPopupHost(host);
 	m_market->setBaseUrl(baseUrl);
 	setTitle(qtTrId("plugin_market_title"));
 
@@ -233,35 +233,12 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 
 void PluginsManager::openPlugins()
 {
-	if (!m_host)
-		return;
-	// 判重：窗口已经打开时忽略重复请求
-	if (isVisible())
-		return;
-
-	// 铺遮罩 + 居中 + 显示自己：背靠背完成，两者落在同一帧
-	WindowFrame::showOverlayWithPopup(m_host, this, this);
-
-	// 数据随后异步加载（市场 + 已安装 + 确保市场包存在）。刻意放在 show() 之后：
-	// refreshOnOpen() 里含 ensureInstalled()，可能要解包落盘，放前面会让点击后
-	// "卡一下才出现"；放这里既不延迟弹窗出现，也不打断上面那两步的背靠背
-	// （理由见 WindowFrame::showOverlayWithPopup）。
-	refreshOnOpen();
+	openHosted();
 }
 
 void PluginsManager::closePlugins()
 {
-	// 先收遮罩、再隐藏自己：收遮罩那一步会同步重绘一次主窗口，两件事落在
-	// 同一帧上。反过来（或让遮罩等下一帧重绘）观感就是"插件窗口没了、
-	// 遮罩还留一拍"。
-	WindowFrame::hideOverlay(m_host, this);
-	// 隐藏自己（常驻：不销毁，等待下次打开）
-	hide();
-}
-
-void PluginsManager::syncOverlayToHost()
-{
-	WindowFrame::syncOverlay(m_host);
+	closeHosted();
 }
 
 void PluginsManager::refreshOnOpen()

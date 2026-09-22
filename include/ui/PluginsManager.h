@@ -38,9 +38,6 @@ public:
 	// 关闭插件管理窗口并归还遮罩（幂等）
 	void closePlugins();
 
-	// 宿主窗口 resize 后调用，让遮罩重新铺满宿主（未打开时为空操作）
-	void syncOverlayToHost();
-
 signals:
 	void serverRestartRequested();
 
@@ -50,7 +47,7 @@ private slots:
 
 private:
 	// 打开前刷新数据（市场 + 已安装 + 确保市场包存在）
-	void refreshOnOpen();
+	void refreshOnOpen() override;
 
 	// 市场包安装完成后，等后台刷新出结果前轮询几次
 	void retryRefreshAfterInstall(int attempt);
@@ -66,7 +63,6 @@ private:
 	QWidget* createMarketCard(const MarketPlugin& plugin);
 	QWidget* createInstalledCard(const QString& name, const QString& version);
 
-	QWidget* m_host = nullptr;          // 宿主主窗口（遮罩/居中定位）
 	PluginMarketClient* m_market = nullptr;
 	PluginMarketInstaller* m_installer = nullptr;
 

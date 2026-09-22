@@ -31,8 +31,8 @@ SettingsButton::SettingsButton(const QString& text, QWidget* parent)
 Settings::Settings(DshApiClient* api, QWidget* host)
 	: PopupWindow(host)
 	, m_api(api)
-	, m_host(host)
 {
+	setPopupHost(host);
 	setTitle(qtTrId("settings_title"));
 
 	auto* content = new QWidget(this);
@@ -337,35 +337,12 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 
 void Settings::openSettings()
 {
-	if (!m_host)
-		return;
-	// 判重：窗口已经打开时忽略重复请求
-	if (isVisible())
-		return;
-
-	// 铺遮罩 + 居中 + 显示自己：背靠背完成，两者落在同一帧
-	WindowFrame::showOverlayWithPopup(m_host, this, this);
-
-	// 数据随后异步加载（API Key / Server 地址 / 预设列表）。刻意放在 show() 之后：
-	// refreshOnOpen() 是本函数里最耗时的一步，放前面会让点击后"卡一下才出现"，
-	// 放这里既不延迟弹窗出现，也不打断上面那两步的背靠背
-	// （理由见 WindowFrame::showOverlayWithPopup）。
-	refreshOnOpen();
+	openHosted();
 }
 
 void Settings::closeSettings()
 {
-	// 先收遮罩、再隐藏自己：收遮罩那一步会同步重绘一次主窗口，两件事落在
-	// 同一帧上。反过来（或让遮罩等下一帧重绘）观感就是"设置窗口没了、
-	// 遮罩还留一拍"。
-	WindowFrame::hideOverlay(m_host, this);
-	// 隐藏自己（常驻：不销毁，等待下次打开）
-	hide();
-}
-
-void Settings::syncOverlayToHost()
-{
-	WindowFrame::syncOverlay(m_host);
+	closeHosted();
 }
 
 void Settings::refreshOnOpen()
