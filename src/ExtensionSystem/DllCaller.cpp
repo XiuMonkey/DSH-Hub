@@ -1,26 +1,6 @@
-// ------------------------------------------------------------------
-// DllCaller.cpp
-// ------------------------------------------------------------------
-// 实现 JSON5 DLL 描述解析和 DLL 调用。
-//
-// 支持的 JSON5 描述示例：
-// {
-//   "Name": "Example",
-//   "Description": "Example DLL",
-//   "Function": [
-//     {
-//       "Func": "dll_echo",
-//       "InterfaceType": "default",      // 可选：default(http/websocket/com 等由未来版本接入)
-//       "Calling Convention": {
-//         "Style": "json",
-//         "ReturnType": "int",
-//         "ResultIsJson": true
-//       },
-//       "Tool": "dll_echo"
-//     }
-//   ]
-// }
-// ------------------------------------------------------------------
+// DllCaller.cpp：JSON5 DLL 描述解析 + DLL 调用（json / native 两种风格；com 走 ComCaller）。
+// 描述示例：{ "Name":"Example", "Function":[ { "Func":"dll_echo", "InterfaceType":"default",
+//   "Calling Convention":{ "Style":"json", "ReturnType":"int", "ResultIsJson":true }, "Tool":"dll_echo" } ] }
 
 #include "ExtensionSystem/DllCaller.h"
 #include "ExtensionSystem/Thunk.h"
@@ -40,8 +20,7 @@
 
 namespace
 {
-	// Windows 文件系统大小写不敏感：统一规范化绝对路径（存在时用 canonical），
-	// 用于扩展描述去重与 DLL 库缓存的 key。
+	// Windows 文件系统大小写不敏感：统一规范化绝对路径（存在时用 canonical），用于扩展描述去重与 DLL 库缓存的 key。
 	QString normalizedDllPath(const QString& path)
 	{
 		const QFileInfo info(path);
@@ -78,8 +57,7 @@ bool DllCaller::loadDescriptor(const QString& json5Path)
 		return false;
 	}
 
-	// 扩展名 = 描述文件所在目录的 basename（安装布局 extensions/<name>/regulation.json5），
-	// 与扩展管理/移除流程的扩展名同源。
+	// 扩展名 = 描述文件所在目录的 basename（安装布局 extensions/<name>/regulation.json5），与扩展管理/移除流程的扩展名同源。
 	const QString dir = QFileInfo(json5Path).absolutePath();
 	QString name = QFileInfo(dir).fileName();
 	if (name.isEmpty())
@@ -93,8 +71,7 @@ bool DllCaller::loadDescriptor(const QString& json5Path)
 		}
 	}
 
-	// 每个 Function 的 LoadingSource 相对本描述文件目录解析成规范化绝对路径，
-	// 调用期一律按绝对路径加载 DLL（多扩展同名 main.dll 互不冲突）
+	// 每个 Function 的 LoadingSource 相对本描述文件目录解析成规范化绝对路径，调用期一律按绝对路径加载 DLL（多扩展同名 main.dll 互不冲突）
 	for (FunctionSpec& fn : parsed.functions)
 		fn.resolvedDllPath = normalizedDllPath(QDir(dir).filePath(fn.loadingSource));
 
@@ -188,8 +165,7 @@ bool DllCaller::removeExtension(const QString& name)
 		}
 	}
 
-	// 卸载仅属于被移除扩展的 DLL：等待其上的在途调用结束，释放文件占用
-	// （Windows 下删除/覆盖才能成功）
+	// 卸载仅属于被移除扩展的 DLL：等待其上的在途调用结束，释放文件占用（Windows 下删除/覆盖才能成功）
 	QStringList drop;
 	for (auto it = m_librariesByPath.constBegin(); it != m_librariesByPath.constEnd(); ++it) {
 		if (!keep.contains(it.key()))
@@ -248,9 +224,7 @@ DllCaller::LoadedLibrary* DllCaller::ensureRuntimeLocked(const QString& absolute
 		return nullptr;
 	}
 
-	// 新约定：扩展 DLL 若导出 ClearMem，说明它的 json 风格工具返回的是
-	// malloc 堆内存，调用方必须在该函数返回后调用 ClearMem 归还。
-	// 老扩展（无 ClearMem 导出）保持旧行为（static 缓冲、不释放）。
+	// 新约定：扩展 DLL 若导出 ClearMem，说明它的 json 风格工具返回的是 malloc 堆内存，调用方必须在该函数返回后调用 ClearMem 归还；老扩展（无 ClearMem 导出）保持旧行为（static 缓冲、不释放）。
 	entry->clearMem = reinterpret_cast<ClearMemFn>(entry->library->resolve("ClearMem"));
 
 	m_librariesByPath.insert(key, entry);
@@ -330,18 +304,13 @@ bool DllCaller::callTool(const QString& tool,
 		return false;
 	}
 
-	// 按接口类型分派执行。以后新增接口类型时，在下面加一个对应的
-	// "else if (interfaceType == ...)" 分支即可，每个分支自带完整执行逻辑，
-	// 无需改动其它分支；未声明的类型落到末尾 else 统一报错。
+	// 按接口类型分派执行：以后新增接口类型时，在下面加一个对应的 "else if (interfaceType == ...)" 分支即可（每个分支自带完整执行逻辑，无需改动其它分支）；未声明的类型落到末尾 else 统一报错。
 	const QString interfaceType = spec.interfaceType.isEmpty()
 		? QStringLiteral("default")
 		: spec.interfaceType;
 
 	if (interfaceType == QStringLiteral("default")) {
-		// ---- 默认接口：原生 DLL（json / native 调用约定） ----
-		// 线程模型：本函数可在 Worker 线程调用。同一 DLL 经 runMutex 串行
-		// （旧扩展可能带 static 缓冲 / 非重入代码），不同 DLL 并行执行；
-		// 卸载/移除扩展会等待 inFlight 归零，不会卸载使用中的 QLibrary。
+		// 线程模型：本函数可在 Worker 线程调用；同一 DLL 经 runMutex 串行（旧扩展可能带 static 缓冲 / 非重入代码），不同 DLL 并行执行；卸载/移除扩展会等待 inFlight 归零，不会卸载使用中的 QLibrary。
 		LoadedLibrary* runtime = nullptr;
 		{
 			QMutexLocker stateLock(&m_mutex);
@@ -386,20 +355,17 @@ bool DllCaller::callTool(const QString& tool,
 		return true;
 	}
 	else if (interfaceType == QStringLiteral("http")) {
-		// ---- 预留：HTTP 接口（未来在此实现，如按 url/method 发起请求） ----
 		qWarning().noquote() << "[DllCaller] interfaceType \"http\" not implemented yet, tool=" << tool;
 		recordError(errOut, QStringLiteral("interfaceType \"http\" not implemented yet"));
 		return false;
 	}
 	else if (interfaceType == QStringLiteral("websocket")) {
-		// ---- 预留：WebSocket 接口（未来在此实现） ----
 		qWarning().noquote() << "[DllCaller] interfaceType \"websocket\" not implemented yet, tool=" << tool;
 		recordError(errOut, QStringLiteral("interfaceType \"websocket\" not implemented yet"));
 		return false;
 	}
 	else if (interfaceType == QStringLiteral("com")) {
-		// ---- COM 接口：由 ComCaller 执行（组件白名单在 "Com" 段声明）。
-		// 每次调用新建组件实例、无共享状态，可跨线程并行（ComCaller 内部按线程初始化 COM）。
+		// COM 接口由 ComCaller 执行（组件白名单在 "Com" 段声明）；每次调用新建组件实例、无共享状态，可跨线程并行（ComCaller 内部按线程初始化 COM）。
 		if (!spec.comConfig.isEmpty()) {
 			QString comError;
 			if (!comcall::invoke(spec.comConfig, args, result, comError)) {
@@ -453,14 +419,11 @@ bool DllCaller::parseDescriptor(const QByteArray& json5,
 		fn.tool = obj.value(QStringLiteral("Tool")).toString();
 		fn.loadingSource = obj.value(QStringLiteral("LoadingSource"))
 			.toString(QStringLiteral("main.dll"));
-		// InterfaceType：缺省 "default"（现有 DLL json/native 方式）；
-		// "com" 由 ComCaller 接入；http / websocket 等为未来预留。
+		// InterfaceType 缺省 "default"（现有 DLL json/native 方式）；"com" 由 ComCaller 接入；http / websocket 等为未来预留。
 		fn.interfaceType = obj.value(QStringLiteral("InterfaceType"))
 			.toString(QStringLiteral("default"));
 
-		// com 等非 default 接口的可选配置段，例如：
-		//   "Com": { "ProgId": "WScript.Shell" }
-		// ProgId 在此固定（白名单式），运行时 args 不能任意指定组件。
+		// com 等非 default 接口的可选配置段，例如 "Com": { "ProgId": "WScript.Shell" }；ProgId 在此固定（白名单式），运行时 args 不能任意指定组件。
 		if (fn.interfaceType != QStringLiteral("default"))
 			fn.comConfig = obj.value(QStringLiteral("Com")).toObject();
 
@@ -484,8 +447,7 @@ bool DllCaller::parseDescriptor(const QByteArray& json5,
 			fn.parameters.append(param);
 		}
 
-		// Tool 是所有接口类型都必需的；Func 仅 default（DLL）接口需要，
-		// com 等接口没有 DLL 导出函数名。
+		// Tool 是所有接口类型都必需的；Func 仅 default（DLL）接口需要，com 等接口没有 DLL 导出函数名。
 		if (fn.tool.isEmpty()
 			|| (fn.interfaceType == QStringLiteral("default") && fn.function.isEmpty())) {
 			*error = qtTrId("com_function_requires_tool");
@@ -526,11 +488,7 @@ bool DllCaller::invokeJsonFunction(const FunctionSpec& fn,
 			return false;
 		}
 
-		// 内存契约（新约定）：若该 DLL 导出了 ClearMem，则 rawResult 指向
-		// DLL 分配的堆内存。先把内容拷进 Qt 自己的 QByteArray（后续解析只
-		// 用副本，不再碰 rawResult），然后立刻调用 ClearMem 归还 DLL 内存。
-		// 老扩展 DLL 未导出 ClearMem 时 releaseResult 为空操作，
-		// 保持其"static 缓冲、调用方无需释放"的旧行为。
+		// 内存契约（新约定）：若该 DLL 导出了 ClearMem，则 rawResult 指向 DLL 分配的堆内存 —— 先把内容拷进 Qt 自己的 QByteArray（后续解析只用副本，不再碰 rawResult），然后立刻调用 ClearMem 归还 DLL 内存；老扩展 DLL 未导出 ClearMem 时 releaseResult 为空操作，保持其"static 缓冲、调用方无需释放"的旧行为。
 		const QByteArray resultBytes(rawResult);
 		releaseResult(fn, rawResult);
 
@@ -609,7 +567,6 @@ bool DllCaller::invokeNativeFunction(const FunctionSpec& fn,
 {
 	Thunk::Signature signature;
 
-	// 返回值类型
 	if (fn.returnType == QStringLiteral("void"))
 		signature.returnType = Thunk::ReturnType::Void;
 	else if (fn.returnType == QStringLiteral("bool"))

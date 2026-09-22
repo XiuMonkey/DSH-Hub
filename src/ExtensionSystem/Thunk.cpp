@@ -1,10 +1,5 @@
-// ------------------------------------------------------------------
-// Thunk.cpp
-// ------------------------------------------------------------------
-// Windows x64 运行时 thunk 生成器。
-// 根据参数/返回值描述生成可执行机器码，把统一参数数组转换为
-// 目标 DLL 函数的真实调用约定（由 DllCaller 的 native 风格使用）。
-// ------------------------------------------------------------------
+// Thunk.cpp：Windows x64 运行时 thunk 生成器 —— 按参数/返回值描述生成可执行机器码，
+// 把统一参数数组翻译成目标 DLL 函数的真实调用约定（DllCaller 的 native 风格使用）。
 
 #include "ExtensionSystem/Thunk.h"
 
@@ -220,9 +215,7 @@ namespace Thunk
 			return false;
 		}
 
-		// ⚠️ 不要在这里再赋值 m_codeSize：它由 emitMachineCode() 末尾设置（那边有它
-		// 自己的 X86Writer）。原先这里写的是 m_codeSize = writer.size()，可是外层那个
-		// writer 一个字节都没 emit 过 ⇒ 长度被覆盖成 0 ⇒ 下面刷新 0 字节。
+		// ⚠️ 不要在这里再赋值 m_codeSize：它由 emitMachineCode() 末尾设置；原 bug 是这里写过 m_codeSize = writer.size()，而外层 writer 一个字节都没 emit 过 ⇒ 长度被覆盖成 0 ⇒ 下面刷新 0 字节。
 		FlushInstructionCache(GetCurrentProcess(), m_code, m_codeSize);
 		return true;
 	}

@@ -1,9 +1,6 @@
-// ------------------------------------------------------------------
-// ComCaller.cpp
-// ------------------------------------------------------------------
-// InterfaceType = "com" 的独立执行器实现：通过 IDispatch 自动化
-// 调用白名单 ProgId 组件的方法/属性。命名不含 "Json"，与 DllCaller
-// 的 json/native 风格是并列的执行路径。
+// ComCaller.cpp：InterfaceType = "com" 的独立执行器 —— 通过 IDispatch 自动化调用
+// 白名单 ProgId 组件的方法/属性。命名不含 "Json"：它与 DllCaller 的 json/native
+// 风格是并列的执行路径。
 
 #include "ExtensionSystem/ComCaller.h"
 
@@ -24,14 +21,7 @@
 
 namespace
 {
-	// ------------------------------------------------------------------
-	// COM 生命周期 / VARIANT 工具
-	// ------------------------------------------------------------------
-
-	// COM 必须按线程初始化。每次调用自行初始化（MTA）并在本调用结束时
-	// 反初始化；若线程此前已被其它模式初始化（hr == S_FALSE 已初始化 /
-	// RPC_E_CHANGED_MODE 已是 STA），则不再反初始化，避免破坏调用方线程
-	// 的 COM 状态。这样 DLL/COM 工具可放到 Worker 线程并行执行。
+	// COM 必须按线程初始化：每次调用自行 CoInitializeEx(MTA) 并在本调用结束时反初始化；若线程此前已被其它模式初始化（hr == S_FALSE 已初始化 / RPC_E_CHANGED_MODE 已是 STA）则不再反初始化，避免破坏调用方线程的 COM 状态 —— 这样 DLL/COM 工具才能放到 Worker 线程并行执行。
 	class ComThreadInit
 	{
 	public:
@@ -144,7 +134,7 @@ namespace
 		}
 	}
 
-	// 用 VariantChangeType 尽力把任意 VARIANT 转成 VT_BSTR/VT_I4/VT_R8 后再序列化。
+	// 兜底：用 VariantChangeType 尽力转成 VT_BSTR / VT_R8 后再序列化。
 	QJsonValue coerceVariantToJson(const VARIANT& v)
 	{
 		VARIANT conv;
@@ -159,10 +149,6 @@ namespace
 		VariantClear(&conv);
 		return result;
 	}
-
-	// ------------------------------------------------------------------
-	// IDispatch 辅助（属性路径、方法/属性读写）
-	// ------------------------------------------------------------------
 
 	QString hrText(HRESULT hr)
 	{
@@ -302,8 +288,7 @@ namespace
 		return ok;
 	}
 
-	// 结果里若出现对象（VT_DISPATCH）：MVP 不支持句柄保活，
-	// 只做最小"对象摘要"（尝试 Count），避免魔法探测过多。
+	// 结果里若出现对象（VT_DISPATCH）：MVP 不支持句柄保活，只做最小"对象摘要"（尝试 Count），避免魔法探测过多。
 	QJsonValue summarizeObject(IDispatch* p)
 	{
 		long count = 0;
@@ -322,14 +307,13 @@ namespace comcall
 	{
 		ComThreadInit comInit;
 
-		// 1. ProgId 白名单：只允许 regulation "Com" 段声明的组件
+		// 白名单：只允许 regulation "Com" 段声明的组件
 		const QString progId = comConfig.value(QStringLiteral("ProgId")).toString();
 		if (progId.isEmpty()) {
 			error = qtTrId("com_missing_config");
 			return false;
 		}
 
-		// 2. 解析调用意图
 		const QString member = args.value(QStringLiteral("member")).toString();
 		if (member.isEmpty()) {
 			error = qtTrId("com_missing_member_arg");
@@ -343,7 +327,7 @@ namespace comcall
 			return false;
 		}
 
-		// 3. 创建组件实例（无状态：每次新建）
+		// 无状态：每次调用新建组件实例
 		CLSID clsid;
 		HRESULT hr = CLSIDFromProgID(reinterpret_cast<const wchar_t*>(progId.utf16()), &clsid);
 		if (FAILED(hr)) {
@@ -358,7 +342,7 @@ namespace comcall
 			return false;
 		}
 
-		// 4. 沿属性链下行（path 每层都是 PROPERTYGET）
+		// 沿属性链下行：path 每层都是 PROPERTYGET
 		IDispatch* current = root;
 		QString currentOwner = progId;
 		QStringList path;
@@ -392,7 +376,6 @@ namespace comcall
 			currentOwner += QStringLiteral(".") + prop;
 		}
 
-		// 5. 执行 member
 		VARIANT out;
 		VariantInit(&out);
 		bool ok = false;
@@ -441,7 +424,6 @@ namespace comcall
 				error = mErr;
 		}
 
-		// 6. 结果序列化
 		if (ok) {
 			if (out.vt == VT_DISPATCH && out.pdispVal) {
 				result.insert(QStringLiteral("value"), summarizeObject(out.pdispVal));

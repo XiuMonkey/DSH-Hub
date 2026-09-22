@@ -1,12 +1,6 @@
-// ------------------------------------------------------------------
-// DshNamedPipeBridge.cpp
-// ------------------------------------------------------------------
-// 命名管道桥接服务实现。
-// 协议：每个请求/响应都是单行 JSON，以 '\n' 结尾。
-//   请求: {"id":1,"tool":"dll_power_func","args":{...}}
-//   响应: {"id":1,"ok":true,"result":{...}}
-//         {"id":1,"ok":false,"error":"..."}
-// ------------------------------------------------------------------
+// DshNamedPipeBridge.cpp：命名管道桥接服务。协议为单行 JSON + '\n'：
+//   请求 {"id":1,"tool":"dll_power_func","args":{...}}
+//   响应 {"id":1,"ok":true,"result":{...}} 或 {"id":1,"ok":false,"error":"..."}
 
 #include "ExtensionSystem/DshNamedPipeBridge.h"
 
@@ -107,7 +101,7 @@ void DshNamedPipeBridge::onReadyRead()
 	QByteArray& buffer = m_buffers[socket];
 	buffer.append(socket->readAll());
 
-	// 按换行拆出一个一个完整的 JSON
+	// 按 '\n' 切出完整请求；不完整的尾部留在 buffer 里等下次读
 	int newlineIndex;
 	while ((newlineIndex = buffer.indexOf('\n')) != -1) {
 		QByteArray line = buffer.left(newlineIndex).trimmed();
