@@ -318,7 +318,7 @@ void WorkspaceButton::paintEvent(QPaintEvent* event)
 		painter.drawEllipse(QPointF(cx, cy), radius, radius);
 	}
 
-	QPen pen(QColor(76, 139, 245), 2, Qt::SolidLine, Qt::RoundCap);
+	QPen pen(QColor(ThemeManager::instance().accent()), 2, Qt::SolidLine, Qt::RoundCap);
 	painter.setPen(pen);
 
 	const int half = 5;

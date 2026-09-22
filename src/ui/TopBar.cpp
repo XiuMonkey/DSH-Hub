@@ -1,5 +1,6 @@
 #include "ui/TopBar.h"
 
+#include "common/appearance/CardShadow.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
 #include "common/util/CommonRegistry.h"
@@ -64,7 +65,7 @@ namespace
 			QPainter painter(this);
 			painter.setRenderHint(QPainter::Antialiasing, true); // 只有胶囊两端的圆头需要
 			painter.setPen(Qt::NoPen);
-			painter.setBrush(QColor(ThemeManager::instance().textSecondary()));
+			painter.setBrush(CardShadow::parseColor(ThemeManager::instance().textSecondary()));
 			// 之后 1 单位 = 1 设备像素
 			painter.scale(1.0 / dpr, 1.0 / dpr);
 
@@ -117,10 +118,10 @@ namespace
 			font.setPixelSize(12);
 			painter.setFont(font);
 			const QColor textColor = isEnabled()
-				? QColor(underMouse()
+				? CardShadow::parseColor(underMouse()
 					? ThemeManager::instance().textSecondary()
 					: ThemeManager::instance().color(QStringLiteral("textTertiary")))
-				: QColor(ThemeManager::instance().color(QStringLiteral("textCaption")));
+				: CardShadow::parseColor(ThemeManager::instance().color(QStringLiteral("textCaption")));
 			painter.setPen(textColor);
 			const int textWidth = qMax(width() - int(kTrackWidth) - 14, 0);
 			painter.drawText(QRect(4, 0, textWidth, height()),
@@ -132,7 +133,7 @@ namespace
 			const qreal trackY = (height() - kTrackHeight) / 2.0;
 			const QRectF track(trackX, trackY, kTrackWidth, kTrackHeight);
 			painter.setPen(Qt::NoPen);
-			painter.setBrush(QColor(isEnabled()
+			painter.setBrush(CardShadow::parseColor(isEnabled()
 				? (isChecked() ? ThemeManager::instance().textSecondary() : ThemeManager::instance().border())
 				: ThemeManager::instance().inputBg()));
 			painter.drawRoundedRect(track, kTrackHeight / 2.0, kTrackHeight / 2.0);
@@ -142,7 +143,7 @@ namespace
 			const qreal knobX = isChecked()
 				? trackX + kTrackWidth - knobSize - 2.0
 				: trackX + 2.0;
-			painter.setBrush(isEnabled() ? QColor(Qt::white) : QColor(ThemeManager::instance().border()));
+			painter.setBrush(isEnabled() ? QColor(Qt::white) : CardShadow::parseColor(ThemeManager::instance().border()));
 			painter.drawEllipse(QPointF(knobX + knobSize / 2.0, trackY + kTrackHeight / 2.0),
 				knobSize / 2.0, knobSize / 2.0);
 		}

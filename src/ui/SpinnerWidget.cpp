@@ -1,5 +1,7 @@
 #include "ui/SpinnerWidget.h"
 
+#include "common/appearance/ThemeManager.h"
+
 #include <QPainter>
 #include <QTimer>
 
@@ -24,7 +26,7 @@ void SpinnerWidget::paintEvent(QPaintEvent* event)
 {
 	Q_UNUSED(event)
 
-		QPainter painter(this);
+	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 
 	const int side = qMin(width(), height());
@@ -36,7 +38,7 @@ void SpinnerWidget::paintEvent(QPaintEvent* event)
 	painter.drawArc(rect, 0, 360 * 16);
 
 	// 前景旋转弧
-	QPen fgPen(QColor(76, 139, 245), 4, Qt::SolidLine, Qt::RoundCap);
+	QPen fgPen(QColor(ThemeManager::instance().accent()), 4, Qt::SolidLine, Qt::RoundCap);
 	painter.setPen(fgPen);
 	painter.drawArc(rect, m_angle * 16, 270 * 16);
 }

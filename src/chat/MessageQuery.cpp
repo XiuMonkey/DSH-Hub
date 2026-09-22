@@ -3,6 +3,7 @@
 #include "network/DshEventParser.h"
 #include "network/DshApiClient.h"
 #include "chat/CacheHistoryManager.h"
+#include "common/session/SessionCommands.h"
 #include "ui/ShadowPanel.h"
 
 #include <QClipboard>
@@ -591,19 +592,6 @@ HistoryLoader::HistoryLoader(DshApiClient* api,
 
 namespace
 {
-	// 0.1.5：session/page 与 session/follow 的记录都是
-	// {type:"event", event:{type,seq,time,data,…}}，这里取出内层事件，
-	// 交给既有的分批构建路径（它只认裸事件对象）。
-	QJsonArray eventsFromRecords(const QJsonArray& records)
-	{
-		QJsonArray events;
-		for (const auto& record : records) {
-			const QJsonObject event = record.toObject().value(QStringLiteral("event")).toObject();
-			if (!event.isEmpty())
-				events.append(event);
-		}
-		return events;
-	}
 	// 日志事件里的 seq（上翻分页按它做 beforeSeq 游标）
 	int seqOf(const QJsonObject& event)
 	{
@@ -691,21 +679,10 @@ void HistoryLoader::load(const QString& sessionId)
 	QElapsedTimer requestTimer;
 	requestTimer.start();
 
-	QJsonObject address;
-	address.insert(QStringLiteral("kind"), QStringLiteral("session"));
-	address.insert(QStringLiteral("sessionId"), sessionId);
-
-	QJsonObject request;
-	request.insert(QStringLiteral("address"), address);
-	request.insert(QStringLiteral("throughSeq"), m_throughSeq);
-	request.insert(QStringLiteral("maxMessages"), m_history->limit());
-	// 上翻一页：只取比当前最早一条更早的记录。
-	// 首屏（含快照播种后的刷新）不带 beforeSeq，语义是"throughSeq 往前最近一页"。
-	if (m_history->loadMoreRequested() && m_oldestSeq > 0)
-		request.insert(QStringLiteral("beforeSeq"), m_oldestSeq);
-
-	QJsonObject args;
-	args.insert(QStringLiteral("request"), request);
+	// 上翻一页：只取比当前最早一条更早的记录；不带 beforeSeq = "throughSeq 往前最近一页"。
+	const int beforeSeq = (m_history->loadMoreRequested() && m_oldestSeq > 0) ? m_oldestSeq : 0;
+	const QJsonObject args = SessionCommands::sessionPage(sessionId, m_throughSeq,
+		m_history->limit(), beforeSeq);
 
 	m_api->callMethod(
 		QStringLiteral("session/page"),
@@ -719,7 +696,7 @@ void HistoryLoader::load(const QString& sessionId)
 			if (requestedSessionId != m_sessionId)
 				return;
 
-			const QJsonArray events = eventsFromRecords(value.value(QStringLiteral("records")).toArray());
+			const QJsonArray events = SessionCommands::eventsFromRecords(value.value(QStringLiteral("records")).toArray());
 			const bool serverHasMore = value.value(QStringLiteral("hasMore")).toBool();
 			const int newCount = events.size();
 
@@ -975,7 +952,7 @@ void HistoryLoader::seedFromSnapshot(const QString& sessionId, int cursor, const
 	m_seeded = true;
 	m_loading = false;
 
-	QJsonArray events = eventsFromRecords(records);
+	QJsonArray events = SessionCommands::eventsFromRecords(records);
 
 	// 只播种最近 kSeedEventCap 条：快照一页可能给几十条消息的事件，
 	// 全量构建会让切会话明显变慢；更早的用"加载更多"按 beforeSeq 上翻。

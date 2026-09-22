@@ -1,5 +1,6 @@
 #include "common/appearance/ThemeManager.h"
 
+#include "common/appearance/CardShadow.h"
 #include "common/settings/ClientSettings.h"
 #include "common/util/CommonRegistry.h"
 #include "core/DSHHub.h"
@@ -147,13 +148,15 @@ QString ThemeManager::token(const QHash<QString, QString>& palette, const QStrin
 void ThemeManager::installPaletteFor(const QHash<QString, QString>& palette)
 {
 	QPalette pal = QApplication::palette();
-	const QColor window(token(palette, QStringLiteral("windowBg"), QStringLiteral("#FFFFFF")));
-	const QColor panel(token(palette, QStringLiteral("panelBg"), QStringLiteral("#FFFFFF")));
-	const QColor text(token(palette, QStringLiteral("textPrimary"), QStringLiteral("#000000")));
-	const QColor textDim(token(palette, QStringLiteral("textSecondary"), QStringLiteral("#666666")));
-	const QColor accent(token(palette, QStringLiteral("accent"), QStringLiteral("#4C8BF5")));
-	const QColor onAccent(token(palette, QStringLiteral("textOnAccent"), QStringLiteral("#FFFFFF")));
-	const QColor border(token(palette, QStringLiteral("border"), QStringLiteral("#E5E7EB")));
+	// 色板值可能是 CSS 的 rgba(...)，QColor 的字符串构造不认那种写法（会得到无效色）
+	// —— 一律走 CardShadow::parseColor（它两种写法都认，是 QColor 的超集）。
+	const QColor window(CardShadow::parseColor(token(palette, QStringLiteral("windowBg"), QStringLiteral("#FFFFFF"))));
+	const QColor panel(CardShadow::parseColor(token(palette, QStringLiteral("panelBg"), QStringLiteral("#FFFFFF"))));
+	const QColor text(CardShadow::parseColor(token(palette, QStringLiteral("textPrimary"), QStringLiteral("#000000"))));
+	const QColor textDim(CardShadow::parseColor(token(palette, QStringLiteral("textSecondary"), QStringLiteral("#666666"))));
+	const QColor accent(CardShadow::parseColor(token(palette, QStringLiteral("accent"), QStringLiteral("#4C8BF5"))));
+	const QColor onAccent(CardShadow::parseColor(token(palette, QStringLiteral("textOnAccent"), QStringLiteral("#FFFFFF"))));
+	const QColor border(CardShadow::parseColor(token(palette, QStringLiteral("border"), QStringLiteral("#E5E7EB"))));
 
 	const auto apply = [&pal](QPalette::ColorRole role, const QColor& color) {
 		for (int i = 0; i < QPalette::NColorGroups; ++i) {
