@@ -1,5 +1,7 @@
 #pragma once
 
+// 内置 DSH 服务端进程的生命周期：拉起 / 重启 / 移交给下一个窗口。
+
 #include <QObject>
 #include <QProcess>
 #include <QString>
@@ -13,22 +15,18 @@ public:
 	explicit ServerManager(QObject* parent = nullptr);
 	~ServerManager() override;
 
-	// 启动内置 DSH 服务；如果传入已有 baseUrl/进程，则复用而不是新启动
+	// 启动内置 DSH 服务；传入已有 baseUrl/进程则复用而不是新启动
 	void start(const QUrl& initialBaseUrl = QUrl(),
 		QProcess* initialServerProcess = nullptr);
 	void restart();
 
-	// 主题切换等场景移交服务进程（接管方通过 start() 的 initialServerProcess 参数）
+	// 移交服务进程（接管方通过 start() 的 initialServerProcess 参数拿回）
 	QProcess* takeProcess();
 
 	QString dshHome() const;
 	bool isRestarting() const;
 
-	// 出厂 settings.yaml：本部署**不随附任何模型**（写 `llm-deepseek: models: []`）。
-	// 为什么要显式写空数组：适配器自带的默认目录（deepseek-flash 等 4 条）只在
-	// 该路由的 `models` 缺席时才生效 —— 写了空数组才等于"这条路由一条也不公布"。
-	// 只在文件缺失时写入：用户配置过的 harness 一个字都不动（返回 true 表示可用）。
-	// 之所以落在客户端：数据根是客户端建的，缺这一步时"清空 harness"会让随附模型复活。
+	// 出厂 settings.yaml：只在文件缺失时写（返回是否已有可用的）；必须显式写空 `models: []`，该键缺席时适配器会退回自带默认目录。
 	static bool ensureFactorySettings(const QString& dshHome);
 
 signals:
@@ -39,12 +37,11 @@ signals:
 
 private:
 	void startBundledServer();
-	// 内置插件安装：把 qrc 里的插件源写进 profile 的 node_modules 并登记到
-	// cordis.patch.yml。台账（.dsh-hub-builtin.json）记录已装内容的 revision，
-	// 因此是"首次装一次、源码变了才重装"，不是每次启动都覆盖。
+	// 发布 baseUrl。⚠️ m_restarting 必须先于 emit 落地，否则界面会在重启后一直转圈。
+	void publishBaseUrl(const QUrl& url);
+	// 内置插件安装：qrc 源写进 profile 的 node_modules 并登记 cordis.patch.yml；台账记 revision，故只首次装、源码变了才重装。
 	void ensureBuiltinPlugins(const QString& profileDir);
 	// 单个内置插件的落地：qrc → <profile>/node_modules/<name>/ + patch 行。
-	// 装任意一个内置插件就是这一次调用（清单里加一行即可）。
 	bool installBuiltinPlugin(const QString& profileDir,
 		const QString& pluginName,
 		QString* error);

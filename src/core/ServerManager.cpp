@@ -213,13 +213,11 @@ void ServerManager::start(const QUrl& initialBaseUrl, QProcess* initialServerPro
 
 	if (!baseUrl.isEmpty()) {
 		// 复用已有 DSH server，不创建新 server
-		m_restarting = false;
 		if (initialServerProcess) {
 			m_serverProcess = initialServerProcess;
 			m_serverProcess->setParent(this);
 		}
-		m_baseUrl = baseUrl;
-		emit baseUrlReady(m_baseUrl);
+		publishBaseUrl(baseUrl);
 		return;
 	}
 
@@ -239,13 +237,18 @@ void ServerManager::restart()
 
 	const QUrl baseUrl = storedServerUrl();
 	if (!baseUrl.isEmpty()) {
-		m_restarting = false;
-		m_baseUrl = baseUrl;
-		emit baseUrlReady(m_baseUrl);
+		publishBaseUrl(baseUrl);
 		return;
 	}
 
 	startBundledServer();
+}
+
+void ServerManager::publishBaseUrl(const QUrl& url)
+{
+	m_baseUrl = url;
+	m_restarting = false;
+	emit baseUrlReady(m_baseUrl);
 }
 
 QProcess* ServerManager::takeProcess()
@@ -311,11 +314,10 @@ void ServerManager::startBundledServer()
 	m_dshHome = dshHome;
 
 	if (!QFile::exists(nodePath) || !QFile::exists(entryPath) || !QFile::exists(dshEntry)) {
-		m_baseUrl = storedServerUrl();
-		if (m_baseUrl.isEmpty())
-			m_baseUrl = QUrl(QStringLiteral("http://127.0.0.1:3080"));
-		m_restarting = false;
-		emit baseUrlReady(m_baseUrl);
+		QUrl fallback = storedServerUrl();
+		if (fallback.isEmpty())
+			fallback = QUrl(QStringLiteral("http://127.0.0.1:3080"));
+		publishBaseUrl(fallback);
 		return;
 	}
 
@@ -642,9 +644,7 @@ void ServerManager::launchBundledServer(const QString& nodePath,
 		probe.connectToHost(QStringLiteral("127.0.0.1"), serverPort);
 		if (probe.waitForConnected(500)) {
 			qDebug().noquote() << "[ServerManager] using port:" << serverPort;
-			m_baseUrl = QUrl(QStringLiteral("http://127.0.0.1:%1").arg(serverPort));
-			m_restarting = false;
-			emit baseUrlReady(m_baseUrl);
+			publishBaseUrl(QUrl(QStringLiteral("http://127.0.0.1:%1").arg(serverPort)));
 			return;
 		}
 	}
@@ -732,9 +732,7 @@ void ServerManager::handleServerOutput()
 			}
 
 			qDebug().noquote() << QStringLiteral("[ServerManager] 服务端端口: %1（认证令牌: 有）").arg(port);
-			m_baseUrl = parsed;
-			m_restarting = false;
-			emit baseUrlReady(m_baseUrl);
+			publishBaseUrl(parsed);
 			continue;
 		}
 
