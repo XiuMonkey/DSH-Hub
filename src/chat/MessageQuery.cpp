@@ -10,7 +10,6 @@
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QPushButton>

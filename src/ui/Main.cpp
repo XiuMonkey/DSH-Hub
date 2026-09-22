@@ -16,7 +16,6 @@
 #include "ui/TitleBar.h"
 #include "ui/TopBar.h"
 #include "common/appearance/WindowFrame.h"
-#include "chat/MessageQuery.h"
 
 #include <QFrame>
 #include <QGuiApplication>

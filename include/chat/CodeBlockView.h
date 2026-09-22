@@ -21,14 +21,8 @@ public:
 
 	explicit CodeBlockView(QWidget* parent = nullptr);
 
-	/** 设置纯文本代码并自动调整高度。 */
-	void setCode(const QString& code);
-
 	/** 设置语法高亮后的 HTML 代码并自动调整高度。 */
 	void setCodeHtml(const QString& html);
-
-	/** 调整高度上限（默认 DefaultMaxHeight）。 */
-	void setMaxHeight(int maxHeight);
 
 	/** 内容变化后重新计算高度（外部也可调用）。 */
 	void updateHeightToContent();

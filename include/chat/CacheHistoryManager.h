@@ -13,7 +13,6 @@
 
 #include <QHash>
 #include <QJsonArray>
-#include <QSet>
 #include <QString>
 
 class MessageQuery;

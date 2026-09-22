@@ -41,24 +41,12 @@ CodeBlockView::CodeBlockView(QWidget* parent)
 		this, &CodeBlockView::updateHeightToContent);
 }
 
-void CodeBlockView::setCode(const QString& code)
-{
-	setPlainText(code);
-	updateHeightToContent();
-}
-
 void CodeBlockView::setCodeHtml(const QString& html)
 {
 	// 用 <pre> 包装：保留缩进与换行（Qt 富文本只在 <pre> 内保留空白），
 	// 字体与控件自身的等宽设置一致
 	setHtml(QStringLiteral("<pre style='margin:0;font-family:Consolas,Menlo,monospace;'>")
 		+ html + QStringLiteral("</pre>"));
-	updateHeightToContent();
-}
-
-void CodeBlockView::setMaxHeight(int maxHeight)
-{
-	m_maxHeight = qMax(16, maxHeight);
 	updateHeightToContent();
 }
 

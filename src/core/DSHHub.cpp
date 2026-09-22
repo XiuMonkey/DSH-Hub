@@ -40,15 +40,9 @@
 #include <QFileDialog>
 
 #include <QJsonArray>
-#include <QLabel>
-#include <QLayout>
 #include <QMessageBox>
 
-#include <QPushButton>
 #include <QResizeEvent>
-
-#include <QScrollBar>
-#include <QScrollArea>
 
 #include <QProcess>
 

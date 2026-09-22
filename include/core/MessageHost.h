@@ -40,7 +40,6 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
-#include <QVector>
 
 class CacheManager;
 class ChatInputWidget;
