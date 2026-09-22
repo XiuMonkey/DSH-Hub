@@ -1,14 +1,15 @@
 #pragma once
 
+// 主窗口：窗口 / 侧栏 / 输入区接线，并实现客户端扩展的 VirtualWindow 与 VirtualShell 两个宿主接口。
+
 #include <QJsonObject>
 #include <QJsonArray>
 #include "chat/CacheHistoryManager.h"
 
-// 客户端扩展那套全内联虚接口（VirtualTopBar / VirtualTheme / VirtualWindow）：
-// 本窗口实现其中的 VirtualWindow，插件按 index 取到本对象后 qobject_cast 成接口再用。
+// 客户端扩展的全内联虚接口（本窗口实现其中的 VirtualWindow）：插件按 index 取到本对象后 qobject_cast 成接口再用。
 #include "VirtualClass/VirtualCommon.h"
 
-// 架空（VirtualShell）的让渡动作本体；在 ExtensionSystem/ 下，与客户端扩展装载同属一套。
+// 架空（VirtualShell）的让渡动作本体，与客户端扩展装载同属一套。
 #include "ExtensionSystem/UiStage.h"
 
 #include <QMainWindow>
@@ -54,48 +55,19 @@ public:
 		QProcess* initialServerProcess = nullptr);
 	~DSHHub() override;
 	QUrl baseUrl() const;
-	/**
-	 * 带认证令牌的 baseUrl：供"重建主窗口但仍复用同一个服务端"的场景使用
-	 * （主题切换就是重建窗口）。不带令牌时新窗口换不到 cookie，会 401 卡住。
-	 */
+	// 带认证令牌的 baseUrl：重建主窗口但仍复用同一服务端（切主题就是重建窗口）时必须用它，否则新窗口换不到 cookie 会 401 卡住。
 	QUrl authenticatedBaseUrl() const;
 
 	bool isInitializationComplete() const;
 
 	QProcess* takeServerProcess();
 
-	// ------------------------------------------------------------------
-	// VirtualWindow 接口的实现（客户端扩展唯一入口）
-	// ------------------------------------------------------------------
-	// 插件把注册表里取到的 mainWindow 转成 VirtualWindow*，就能把**它自己的**顶层窗口
-	// 当成宿主弹窗：铺遮罩 + 居中显示。内部走的就是宿主自己的设置 / 插件市场 / 扩展管理
-	// 那条路径（WindowFrame::showOverlayWithPopup），所以"遮罩先到、弹窗后到"的缝不存在。
-	// 所以扩展要把窗口**先建好**（控件都搭完、尺寸定下来），再调它。
-	//
-	// 插件侧用法（它只需 include VirtualClass/VirtualCommon.h 与 core/HostExports.h）：
-	//     const QPointer<QObject> hostObject = DshHost::findObject(DshHostIndex::kMainWindow);
-	//     if (auto* window = qobject_cast<VirtualWindow*>(hostObject.data()))
-	//         window->ExternalShowOverlay(myWindow);
-	//
-	// ⚠️ 别改成 qobject_cast<DSHHub*>：那会去链宿主的 staticMetaObject（宿主 exe 的
-	//    外部符号且零导出）⇒ 插件 DLL 链接期 LNK2019。也别用 dynamic_cast
-	//    （Itanium ABI 下跨模块静默返回 nullptr）。
-	//
-	// ⚠️ show/hide 必须成对：遮罩在宿主窗口上只留一层、按 owner 记名（见 WindowFrame.h），
-	//    只有最后一个 release 的才真正隐藏。
+	// VirtualWindow 接口（客户端扩展唯一入口）：插件自己的顶层窗口铺遮罩 + 居中当宿主弹窗，窗口要先建好；show/hide 成对，遮罩只留一层、按 owner 记名。
+	// ⚠️ 插件侧只能 qobject_cast<VirtualWindow*>：转 DSHHub* 撞 LNK2019（宿主 staticMetaObject 零导出），dynamic_cast 跨模块静默返回 nullptr。
 	void ExternalShowOverlay(QWidget* popup) override;
 	void ExternalHideOverlay(QWidget* popup) override;
 
-	// ------------------------------------------------------------------
-	// VirtualShell 接口的实现（"架空原 UI"）—— 全部只有一行转发
-	// ------------------------------------------------------------------
-	// 宿主侧刻意**不在本类里写任何逻辑**：让渡动作（摘原生客户区、建舞台、
-	// 收宿主浮层、窗口条登记）全在 ExtensionSystem/UiStage.cpp。
-	// 这里只做三件事：接上接口、把 owner 从 char* 转成 QString、转发。
-	// 所以本文件相对"没有架空功能"的版本只多了这几行 + 一个基类。
-	//
-	// 内联定义在这里而不是另开 .cpp：这 4 个都是单行转发，另开一个编译单元
-	// 只会多一份样板（也省掉往 .vcxproj 里再登一个源文件）。
+	// VirtualShell 接口（"架空原 UI"）：全是单行转发，逻辑都在 ExtensionSystem/UiStage.cpp（摘原生客户区 / 建舞台 / 收宿主浮层 / 窗口条登记），本类只做接口接线 + char*→QString。
 	QWidget* ExternalAcquireStage(const char* owner) override
 	{
 		return (owner && *owner) ? UiStage::acquire(this, QString::fromUtf8(owner)) : nullptr;
@@ -130,11 +102,7 @@ private slots:
 	void handleTransportError(const QString& context, const QString& message);
 	/** mux 上 session/follow 的快照：给历史加载器游标，并用快照播种首屏。 */
 	void handleSessionSnapshot(const QString& sessionId, int cursor, const QJsonArray& records, bool hasMore);
-	/**
-	 * session/follow 快照帧里带的会话投影：输入区下方那行小灰字的主要来源。
-	 * 快照上的投影是"全量折叠"（直接从日志算），所以只是打开来看、还没附着 Agent
-	 * 的会话也能拿到真实数字。
-	 */
+	/** session/follow 快照里的会话投影：全量折叠算出，所以还没附着 Agent 的会话也准；输入区下方小灰字的主要来源。 */
 	void handleSessionProjections(const QString& sessionId, int asOfSeq, const QJsonObject& values);
 
 	/** session/control 的 baseline：活会话的现算投影快照（只取当前会话那一份）。 */
@@ -144,22 +112,11 @@ private slots:
 	void handleSessionProjectionChanged(const QString& sessionId, const QString& key,
 		const QJsonValue& value, int seq);
 
-	/**
-	 * 把一份"会话投影"并到小灰字上（两块投影按块记，见成员变量）。
-	 *
-	 * 为什么必须按块合并而不是整包覆盖：投影是分块来的，而且同一份数据有两个来源 ——
-	 *   session/follow 快照：全量折叠，两块都有（打开会话时最先到）
-	 *   session/list 行  ：投影缓存检查点，可能只有 tokenUsage、没有 sessionStats
-	 * 早先整包覆盖时，后到的列表行会把快照带来的"轮/步 + LLM/工具/首 token"那段擦掉，
-	 * 表现就是那一段闪一下然后只剩"缓存命中 / 输入输出"。
-	 *
-	 * asOfSeq 用服务端那套 higher-seq-wins：旧值直接丢，避免用停得很旧的检查点盖掉新值。
-	 */
-	void applySessionProjections(const QString& sessionId, int asOfSeq, const QJsonObject& values);	/** workspace/follow 的 baseline：工作区清单 + 归档集合。 */
+	/** 把一份会话投影按块并入小灰字（follow 快照与 list 行各带部分块，整包覆盖会擦掉快照那段）；asOfSeq 用服务端 higher-seq-wins。 */
+	void applySessionProjections(const QString& sessionId, int asOfSeq, const QJsonObject& values);
+	/** workspace/follow 的 baseline：工作区清单 + 归档集合。 */
 	void handleWorkspaceSnapshot(const QJsonArray& items, const QJsonArray& archivedSessionIds);
-	/** workspace/follow 的 upsert。 */
 	void handleWorkspaceUpserted(const QJsonObject& workspace);
-	/** workspace/follow 的 remove。 */
 	void handleWorkspaceRemoved(const QString& workspaceId);
 	/** workspace/follow 的 order：工作区排序整体替换。 */
 	void handleWorkspaceReordered(const QStringList& workspaceIds);
@@ -180,8 +137,7 @@ private:
 	void moveEvent(QMoveEvent* event) override;
 	void showEvent(QShowEvent* event) override;
 	void changeEvent(QEvent* event) override;
-	// 无边框窗口的原生消息全部转交给 common/WindowFrame 判定
-	// （WM_NCCALCSIZE 让客户区铺满窗口、WM_NCHITTEST 判缩放热区与标题栏拖动区）
+	// 无边框窗口的原生消息全部转交 common/WindowFrame 判定（WM_NCCALCSIZE 铺满客户区 / WM_NCHITTEST 判缩放热区与标题栏拖动区）
 	bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
 	// 窗口状态变化后的界面收尾：切圆角描边、补偿系统多给的一圈、刷新标题栏按钮图标
 	void syncWindowFrameStyle();
@@ -189,61 +145,37 @@ private:
 	// 把当前打开的弹窗重新居中于宿主窗口（拖动/缩放宿主时保持跟随）
 	void keepOpenPopupsCentered();
 
-	// ---- 首屏预取（0.1.5：一元 session/page，见 SessionPrefetcher）----
-	/** 会话列表刷新后，对可见会话排一轮预取。 */
+	/** 会话列表刷新后，对可见会话排一轮预取（见 SessionPrefetcher）。 */
 	void onSessionsRefreshed();
 	void openExtensions();
 
-	// 切换到"刚创建的空会话"的统一入口：停流式、交缓存旧会话、换空列表，
-	// 并按需绑定/加载 HistoryLoader（消息区那部分都交给 MessageHost::showFreshSession）。
-	// loadHistory=true → loader->load(sessionId)；false → adoptSession（等待首条 prompt
-	// 的 mux 事件，例如"无会话时直接发送"）。
+	// 切到"刚创建的空会话"的统一入口：停流式、交缓存旧会话、换空列表；loadHistory=false 时只接管会话，等首条 prompt 的 mux 事件。
 	void switchToFreshSession(const QString& sessionId, const QString& title, bool loadHistory);
 	// 主窗口 UI 搭建（实现位于 src/ui/Main.cpp，减少构造函数体积）
 	void buildUi();
 	void callSessionCreate();
-	// 新建会话该挂到哪个工作区：优先"当前会话所在的那个"，其次退回基线里的第一个。
-	// 必须由客户端显式给 —— 服务端 session/create 的响应里没有 workspaceId，而
-	// 0.1.5 已删掉 workspace list 这个 RPC，归属只能来自 workspace/follow 基线。
+	// 新建会话挂到哪个工作区：优先"当前会话所在的那个"，其次退回基线里的第一个（服务端 session/create 响应里没有 workspaceId，归属只能来自 workspace/follow 基线）。
 	QString preferredWorkspaceId();
-	// 把当前会话同步给输入区（模型/思考深度按该会话的模型目录刷新；
-	// 控件那半边在 MessageHost::syncComposerSession，这里只做会话目录查询）
+	// 把当前会话同步给输入区（模型 / 思考深度按该会话的模型目录刷新；控件那半边在 MessageHost，这里只做会话目录查询）
 	void syncComposerSession();
 
-	// ------------------------------------------------------------------
-	// 输入卡片下方那行小灰字（会话统计）
-	// ------------------------------------------------------------------
-	// 暂时放在这个 god class 里，等接口稳定了再分离（候选：一个 SessionStatsService
-	// 负责取数 + 输入区自己的控制器负责推给控件）。
-	//
-	// 数据全部来自服务端现算，**客户端不读任何缓存**：
-	//   session/follow 快照里的 projections（全量折叠整条日志，冷会话也准）
-	//   session/control 的 baseline + projection 帧（活会话快照与实时变化推送）
-	// 早先用过 session/list 行，那是投影缓存检查点（冷会话会很旧），已弃用。
-	// 没有当前会话时把控件上的字擦掉（高度照旧占着）。
-	// ------------------------------------------------------------------
 	void createSessionAndSend(const QString& text);
 
 	void handlePipeRequest(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket);
 
 	QString m_sessionId;
 
-	// workspace/follow 的本地缓存：baseline 给全量，upsert/remove/archived 增量改它，
-	// 每次变化后整体推给侧栏 catalog（catalog 只认全量清单）。
+	// workspace/follow 的本地缓存：baseline 给全量，upsert/remove/archived 增量改它，每次变化后整体推给侧栏 catalog（catalog 只认全量清单）。
 	QJsonArray m_workspaceItems;
 	QJsonArray m_workspaceArchived;
 
 	CacheManager m_cacheManager;
 	SessionPrefetcher* m_prefetcher = nullptr;
 
-	// 预构建控件树的队列与配额：见 MessageHost（预构建能把"进入会话"变成真正的 cache hit，
-	// 但每个控件树要占内存，所以只做有限个）
-
 	QWidget* m_initOverlay = nullptr;
 	QLabel* m_initLabel = nullptr;
 
-	// 消息区宿主：拥有当前列表 + HistoryLoader + 预构建队列 + 消息区的 UI 反馈
-	// （载入中提示、加载更多按钮显隐、toast）。控件由 buildUi() 搭好后传进去。
+	// 消息区宿主：拥有当前列表 + HistoryLoader + 预构建队列 + 消息区的 UI 反馈；控件由 buildUi() 搭好后传进去。
 	MessageHost* m_messageHost = nullptr;
 	Settings* m_settings = nullptr;          // 常驻“设置系统”（自管窗口开关）
 	PluginsManager* m_pluginsManager = nullptr;  // 常驻“插件系统”（自管窗口开关）
@@ -264,8 +196,8 @@ private:
 	QVBoxLayout* m_messagesLayout = nullptr;
 	ChatInputWidget* m_chatInput = nullptr;
 
-	// 小灰字的合并态：两块投影分别记住（来源可能只带其中一块），
-	// 每次变化后整包重算一行文本推给控件；换会话时连同 asOfSeq 一起清空
+	// 小灰字（会话统计）：数据全部服务端现算、客户端不读任何缓存；两块投影按块记（来源可能只带一块）。
+	// 每次变化整包重算一行文本推给控件；换会话时连同 asOfSeq 一起清空；无当前会话时擦掉文字、高度照旧占着。
 	QJsonObject m_sessionStatsBlock;   // projections.values.sessionStats
 	QJsonObject m_tokenUsageBlock;     // projections.values.tokenUsage
 	int m_statsAsOfSeq = -1;           // 已并进来的投影反映到哪个 seq（higher-seq-wins）

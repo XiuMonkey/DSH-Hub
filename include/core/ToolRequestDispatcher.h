@@ -1,12 +1,6 @@
 #pragma once
 
-// ------------------------------------------------------------------
-// ToolRequestDispatcher.h
-// ------------------------------------------------------------------
-// DLL/COM 工具调用的分发：把"命名管道请求 → 线程池执行 → 回投 GUI 线程
-// 发送响应"从 DSHHub 中抽出，控制器只保留一句 dispatch() 调用。
-// 纯 header + inline，无需链接改动。
-// ------------------------------------------------------------------
+// DLL/COM 工具调用的分发：命名管道请求 → 线程池执行 → 回投 GUI 线程发响应。纯 header + inline，无链接改动。
 
 #include "ExtensionSystem/DllCaller.h"
 #include "ExtensionSystem/DshNamedPipeBridge.h"
@@ -82,8 +76,7 @@ namespace ToolRequestDispatcher
 		};
 	} // namespace detail
 
-	// DLL/COM 调用挪到 Worker 线程执行（GUI 不被长任务卡住，不同 DLL 可并行）；
-	// 同一连接上多个请求的响应可能乱序返回，Node 端按请求 id 配对。
+	// DLL/COM 调用挪到 Worker 线程执行（GUI 不卡、不同 DLL 并行）；同一连接上响应可能乱序，Node 端按请求 id 配对。
 	inline void dispatch(DllCaller* dllCaller, DshNamedPipeBridge* bridge, QThreadPool* pool,
 		int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket)
 	{
