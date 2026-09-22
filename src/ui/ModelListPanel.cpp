@@ -419,14 +419,8 @@ public:
 		bodyLayout->setSpacing(0);
 
 		// 候选可能有几百条（聚合网关就是这样）：装不下就滚动
-		m_scroll = new QScrollArea(m_body);
-		m_scroll->setObjectName(QStringLiteral("modelListFetchScroll"));
-		m_scroll->setFrameShape(QFrame::NoFrame);
-		m_scroll->setWidgetResizable(true);
-		m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		m_scroll = LayoutUtils::makeThemedScrollArea(m_body, QStringLiteral("modelListFetchScroll"));
 		m_scroll->setFocusPolicy(Qt::NoFocus);
-		// 滚动条早于 objectName 存在（基类构造时创建），设完名字重新解析一次
-		ThemeManager::instance().repolishScrollArea(m_scroll);
 
 		m_content = new QWidget(m_scroll);
 		m_content->setObjectName(QStringLiteral("modelListFetchMenuContent"));
@@ -557,15 +551,10 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	m_notice->hide();
 
 	// ---------------- 列表 ----------------
-	m_scroll = new QScrollArea(this);
-	m_scroll->setObjectName(QStringLiteral("modelListScroll"));
-	m_scroll->setFrameShape(QFrame::NoFrame);
-	m_scroll->setWidgetResizable(true);
-	m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_scroll = LayoutUtils::makeThemedScrollArea(this, QStringLiteral("modelListScroll"));
 	// 清单区占满面板剩余空间：装得下就不出滚动条，装不下才滚动。
 	// 不按内容设固定高度——那会把窗口的最小高度一起顶大。
 	m_scroll->setMinimumHeight(kMinListHeight);
-	ThemeManager::instance().repolishScrollArea(m_scroll);
 
 	m_listContent = new QWidget(m_scroll);
 	m_listContent->setObjectName(QStringLiteral("modelListContent"));

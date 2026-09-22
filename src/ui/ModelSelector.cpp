@@ -170,14 +170,8 @@ public:
 		layout->setSpacing(2);
 
 		// 行多时滚动。滚动区不参与焦点链，理由同行本身。
-		m_scroll = new QScrollArea(body);
-		m_scroll->setObjectName(QStringLiteral("modelSelectorScroll"));
-		m_scroll->setFrameShape(QFrame::NoFrame);
-		m_scroll->setWidgetResizable(true);
-		m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		m_scroll = LayoutUtils::makeThemedScrollArea(body, QStringLiteral("modelSelectorScroll"));
 		m_scroll->setFocusPolicy(Qt::NoFocus);
-		// 滚动条早于 objectName 存在（基类构造时创建），设完名字重新解析一次
-		ThemeManager::instance().repolishScrollArea(m_scroll);
 
 		m_content = new QWidget(m_scroll);
 		m_content->setObjectName(QStringLiteral("modelSelectorMenuContent"));

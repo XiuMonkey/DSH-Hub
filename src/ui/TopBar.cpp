@@ -372,14 +372,7 @@ ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 	layout->addWidget(m_hint);
 
 	// 列表区：一个可滚动的容器，里面每个目录是一行（表头按钮 + 工具行）
-	m_scroll = new QScrollArea(content);
-	m_scroll->setObjectName(QStringLiteral("toolsFilterScroll"));
-	m_scroll->setFrameShape(QFrame::NoFrame);
-	m_scroll->setWidgetResizable(true);
-	m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	// 滚动条在基类构造时就建好了，那时 objectName 还没设 —— 见 ThemeManager.h 里
-	// repolishScrollArea 的说明（下面这句顺带把"首次显示/首次真出现"也补上）
-	ThemeManager::instance().repolishScrollArea(m_scroll);
+	m_scroll = LayoutUtils::makeThemedScrollArea(content, QStringLiteral("toolsFilterScroll"));
 	layout->addWidget(m_scroll, 1);
 
 	m_listContent = new QWidget(m_scroll);

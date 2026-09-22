@@ -76,13 +76,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	marketLayout->setContentsMargins(8, 8, 8, 8);
 	marketLayout->setSpacing(8);
 
-	m_marketScroll = new QScrollArea(marketPage);
-	m_marketScroll->setObjectName(QStringLiteral("pluginMarketScroll"));
-	m_marketScroll->setWidgetResizable(true);
-	m_marketScroll->setFrameShape(QFrame::NoFrame);
-	// 滚动条早于 objectName 存在（基类构造时创建），设完名字要重新解析一次，
-	// 否则 #pluginMarketScroll QScrollBar 匹配不上、滚动条按原生样式画
-	ThemeManager::instance().repolishScrollArea(m_marketScroll);
+	m_marketScroll = LayoutUtils::makeThemedScrollArea(marketPage, QStringLiteral("pluginMarketScroll"));
 
 	m_marketContainer = new QWidget;
 	m_marketContainer->setObjectName(QStringLiteral("pluginMarketContainer"));
@@ -123,12 +117,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	installedLayout->setContentsMargins(8, 8, 8, 8);
 	installedLayout->setSpacing(8);
 
-	m_installedScroll = new QScrollArea(installedPage);
-	m_installedScroll->setObjectName(QStringLiteral("pluginInstalledScroll"));
-	m_installedScroll->setWidgetResizable(true);
-	m_installedScroll->setFrameShape(QFrame::NoFrame);
-	// 同上：#pluginInstalledScroll 的滚动条规则需要重新解析一次
-	ThemeManager::instance().repolishScrollArea(m_installedScroll);
+	m_installedScroll = LayoutUtils::makeThemedScrollArea(installedPage, QStringLiteral("pluginInstalledScroll"));
 
 	m_installedContainer = new QWidget;
 	m_installedContainer->setObjectName(QStringLiteral("pluginInstalledContainer"));

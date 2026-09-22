@@ -1,4 +1,5 @@
 #include "ui/Sidebar.h"
+#include "ui/LayoutUtils.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/util/CommonRegistry.h"
 #include "core/HostExports.h"
@@ -528,16 +529,8 @@ Sidebar::Sidebar(QWidget* parent)
 	// 只是变长，滚动条出现，侧栏高度不变。以前它直接挂在侧栏布局里，内容多高
 	// 就把侧栏的最小高度顶多高，进而把整个窗口撑高（底部图标行还会被挤出可视区）。
 	// 滚动条外观来自 scrollbars.qss 的全局规则，这里不需要写任何滚动条样式。
-	m_workspaceScroll = new QScrollArea(this);
-	m_workspaceScroll->setObjectName(QStringLiteral("workspaceScrollArea"));
-	m_workspaceScroll->setFrameShape(QFrame::NoFrame);
-	m_workspaceScroll->setWidgetResizable(true);
-	m_workspaceScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_workspaceScroll = LayoutUtils::makeThemedScrollArea(this, QStringLiteral("workspaceScrollArea"));
 	m_workspaceScroll->setMinimumHeight(kMinWorkspaceListHeight);
-	// 滚动条是 QAbstractScrollArea 基类构造时建的，那时 objectName 还没设，
-	// 规则会被缓存成"匹配不到"；设完名字后重新解析一次
-	// （见 ThemeManager::instance().repolishScrollArea 的注释）。
-	ThemeManager::instance().repolishScrollArea(m_workspaceScroll);
 
 	m_workspaceList = new WorkspaceList(m_workspaceScroll);
 	m_workspaceScroll->setWidget(m_workspaceList);

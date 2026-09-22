@@ -8,6 +8,7 @@
 #include "core/DSHHub.h"
 
 #include "ui/ChatInputWidget.h"
+#include "ui/LayoutUtils.h"
 #include "ui/LoadMoreButton.h"
 #include "ui/ShadowPanel.h"
 #include "ui/Sidebar.h"
@@ -122,11 +123,7 @@ void DSHHub::buildUi()
 	connect(m_titleBar, &TitleBar::closeRequested,
 		this, [this]() { WindowFrame::closeWindow(this); });
 
-	m_scrollArea = new QScrollArea(central);
-	m_scrollArea->setObjectName(QStringLiteral("chatScrollArea"));
-	m_scrollArea->setFrameShape(QFrame::NoFrame);
-	// 同上：滚动条早于 objectName 存在，需重新解析一次 #chatScrollArea 的滚动条规则
-	ThemeManager::instance().repolishScrollArea(m_scrollArea);
+	m_scrollArea = LayoutUtils::makeThemedScrollArea(central, QStringLiteral("chatScrollArea"));
 
 	auto* scrollContent = new QWidget;
 	scrollContent->setObjectName(QStringLiteral("chatScrollContent"));
@@ -146,9 +143,7 @@ void DSHHub::buildUi()
 	scrollLayout->insertWidget(0, m_loadMoreButton, 0, Qt::AlignHCenter);
 
 	m_scrollArea->setWidget(scrollContent);
-	m_scrollArea->setWidgetResizable(true);
 	m_scrollArea->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-	m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
 	// 右侧面板与主窗口同色
 	auto* rightPanel = new QWidget(central);

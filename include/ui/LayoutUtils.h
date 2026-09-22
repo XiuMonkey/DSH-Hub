@@ -1,9 +1,13 @@
 #pragma once
 
-// 清空布局这类"装配样板"的共用实现。
+// UI 装配样板：清空布局、造按主题着色的滚动区这类各处重复的写法。
 
+#include "common/appearance/ThemeManager.h"
+
+#include <QFrame>
 #include <QLayout>
 #include <QLayoutItem>
+#include <QScrollArea>
 #include <QWidget>
 
 namespace LayoutUtils
@@ -36,5 +40,24 @@ namespace LayoutUtils
 			}
 			delete item;
 		}
+	}
+
+	// 造一个按主题着色的 QScrollArea。
+	//
+	// ⚠️ 这里必须自己调 repolishScrollArea：滚动条是 QAbstractScrollArea 基类构造时建的，
+	// 那时 objectName 还没设，QStyleSheetStyle 会把"匹配不到规则"缓存下来，之后再设名字也不会
+	// 重新匹配（详见 ThemeManager.h 的说明）。所以设完名字就得补一次。
+	//
+	// 调用方按需自行追加：setMinimumHeight、setFocusPolicy(NoFocus)（弹层里用，防止可聚焦
+	// 子控件把弹层关掉）、setWidget(…) 之后的 setAlignment 等。
+	inline QScrollArea* makeThemedScrollArea(QWidget* parent, const QString& objectName)
+	{
+		auto* area = new QScrollArea(parent);
+		area->setObjectName(objectName);
+		area->setFrameShape(QFrame::NoFrame);
+		area->setWidgetResizable(true);
+		area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		ThemeManager::instance().repolishScrollArea(area);
+		return area;
 	}
 }
