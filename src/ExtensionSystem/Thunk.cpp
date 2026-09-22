@@ -30,12 +30,6 @@ namespace
 			++m_size;
 		}
 
-		void u32(std::uint32_t v)
-		{
-			for (int i = 0; i < 4; ++i)
-				u8(static_cast<std::uint8_t>(v >> (i * 8)));
-		}
-
 		std::size_t size() const
 		{
 			return m_size;

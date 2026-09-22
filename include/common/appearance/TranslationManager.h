@@ -35,7 +35,6 @@ public:
 	void notifyLanguageChanged();
 
 signals:
-	void languageChanged();
 
 private:
 	explicit TranslationNotifier(QObject* parent = nullptr);
@@ -51,7 +50,6 @@ namespace Translation
 	void setSavedLanguageCode(const QString& code);
 
 	// 生效中的语言代码（已解析过“跟随系统”，不会是空串）
-	QString activeLanguageCode();
 
 	// 语言代码 -> 翻译文件基名（"en" -> "dshhub_en"）；空代码返回空串
 	QString translationFileBase(const QString& languageCode);

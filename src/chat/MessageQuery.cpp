@@ -379,7 +379,6 @@ MessageQuery::StreamFrameResult MessageQuery::applyStreamEvent(
 				else {
 					addAgentMessage(reply, layout, thinking);
 				}
-				result.contentRouted = true;
 			}
 		}
 		return result;
@@ -396,11 +395,9 @@ MessageQuery::StreamFrameResult MessageQuery::applyStreamEvent(
 
 		if (chunkType == QStringLiteral("reasoning-delta") && !chunk.isEmpty()) {
 			streamTarget->appendStreamChunk(StreamSegment::Thinking, chunk);
-			result.contentRouted = true;
 		}
 		else if (chunkType == QStringLiteral("text-delta") && !chunk.isEmpty()) {
 			streamTarget->appendStreamChunk(StreamSegment::Reply, chunk);
-			result.contentRouted = true;
 		}
 		result.kind = StreamFrameResult::Streaming;
 		return result;
@@ -424,7 +421,6 @@ MessageQuery::StreamFrameResult MessageQuery::applyStreamEvent(
 				continue;
 			target->appendStreamChunk(
 				thinking ? StreamSegment::Thinking : StreamSegment::Reply, chunk);
-			result.contentRouted = true;
 		}
 		result.kind = StreamFrameResult::Streaming;
 		return result;
@@ -443,7 +439,6 @@ MessageQuery::StreamFrameResult MessageQuery::applyStreamEvent(
 					.toHtmlEscaped());
 			target->appendStreamChunk(StreamSegment::ToolCall, html, tool.name);
 			result.kind = StreamFrameResult::Streaming;
-			result.contentRouted = true;
 		}
 		return result;
 	}
@@ -456,7 +451,6 @@ MessageQuery::StreamFrameResult MessageQuery::applyStreamEvent(
 			const QString html = QStringLiteral("<pre>%1</pre>").arg(toolResult.message.toHtmlEscaped());
 			target->appendStreamChunk(StreamSegment::ToolResult, html);
 			result.kind = StreamFrameResult::Streaming;
-			result.contentRouted = true;
 		}
 		return result;
 	}
@@ -647,16 +641,12 @@ void HistoryLoader::load(const QString& sessionId)
 	++m_loadGeneration;
 	const int generation = m_loadGeneration;
 	m_loading = true;
-	emit loadingChanged(true);
 
-	const int oldScroll = m_scrollArea ? m_scrollArea->verticalScrollBar()->value() : 0;
-	const int oldScrollMax = m_scrollArea ? m_scrollArea->verticalScrollBar()->maximum() : 0;
 	const int oldCount = m_history ? m_history->eventCount() : 0;
 	const QString requestedSessionId = sessionId;
 
 	if (!m_api || !m_history) {
 		m_loading = false;
-		emit loadingChanged(false);
 		return;
 	}
 
@@ -689,7 +679,6 @@ void HistoryLoader::load(const QString& sessionId)
 				qWarning().noquote() << "[History] follow cursor timeout, no fallback sessionId=" << m_sessionId;
 				m_loadPending = false;
 				m_loading = false;
-				emit loadingChanged(false);
 				emit historyError(QStringLiteral("stream-timeout"),
 					qtTrId("chat_history_timeout"));
 				});
@@ -721,12 +710,11 @@ void HistoryLoader::load(const QString& sessionId)
 	m_api->callMethod(
 		QStringLiteral("session/page"),
 		args,
-		[this, generation, oldScroll, oldScrollMax, oldCount, requestedSessionId, requestTimer](const QJsonObject& value) {
+		[this, generation, oldCount, requestedSessionId, requestTimer](const QJsonObject& value) {
 			if (generation != m_loadGeneration)
 				return;
 
 			m_loading = false;
-			emit loadingChanged(false);
 
 			if (requestedSessionId != m_sessionId)
 				return;
@@ -848,7 +836,6 @@ void HistoryLoader::load(const QString& sessionId)
 				return;
 
 			m_loading = false;
-			emit loadingChanged(false);
 			if (requestedSessionId != m_sessionId)
 				return;
 			qWarning().noquote() << "[History] session/page failed after"
@@ -950,7 +937,6 @@ void HistoryLoader::seedFromPrefetched(const QString& sessionId, const QJsonArra
 	// 遮罩不在"播种"这一刻收：构建全程是在隐藏容器里进行的（见 continueBuild），
 	// 提前收只会露出空白聊天区（实测大页白屏 ~145ms，观感像卡死）。
 	// 内容真正上屏时由 continueBuild() 统一发 firstHistoryArrived()。
-	emit loadingChanged(false);
 	emit loadMoreButtonVisibleChanged(hasMore);
 
 	if (m_history) {
@@ -988,7 +974,6 @@ void HistoryLoader::seedFromSnapshot(const QString& sessionId, int cursor, const
 		m_cursorWatchdog->stop(); // 快照到了，看门狗下班
 	m_seeded = true;
 	m_loading = false;
-	emit loadingChanged(false);
 
 	QJsonArray events = eventsFromRecords(records);
 

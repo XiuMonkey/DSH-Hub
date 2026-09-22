@@ -130,7 +130,6 @@ private:
 	// inFlight/drained 用于卸载/移除时等待在途调用结束，防止卸载中的 QLibrary 被使用。
 	struct LoadedLibrary
 	{
-		QString filePath;             // 规范化绝对路径
 		QLibrary* library = nullptr;
 		ClearMemFn clearMem = nullptr;
 		QMutex runMutex;              // 同库执行互斥（跨库并行）

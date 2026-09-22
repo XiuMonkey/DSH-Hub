@@ -23,7 +23,6 @@ class ExtensionLoader
 public:
 	struct LoadedExtension
 	{
-		QString rootDir;    // 解压出来的临时目录
 		QString jsonPath;   // regulation.json5（客户端扩展：已落到扩展目录的那份）
 		QString dllPath;    // 载荷 DLL（客户端扩展：已落到扩展目录的那份）
 		QString pluginPath; // AttachedPlugin 目录（只有工具扩展才有）
@@ -43,8 +42,6 @@ public:
 		const QString& serverProfilePath,
 		LoadedExtension* out,
 		QString* error = nullptr);
-
-	QString errorString() const;
 
 private:
 	bool extractArchive(const QString& extFilePath,

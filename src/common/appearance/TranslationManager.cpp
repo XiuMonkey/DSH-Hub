@@ -132,7 +132,6 @@ TranslationNotifier& TranslationNotifier::instance()
 
 void TranslationNotifier::notifyLanguageChanged()
 {
-	emit languageChanged();
 }
 
 // ------------------------------------------------------------------
@@ -150,11 +149,6 @@ namespace Translation
 	void setSavedLanguageCode(const QString& code)
 	{
 		AppearanceSetting::setLanguageCode(code);
-	}
-
-	QString activeLanguageCode()
-	{
-		return g_activeCode;
 	}
 
 	QString translationsDir()

@@ -26,18 +26,8 @@ public:
 	// 按 Index 取对象；不存在或已销毁都返回空 QPointer。
 	QPointer<QObject> FindFromRegistry(const QString& index) const;
 
-	// 类型化取用：内部 qobject_cast，类型不符返回 nullptr。
-	template <typename T>
-	T* Find(const QString& index) const
-	{
-		return qobject_cast<T*>(FindFromRegistry(index).data());
-	}
-
 	// 该 Index 上是否登记着一个存活的对象。
 	bool contains(const QString& index) const;
-
-	// 当前存活登记项的 Index 列表（不包含已失效的空记录），便于排查。
-	QStringList liveIndexes() const;
 
 private:
 	// 刻意私有：单例只能通过 instance() 获得；在 .cpp 里定义为不析构的堆对象（原因见文件头）。

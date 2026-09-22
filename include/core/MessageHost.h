@@ -80,9 +80,7 @@ public:
 	/** 当前列表（永远非空）。使用者只读它，不负责它的生命周期。 */
 	MessageQuery* current() const { return m_messages; }
 	/** 消息列表所在的布局（往列表里插交互面板等用）。 */
-	QVBoxLayout* layout() const { return m_layout; }
 	/** 当前列表里还没有任何气泡（新会话 / 历史还在路上）。 */
-	bool empty() const;
 
 	// ---- 会话切换：DSHHub 只说"切到谁"，其余（缓存命中/预取/拉页/分批构建）在这里决策 ----
 	/** 显示某个会话：先把手上的内容交缓存，再依次尝试 控件缓存 → 预取页 → 网络拉取。 */
@@ -137,7 +135,6 @@ public:
 	/** 结束流式渲染态（切会话、删除会话、发送新消息前都要复位）。 */
 	void stopStreaming();
 	/** 输入区底部的"模型 / 思考深度"按当前会话刷新（空值=无会话选择）。 */
-	void syncComposerSession(const QString& provider, const QString& model, const QString& effort);
 	/** 布局落定后滚到底并把这一帧一次性画出来（流式跟随底部、整表替换时用）。 */
 	void scrollToBottomNow();
 
@@ -158,8 +155,6 @@ public slots:
 private:
 	HistoryLoader* loader() const { return m_loader; }
 	/** 分页用的原始事件数（写缓存元数据用）。 */
-	int rawEventCount() const;
-	bool hasMore() const;
 
 	/** 控件缓存命中则恢复并接管分页态；未命中返回 false。 */
 	bool restoreFromCache(const QString& sessionId);

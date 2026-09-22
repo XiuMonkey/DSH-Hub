@@ -266,7 +266,7 @@ void DshApiClient::failAuthQueue(const QString& code, const QString& message)
 	m_authQueue.clear();
 	for (const QueuedCall& call : queued) {
 		if (call.onError)
-			call.onError(RpcError{ code, message, {} });
+			call.onError(RpcError{ code, message });
 	}
 }
 
@@ -603,7 +603,7 @@ void DshApiClient::post(
 		if (m_authQueue.size() >= kMaxQueuedCalls) {
 			if (onError)
 				onError(RpcError{ QStringLiteral("auth"),
-					qtTrId("server_auth_queue_full_fmt").arg(kMaxQueuedCalls), {} });
+					qtTrId("server_auth_queue_full_fmt").arg(kMaxQueuedCalls) });
 			return;
 		}
 
@@ -679,7 +679,6 @@ void DshApiClient::onReplyFinished()
 			pending.onError(RpcError{
 				QStringLiteral("transport"),
 				reply->errorString(),
-				QJsonObject(),
 				});
 		}
 		reply->deleteLater();
@@ -728,7 +727,6 @@ void DshApiClient::handleParsedResponse(
 			pending.onError(RpcError{
 				errorObj.value(QStringLiteral("code")).toString(),
 				errorObj.value(QStringLiteral("message")).toString(),
-				errorObj.value(QStringLiteral("details")).toObject(),
 				});
 		}
 	}

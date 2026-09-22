@@ -122,21 +122,6 @@ MessageHost::~MessageHost()
 	m_messages = nullptr;
 }
 
-bool MessageHost::empty() const
-{
-	return !m_messages || m_messages->messages.empty();
-}
-
-int MessageHost::rawEventCount() const
-{
-	return m_history.eventCount();
-}
-
-bool MessageHost::hasMore() const
-{
-	return m_history.hasMore();
-}
-
 // ------------------------------------------------------------------
 // 会话切换
 // ------------------------------------------------------------------
@@ -896,20 +881,6 @@ void MessageHost::onSendClicked()
 	}
 
 	sendPrompt(text);
-}
-
-void MessageHost::syncComposerSession(const QString& provider, const QString& model, const QString& effort)
-{
-	if (!m_chatInput)
-		return;
-
-	// 输入区底部的模型/思考深度控件按当前会话刷新；会话为空（尚未创建/已被删除）时控件自行隐藏。
-	m_chatInput->setModelSession(m_api, m_sessionId);
-
-	// 会话自己的选择在 session/list 的 projections.values.modelSelection 里
-	// （由 DSHHub 查好后传进来）：推给 chip，避免显示成部署默认模型。
-	if (!m_sessionId.isEmpty())
-		m_chatInput->applySessionModelSelection(provider, model, effort);
 }
 
 // ------------------------------------------------------------------

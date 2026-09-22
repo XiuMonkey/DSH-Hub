@@ -69,15 +69,3 @@ bool CommonRegistry::contains(const QString& index) const
 	const auto it = m_objects.constFind(index);
 	return it != m_objects.constEnd() && !it.value().isNull();
 }
-
-QStringList CommonRegistry::liveIndexes() const
-{
-	QStringList indexes;
-	indexes.reserve(m_objects.size());
-	for (auto it = m_objects.constBegin(); it != m_objects.constEnd(); ++it)
-	{
-		if (!it.value().isNull())
-			indexes.append(it.key());
-	}
-	return indexes;
-}

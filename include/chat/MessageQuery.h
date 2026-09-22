@@ -90,7 +90,6 @@ public:
 			FinalMessage    // assistant/message 收尾：内容已合并/封存
 		};
 		Kind kind = Ignored;
-		bool contentRouted = false; // 是否真的往气泡里写了内容（工具/文本等）
 	};
 
 	// event: 已解包的事件对象；layout: 新建气泡的宿主布局；
@@ -234,7 +233,6 @@ public:
 	}
 
 signals:
-	void loadingChanged(bool loading);
 	void loadMoreButtonVisibleChanged(bool visible);
 	void noMoreHistory();
 	void historyError(const QString& code, const QString& message);

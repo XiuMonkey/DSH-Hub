@@ -332,7 +332,6 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 		loaded.dllPath = destDll;
 		loaded.jsonPath = destJson;
 		loaded.isClientExtension = true;
-		loaded.rootDir = rootDir;
 		if (out)
 			*out = loaded;
 
@@ -383,18 +382,12 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 		loaded.dllPath = extRoot + QStringLiteral("/main.dll");
 	}
 
-	loaded.rootDir = rootDir;
 	if (out)
 		*out = loaded;
 
 	m_errorString.clear();
 	qInfo().noquote() << QStringLiteral("[ExtensionLoader] loadAndInstall finished, total=%1 ms").arg(installTimer.elapsed());
 	return true;
-}
-
-QString ExtensionLoader::errorString() const
-{
-	return m_errorString;
 }
 
 bool ExtensionLoader::extractArchive(const QString& extFilePath,

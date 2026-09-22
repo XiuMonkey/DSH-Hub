@@ -50,8 +50,6 @@ namespace
 		bool m_ownsUninit = false;
 	};
 
-	void clearVariant(VARIANT& v) { VariantClear(&v); }
-
 	void clearVariants(std::vector<VARIANT>& list)
 	{
 		for (VARIANT& v : list)
@@ -88,14 +86,6 @@ namespace
 		VARIANT var = {};
 		var.vt = VT_BOOL;
 		var.boolVal = v ? VARIANT_TRUE : VARIANT_FALSE;
-		return var;
-	}
-
-	VARIANT vtMissing()
-	{
-		VARIANT var = {};
-		var.vt = VT_ERROR;
-		var.scode = DISP_E_PARAMNOTFOUND;
 		return var;
 	}
 

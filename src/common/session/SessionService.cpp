@@ -34,7 +34,7 @@ void SessionService::refreshSessions(
 
 		if (!state->sessionsOk) {
 			if (onError)
-				onError(DshApiClient::RpcError{ state->errorCode, state->errorMessage, {} });
+				onError(DshApiClient::RpcError{ state->errorCode, state->errorMessage });
 			return;
 		}
 

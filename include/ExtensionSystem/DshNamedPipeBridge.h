@@ -26,9 +26,7 @@ public:
 	bool start(const QString& pipeName = QStringLiteral("dshhub-bridge"));
 	void stop();
 
-	bool isListening() const;
 	QString errorString() const;
-	QString pipeName() const;
 
 	// 主动向某个连接的客户端发送 JSON 响应（协议：JSON + '\n'）
 	void sendResponse(QLocalSocket* socket,

@@ -54,19 +54,9 @@ void DshNamedPipeBridge::stop()
 	m_buffers.clear();
 }
 
-bool DshNamedPipeBridge::isListening() const
-{
-	return m_server && m_server->isListening();
-}
-
 QString DshNamedPipeBridge::errorString() const
 {
 	return m_errorString;
-}
-
-QString DshNamedPipeBridge::pipeName() const
-{
-	return m_pipeName;
 }
 
 void DshNamedPipeBridge::sendResponse(QLocalSocket* socket,

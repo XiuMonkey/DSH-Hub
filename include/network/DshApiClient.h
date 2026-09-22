@@ -87,7 +87,6 @@ public:
 	{
 		QString code;       // 错误码，例如 session-not-found、MISSING_CREDENTIAL
 		QString message;    // 错误描述
-		QJsonObject details; // 附加错误详情
 	};
 
 	/**

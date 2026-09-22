@@ -222,7 +222,6 @@ private:
 	// 早先用过 session/list 行，那是投影缓存检查点（冷会话会很旧），已弃用。
 	// 没有当前会话时把控件上的字擦掉（高度照旧占着）。
 	// ------------------------------------------------------------------
-	void clearInteractionPanels();
 	void createSessionAndSend(const QString& text);
 
 	void handlePipeRequest(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket);

@@ -238,7 +238,6 @@ DllCaller::LoadedLibrary* DllCaller::ensureRuntimeLocked(const QString& absolute
 	}
 
 	auto* entry = new LoadedLibrary;
-	entry->filePath = key;
 	entry->library = new QLibrary(key);
 	entry->library->setLoadHints(QLibrary::ResolveAllSymbolsHint);
 	if (!entry->library->load()) {
