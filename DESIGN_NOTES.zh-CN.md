@@ -454,3 +454,55 @@
 - `MessageHost.h`：`cancelBuild()` 在**切会话、丢弃会话**时都要调；`onPrefetched()` 的三分支恰好对应 `PrefetchOutcome` 的三个枚举值；`syncLoadingGeometry()` 只在**窗口尺寸变化**时用；`swapInBuilt()` 把离屏构建好的列表换成当前列表，`handOffToCache()` 把当前实例**与分页元数据**一起交给缓存。
 - `HostExports.h`：`findObject()` 的完整返回语义 —— **符号取不到 / index 为空 / 不在主线程 → 空**；返回 `QPointer`，故长期持有也不会成野指针。
 - `DSHHub.h`：VirtualWindow 的三条口头约定（**窗口要先建好**、**show/hide 必须成对**、**遮罩只留一层、按 owner 记名**）；`workspace/follow` 的 order 与 archived 帧都是**整体替换**（不是增量打点）；小灰字**每次变化整包重算一行文本**、**换会话时连同 `asOfSeq` 一起清空**、**无当前会话时擦掉文字但高度照旧占着**（防布局跳动）。
+
+---
+
+## `src/ExtensionSystem/`（.cpp）
+
+### `Thunk.cpp`
+
+- **`m_codeSize` 陷阱的完整叙述**：原先 `Thunk::build()` 里有一句 `m_codeSize = writer.size()`，而那个外层 `writer` 一个字节都没 emit 过 ⇒ 长度被覆盖成 **0** ⇒ 紧接着的 `FlushInstructionCache` 刷新了 **0 字节**。`m_codeSize` 只应由 `emitMachineCode()` 末尾设置（那边有它自己的 `X86Writer`）。
+- 机器码层面的硬知识（保留在源码里）：**没有 REX.W ⇒ 32 位加载自动零扩展**；**前缀顺序：F2 是 legacy 前缀，REX 必须在它后面**；**`0x24` 是 x64 下确认偏移的 SIB 字节，一定要有**；**`push rbx` 已让 RSP 16 字节对齐，所以只需分配 16 的倍数**。
+
+### `UiStage.cpp`（架空让渡机制的实际动作全在这里）
+
+- **StageState 用哈希表而不是单例字段**：正常只有一个主窗口，但**切主题时"新窗口先建、旧窗口下一轮事件循环才析构"，两者会短暂共存**。
+- **必须用 `close()` 而不是 `hide()`**：只有 `close()` 才走 `closeEvent` → `PopupWindow::closed()` → `WindowFrame::hideOverlay`；遮罩按 owner 记名、只有对应调用方 release 才真隐藏。只 `hide()` 会把遮罩**留在原地盖住舞台**。
+- **宿主浮层是独立顶层窗口**，不跟着客户区下线 —— 不收掉就飘在扩展画面上。例外：常驻的 `Tooltip` 单例是无父的、不在"宿主名下"之列，它靠鼠标移开自己收。
+- **原生客户区必须"重新挂回窗口当普通子控件、再 `hide()`"**：否则丢掉 QSS 继承（QSS 按顶层窗口挂，见 `ThemeManager::applyToWindow`），并且会混进 `QApplication::topLevelWidgets()` —— 而 `ThemeManager::reload()` 正是按那张表刷样式的。
+- **舞台常驻、还台不销毁**：避免"延迟销毁落到插件 `unload()` 之后"（那时插件 vtable 已解映射，析构一次就是崩）。
+- **舞台刻意不叫 `dshhubCentral`、不设 `WA_StyledBackground`**：宿主 QSS 全是 `#dshhubCentral <后代>` 选择器，舞台作为原生客户区的**兄弟**才能免疫这套级联。
+- **顺序**：先 `setCentralWidget`（会 reparent 进窗口）再 `show()`；反过来在无父前提下 `show()` 会短暂变成顶层窗口。
+
+### `ComCaller.cpp`
+
+- **COM 必须按线程初始化**：每次调用自行 `CoInitializeEx(MTA)` 并在结束时反初始化；若线程**已被其它模式初始化**（`hr == S_FALSE` 已初始化 / `RPC_E_CHANGED_MODE` 已是 STA）则**不**反初始化，避免破坏调用方线程的 COM 状态 —— 这样 DLL/COM 工具才能放 Worker 线程并行。
+- `summarizeObject`：结果里出现对象（`VT_DISPATCH`）时 MVP **不支持句柄保活**，只做最小"对象摘要"（尝试 `Count`），避免过多魔法探测。
+- 硬知识：**参数需逆序填入 `DISPPARAMS`**；**写属性（PROPERTYPUT）的值所有权转移给本函数**；**`v.pdispVal = nullptr` 是为了让 `VariantClear` 不释放我们即将持有的指针**。
+- ⚠️ 已更正：`coerceVariantToJson` 原注释写"转成 `VT_BSTR`/`VT_I4`/`VT_R8`"，与实际只试 `VT_BSTR`/`VT_R8` 不符。
+
+### `DllCaller.cpp`
+
+- **线程模型**：同一 DLL 的调用经 `runMutex` **串行**（旧扩展可能带 static 缓冲 / 非重入代码），不同 DLL 之间并行；卸载要等 `inFlight` 归零。
+- `ClearMem` 的两种新旧内存契约；`ensureRuntimeLocked()` **假定调用方已持有 `m_mutex``；快照工具描述时**只拷贝值，不在锁内持有指向容器内部元素的指针**。
+- Windows 下**必须释放文件占用才能删除/覆盖**；`ProgId` 白名单固定。
+- 预留分支：原注释里"HTTP 接口（未来按 url/method 发起请求）"与"WebSocket 接口"两条意图，随分节标题一并删除 —— **这两条是规划信息，代码里只有空的 `if` 分支**。
+
+### `ClientExtension.cpp`
+
+- **`QPluginLoader` 装载顺序的三重坑**（源码里保留了 3 行，每行一个陷阱）：**父对象的选择**、**构造顺序与 `setLoadHints` 的生效条件**、**hint 按 dll 路径共享——会污染同一个库条目**。实测：不清 `PreventUnloadHint` 时 `unload()` 返回 `true` 但**文件仍被映射**。
+- 硬知识：`kDetachSlot` 是**元对象层的字符串契约**而非虚方法（`unload()` 之后碰 vtable 就是崩）；`kIdentitySlot` 的 `owner` = 安装目录名，宿主靠它做所有权校验与**强制收台**；**宿主强制收回架空必须放在 `unload()` 之后**；删判据文件即等于"已卸载"；Windows 上**改名/移动目录同样被文件锁挡住**（实测：连父目录改名都会被拒）。
+- 卸载成功必须摘掉 `g_loadedNames`；`unload()` 会自己删掉插件根组件（实测 `QPointer` **立刻**变空）；**切主题必须重新 `attachHost()`**。
+
+### `ExtensionLoader.cpp`
+
+- **Qt 6 的 `QByteArray` 没有 `replace(QRegularExpression, ...)`**，所以 JSON5 的尾随逗号要**手工扫**，且必须跳过字符串内部（免得吃掉 `"a,]b"` 里的逗号）。
+- **`package.json` 带 UTF-8 BOM 会破坏 Node 的 `JSON.parse` 与 typert-loader**（本函数的处理结论保留）。
+- **同名工具冲突时跳过整个插件安装**（避免重复注册崩溃），但**仍返回 true** —— 扩展的 DLL 部分照常可用。
+- **客户端扩展不在这个函数里装载 DLL**：本函数跑在**后台线程**，而装载必须 GUI 线程。
+
+### `DshNamedPipeBridge.cpp`
+
+- 协议：每个请求/响应都是**单行 JSON、以 `\n` 结尾**（成功与失败两种响应样例都保留在文件头）。
+- 按 `\n` 切出完整请求；**不完整的尾部留在 buffer 里等下次读**。
+- `start()` 会先移除可能残留的旧管道（上次异常退出可能没清干净）。
