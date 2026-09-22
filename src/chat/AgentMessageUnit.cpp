@@ -70,6 +70,31 @@ namespace
 			return edit;
 		return nullptr;
 	}
+
+	// 思考卡锚点。%1 = 索引，%2 = 箭头字形，%3 = 转义后的预览。颜色现取、不缓存
+	//（主题切换靠重建窗口，缓存就会"忘了跟着换"）。
+	QString thinkingAnchorHtml(int index, const QString& arrow, const QString& preview)
+	{
+		return (QStringLiteral("<a href=\"dsh://thinking/%1\" style=\"color:")
+			+ ThemeManager::instance().textSecondary()
+			+ QStringLiteral("; text-decoration:none;\">") + qtTrId("chat_thought_header_fmt")
+			+ QStringLiteral("</a>")).arg(index).arg(arrow, preview);
+	}
+
+	// 思考卡正文：转义后包 <i>。
+	QString thinkingBodyHtml(const QString& content)
+	{
+		return (QStringLiteral("<p style='color:") + ThemeManager::instance().textSecondary()
+			+ QStringLiteral(";'><i>%1</i></p>")).arg(content.toHtmlEscaped());
+	}
+
+	// 工具卡锚点。色取主题 accent；%3 是调用方拼好的标题（已转义，这里不再处理）。
+	QString toolAnchorHtml(int index, const QString& arrow, const QString& title)
+	{
+		return (QStringLiteral("<a href=\"dsh://tool/%1\" style=\"color:")
+			+ ThemeManager::instance().accent()
+			+ QStringLiteral("; text-decoration:none;\">%2 %3</a>")).arg(index).arg(arrow, title);
+	}
 }
 
 AgentMessageUnit::AgentMessageUnit(QWidget* parent)
@@ -596,18 +621,13 @@ void AgentMessageUnit::updateLiveThinking(const QString& content)
 	if (block.card) {
 		if (QLabel* header = block.card->findChild<QLabel*>(QStringLiteral("agentThinkHeader"))) {
 			const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
-			const QString anchor = QStringLiteral(
-				"<a href=\"dsh://thinking/%1\" style=\"color:") + ThemeManager::instance().textSecondary()
-				+ QStringLiteral("; text-decoration:none;\">") + qtTrId("chat_thought_header_fmt") + QStringLiteral("</a>");
-			header->setText(anchor.arg(m_liveThinkingBlock)
-				.arg(arrow, thinkingPreview(content).toHtmlEscaped()));
+			header->setText(thinkingAnchorHtml(m_liveThinkingBlock, arrow,
+				thinkingPreview(content).toHtmlEscaped()));
 		}
 	}
 	// 展开时正文原地刷新
 	if (block.expanded && block.body) {
-		const QString html = QStringLiteral(
-			"<p style='color:") + ThemeManager::instance().textSecondary() + QStringLiteral(";'><i>%1</i></p>");
-		block.body->setHtml(html.arg(content.toHtmlEscaped()));
+		block.body->setHtml(thinkingBodyHtml(content));
 	}
 	if (!m_bulkFit)
 		updateHeightToContent();
@@ -774,18 +794,13 @@ void AgentMessageUnit::addThinkingCard(int index)
 	connect(header, &QLabel::linkActivated, this,
 		[this](const QString& link) { handleAnchorClicked(QUrl(link)); });
 
-	const QString anchor = QStringLiteral(
-		"<a href=\"dsh://thinking/%1\" style=\"color:") + ThemeManager::instance().textSecondary()
-		+ QStringLiteral("; text-decoration:none;\">") + qtTrId("chat_thought_header_fmt") + QStringLiteral("</a>");
-	header->setText(anchor.arg(index).arg(arrow, thinkingPreview(block.content).toHtmlEscaped()));
+	header->setText(thinkingAnchorHtml(index, arrow, thinkingPreview(block.content).toHtmlEscaped()));
 	layout->addWidget(header);
 
 	if (block.expanded) {
 		QTextBrowser* body = createRichPart(QStringLiteral("agentThinkBody"));
 		block.body = body;
-		const QString html = QStringLiteral(
-			"<p style='color:") + ThemeManager::instance().textSecondary() + QStringLiteral(";'><i>%1</i></p>");
-		body->setHtml(html.arg(block.content.toHtmlEscaped()));
+		body->setHtml(thinkingBodyHtml(block.content));
 		m_proseViews.append(body);
 		layout->addWidget(body);
 	}
@@ -802,19 +817,14 @@ void AgentMessageUnit::updateThinkingCard(int index)
 	QLabel* header = block.card->findChild<QLabel*>(QStringLiteral("agentThinkHeader"));
 	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 	if (header) {
-		const QString anchor = QStringLiteral(
-			"<a href=\"dsh://thinking/%1\" style=\"color:") + ThemeManager::instance().textSecondary()
-			+ QStringLiteral("; text-decoration:none;\">") + qtTrId("chat_thought_header_fmt") + QStringLiteral("</a>");
-		header->setText(anchor.arg(index).arg(arrow, thinkingPreview(block.content).toHtmlEscaped()));
+		header->setText(thinkingAnchorHtml(index, arrow, thinkingPreview(block.content).toHtmlEscaped()));
 	}
 
 	QVBoxLayout* cardLayout = qobject_cast<QVBoxLayout*>(block.card->layout());
 	if (block.expanded && !block.body) {
 		QTextBrowser* body = createRichPart(QStringLiteral("agentThinkBody"));
 		block.body = body;
-		const QString html = QStringLiteral(
-			"<p style='color:") + ThemeManager::instance().textSecondary() + QStringLiteral(";'><i>%1</i></p>");
-		body->setHtml(html.arg(block.content.toHtmlEscaped()));
+		body->setHtml(thinkingBodyHtml(block.content));
 		m_proseViews.append(body);
 		if (cardLayout)
 			cardLayout->addWidget(body);
@@ -897,10 +907,7 @@ void AgentMessageUnit::addToolCard(int index)
 	connect(header, &QLabel::linkActivated, this,
 		[this](const QString& link) { handleAnchorClicked(QUrl(link)); });
 
-	const QString anchor = QStringLiteral(
-		"<a href=\"dsh://tool/%1\" style=\"color:") + ThemeManager::instance().accent()
-		+ QStringLiteral("; text-decoration:none;\">%2 %3</a>");
-	header->setText(anchor.arg(index).arg(arrow, block.title.toHtmlEscaped()));
+	header->setText(toolAnchorHtml(index, arrow, block.title.toHtmlEscaped()));
 	layout->addWidget(header);
 
 	if (block.expanded) {
@@ -923,10 +930,7 @@ void AgentMessageUnit::updateToolCard(int index)
 	QLabel* header = block.card->findChild<QLabel*>(QStringLiteral("agentToolHeader"));
 	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 	if (header) {
-		const QString anchor = QStringLiteral(
-			"<a href=\"dsh://tool/%1\" style=\"color:") + ThemeManager::instance().accent()
-			+ QStringLiteral("; text-decoration:none;\">%2 %3</a>");
-		header->setText(anchor.arg(index).arg(arrow, block.title.toHtmlEscaped()));
+		header->setText(toolAnchorHtml(index, arrow, block.title.toHtmlEscaped()));
 	}
 
 	QVBoxLayout* cardLayout = qobject_cast<QVBoxLayout*>(block.card->layout());
