@@ -79,6 +79,41 @@ flat include root: every `#include "..."` resolves as `include/<group>/<Header>.
 > `misc/tools/` and the established layout all expect `<repo>\x64\<Config>\`. Do not drop the
 > `OutputPaths` property group from the two project files.
 
+### Runtime DLLs live in `dependence\`, not next to the exe
+
+The eleven Qt and MSVC runtime DLLs are kept in `<exe dir>\dependence\`:
+
+```text
+x64\Release\
+├── DSH Hub.exe
+├── dependence\
+│   ├── dependence.manifest      # private assembly manifest listing all 11 DLLs
+│   ├── Qt6Core.dll  Qt6Gui.dll  Qt6Widgets.dll  Qt6Network.dll  Qt6WebSockets.dll
+│   └── concrt140.dll  msvcp140*.dll  vcruntime140*.dll
+├── platforms\  styles\  translations\  resources\  ...
+└── logs\  ClientSetting\  tls\  clientExtensions\
+```
+
+**Why a manifest is required**: the Windows loader does **not** search the exe's subdirectories
+(its order is the exe directory, the system directories, `AddDllDirectory` additions, the current
+directory, then `PATH`), so moving the files alone cannot work. What makes it work is a **private
+assembly**:
+
+- `source/dependence.manifest` (deployed into `dependence/`) declares the assembly and lists every
+  DLL;
+- `source/dependence.deps.manifest` is merged into the exe's own manifest to declare the dependency
+  (vcxproj via `<AdditionalManifestFiles>`, CMake via `/MANIFESTINPUT`).
+
+⚠️ **Two maintenance rules**:
+
+1. Whenever a DLL is added or replaced, update the `<file>` list in `source/dependence.manifest`
+   and keep its `version` in sync with `dependence.deps.manifest` -- one missing entry means the
+   app will not start. The directory name must be exactly the assembly name, `dependence`.
+2. After deploying to a new directory, run
+   `misc/tools/make-dependence.ps1 -Target <dir>`. It reads the DLL list **from the manifest** (the
+   manifest is the source of truth), collects the DLLs into `dependence/` and copies the manifest
+   itself. It warns about any DLL that is neither in place nor found.
+
 ## Requirements
 
 - Windows 10 or later

@@ -135,6 +135,13 @@ target_link_libraries(dshhub PRIVATE Qt6::CorePrivate)
  # 图标资源脚本：非 Windows 平台没有这个文件（.ico/.rc 是 Windows 专用）
 if(WIN32)
 	target_sources(dshhub PRIVATE "${DSHHUB_ROOT}/../assets/resources/DSH Hub.rc")
+
+# 让 exe 从 dependence\ 子目录解析 Qt / MSVC 运行库（私有程序集）：Windows 的加载器
+# 默认**不搜索 exe 的子目录**，靠这段 manifest 声明才会去找。DLL 清单在 source/dependence.manifest，
+# 加/换 DLL 时清单与依赖声明的 version 都要改。
+if (MSVC)
+    target_link_options(dshhub PRIVATE "/MANIFESTINPUT:${DSHHUB_ROOT}/dependence.deps.manifest")
+endif()
 endif()
 
 # WIN32_EXECUTABLE 由 qt_add_executable 的 WIN32 关键字设置；Qt6::Core 会据此
@@ -229,6 +236,13 @@ if(DSHHUB_BUILD_TESTS)
 		OUTPUT_NAME "DSH Hub.Tests")
 
 	target_include_directories(dshhub_tests PRIVATE "${DSHHUB_ROOT}/include")
+
+# 让 exe 从 dependence\ 子目录解析 Qt / MSVC 运行库（私有程序集）：Windows 的加载器
+# 默认**不搜索 exe 的子目录**，靠这段 manifest 声明才会去找。DLL 清单在 source/dependence.manifest，
+# 加/换 DLL 时清单与依赖声明的 version 都要改。
+if (MSVC)
+    target_link_options(dshhub_tests PRIVATE "/MANIFESTINPUT:${DSHHUB_ROOT}/dependence.deps.manifest")
+endif()
 	target_compile_definitions(dshhub_tests PRIVATE QT_NO_DEPRECATED_WARNINGS)
 
 	# 与 .vcxproj 的 QtModules（core;gui;testlib）一致，控制台子系统

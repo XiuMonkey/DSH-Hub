@@ -77,6 +77,37 @@ include 根**：所有 `#include "..."` 都按 `include/<分组>/<头文件>.h` 
 > 里，不钉的话 VS 的输出会跟着搬进 `source\x64\`，而 `misc/tools/` 下的脚本与既有习惯都按
 > `<repo>\x64\<Config>\` 找 exe。改这两个工程文件时别删掉那段 `OutputPaths`。
 
+### 运行库收在 `dependence\`，不跟 exe 平铺
+
+Qt 与 MSVC 的 11 个运行库**不在 exe 旁边**，而在 `<exe 目录>\dependence\` 里：
+
+```text
+x64\Release\
+├── DSH Hub.exe
+├── dependence\
+│   ├── dependence.manifest      # 私有程序集清单：逐个列出 11 个 dll
+│   ├── Qt6Core.dll  Qt6Gui.dll  Qt6Widgets.dll  Qt6Network.dll  Qt6WebSockets.dll
+│   └── concrt140.dll  msvcp140*.dll  vcruntime140*.dll
+├── platforms\  styles\  translations\  resources\  ...
+└── logs\  ClientSetting\  tls\  clientExtensions\
+```
+
+**原理**：Windows 的加载器**默认不搜索 exe 的子目录**（顺序是 exe 目录 → 系统目录 →
+`AddDllDirectory` 加进去的 → 当前目录 → `PATH`），所以"把 dll 挪进去"单靠移动文件不成立。
+真正让它成立的是**私有程序集**：
+
+- `source/dependence.manifest`（部署到 `dependence/`）声明程序集 `dependence` 并逐条列出 dll；
+- `source/dependence.deps.manifest` 被合并进 exe 自身的 manifest，声明对它的依赖
+  （vcxproj 走 `<AdditionalManifestFiles>`，CMake 走 `/MANIFESTINPUT`）。
+
+⚠️ **两条维护约定**：
+
+1. **加/换 DLL 必须同步改 `source/dependence.manifest` 的 `<file>` 列表**，并让它与
+   `dependence.deps.manifest` 里的 `version` 保持一致 —— 漏一条就是启动即失败。
+   目录名必须**恰好**等于程序集名 `dependence`。
+2. 部署到新目录后跑一次 `misc/tools/make-dependence.ps1 -Target <目录>`：DLL 名单**从清单里读**
+   （清单即事实来源），把 dll 收进 `dependence/` 并把清单本身也拷过去。漏了哪个它会告警。
+
 ## 环境要求
 
 - Windows 10 或更高版本
