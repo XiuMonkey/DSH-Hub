@@ -183,7 +183,7 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/src/ExtensionSystem/ClientExtension.cpp"
 		# ClientExtension.cpp 引用了 UiStage::releaseForOwner（卸载扩展时强制收回架空），
 		# 所以测试目标也必须编它，否则 LNK2019。
-		"${DSHHUB_ROOT}/src/common/appearance/UiStage.cpp"
+		"${DSHHUB_ROOT}/src/ExtensionSystem/UiStage.cpp"
 		"${DSHHUB_ROOT}/src/network/DshEventParser.cpp"
 		"${DSHHUB_ROOT}/src/common/util/CodeHighlighter.cpp"
 		"${DSHHUB_ROOT}/src/common/util/MarkdownPreprocess.cpp"

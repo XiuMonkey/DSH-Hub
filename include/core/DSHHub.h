@@ -8,15 +8,13 @@
 // 本窗口实现其中的 VirtualWindow，插件按 index 取到本对象后 qobject_cast 成接口再用。
 #include "VirtualClass/VirtualCommon.h"
 
-// 架空（VirtualShell）的让渡动作本体。放在 common/appearance 下是因为
-// WindowFrame 也要问它（遮罩范围 / 窗口条命中测试），见 UiStage.h 的文件头。
-#include "common/appearance/UiStage.h"
+// 架空（VirtualShell）的让渡动作本体；在 ExtensionSystem/ 下，与客户端扩展装载同属一套。
+#include "ExtensionSystem/UiStage.h"
 
 #include <QMainWindow>
 #include <QProcess>
 #include <QString>
 #include <QStringList>
-#include <QList>
 
 class DshApiClient;
 class DshNamedPipeBridge;
@@ -43,7 +41,6 @@ class AgentMessageUnit;
 class MessageHost;
 class QVBoxLayout;
 class QScrollArea;
-class QTimer;
 class LoadMoreButton;
 
 class DSHHub : public QMainWindow, public VirtualWindow, public VirtualShell
@@ -93,7 +90,7 @@ public:
 	// VirtualShell 接口的实现（"架空原 UI"）—— 全部只有一行转发
 	// ------------------------------------------------------------------
 	// 宿主侧刻意**不在本类里写任何逻辑**：让渡动作（摘原生客户区、建舞台、
-	// 收宿主浮层、窗口条登记）全在 common/appearance/UiStage.cpp。
+	// 收宿主浮层、窗口条登记）全在 ExtensionSystem/UiStage.cpp。
 	// 这里只做三件事：接上接口、把 owner 从 char* 转成 QString、转发。
 	// 所以本文件相对"没有架空功能"的版本只多了这几行 + 一个基类。
 	//

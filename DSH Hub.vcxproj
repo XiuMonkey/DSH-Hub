@@ -114,7 +114,7 @@
     <ClCompile Include="src\chat\AgentMessageUnit.cpp" />
     <ClCompile Include="src\chat\CodeBlockView.cpp" />
     <ClCompile Include="src\common\appearance\TopBarTools.cpp" />
-    <ClCompile Include="src\common\appearance\UiStage.cpp" />
+    <ClCompile Include="src\ExtensionSystem\UiStage.cpp" />
     <ClCompile Include="src\ui\LoadMoreButton.cpp" />
     <ClCompile Include="src\ui\ChatInputWidget.cpp" />
     <ClCompile Include="src\ui\Main.cpp">
@@ -222,7 +222,7 @@
     <ClInclude Include="include\common\appearance\InteractionHandler.h" />
     <ClInclude Include="include\chat\CacheHistoryManager.h" />
     <ClInclude Include="include\common\appearance\CardShadow.h" />
-    <ClInclude Include="include\common\appearance\UiStage.h" />
+    <ClInclude Include="include\ExtensionSystem\UiStage.h" />
     <ClInclude Include="include\common\appearance\TopBarTools.h" />
     <ClInclude Include="include\VirtualClass\VirtualCommon.h" />
     <ClInclude Include="include\core\HostExports.h" />

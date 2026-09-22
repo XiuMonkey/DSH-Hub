@@ -118,7 +118,7 @@
     <ClCompile Include="src\ExtensionSystem\DllCaller.cpp" />
     <ClCompile Include="src\ExtensionSystem\ComCaller.cpp" />
     <ClCompile Include="src\ExtensionSystem\ClientExtension.cpp" />
-    <ClCompile Include="src\common\appearance\UiStage.cpp" />
+    <ClCompile Include="src\ExtensionSystem\UiStage.cpp" />
     <ClCompile Include="src\network\DshEventParser.cpp" />
     <ClCompile Include="src\common\util\CodeHighlighter.cpp" />
     <ClCompile Include="src\common\util\MarkdownPreprocess.cpp" />

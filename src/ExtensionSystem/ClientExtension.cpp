@@ -3,7 +3,7 @@
 #include "core/DshHostPlugin.h"
 
 // 架空（VirtualShell）的兜底收台，见下面 remove() 里那段说明
-#include "common/appearance/UiStage.h"
+#include "ExtensionSystem/UiStage.h"
 
 #include <QCoreApplication>
 #include <QDir>

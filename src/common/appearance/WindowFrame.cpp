@@ -8,8 +8,8 @@
 #include "common/appearance/WindowFrame.h"
 
 // 架空（VirtualShell）：本文件只在两处问它 —— 遮罩覆盖范围、窗口条命中测试。
-// 方向是 common/appearance → common/appearance，不引入跨层依赖。
-#include "common/appearance/UiStage.h"
+// 这也是 common/appearance → ExtensionSystem 的唯一一条依赖边。
+#include "ExtensionSystem/UiStage.h"
 
 #include <QByteArray>
 #include <QHash>

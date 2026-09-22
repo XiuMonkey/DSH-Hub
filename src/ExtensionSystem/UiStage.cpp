@@ -1,4 +1,4 @@
-#include "common/appearance/UiStage.h"
+#include "ExtensionSystem/UiStage.h"
 
 #include <QApplication>
 #include <QDebug>
