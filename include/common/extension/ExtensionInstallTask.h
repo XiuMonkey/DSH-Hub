@@ -21,7 +21,6 @@ public:
 	// 启动后台安装；已有任务在跑时返回 false
 	bool start(const QString& extFilePath, const QString& serverProfilePath);
 
-	// 后台任务是否仍在执行
 	bool isRunning() const;
 
 	// 任务已结束则回收结果并返回 true（第二次调用返回 false）

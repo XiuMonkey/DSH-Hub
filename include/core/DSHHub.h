@@ -62,8 +62,7 @@ public:
 
 	QProcess* takeServerProcess();
 
-	// VirtualWindow 接口（客户端扩展唯一入口）：插件自己的顶层窗口铺遮罩 + 居中当宿主弹窗，窗口要先建好；show/hide 成对，遮罩只留一层、按 owner 记名。
-	// ⚠️ 插件侧只能 qobject_cast<VirtualWindow*>：转 DSHHub* 撞 LNK2019（宿主 staticMetaObject 零导出），dynamic_cast 跨模块静默返回 nullptr。
+	// VirtualWindow 接口（客户端扩展唯一入口）：插件用顶层窗口铺遮罩 + 居中当宿主弹窗；⚠️ 插件侧只能 qobject_cast<VirtualWindow*>（转 DSHHub* 撞 LNK2019，dynamic_cast 跨模块静默返回 nullptr）。
 	void ExternalShowOverlay(QWidget* popup) override;
 	void ExternalHideOverlay(QWidget* popup) override;
 
@@ -118,9 +117,8 @@ private slots:
 	void handleWorkspaceSnapshot(const QJsonArray& items, const QJsonArray& archivedSessionIds);
 	void handleWorkspaceUpserted(const QJsonObject& workspace);
 	void handleWorkspaceRemoved(const QString& workspaceId);
-	/** workspace/follow 的 order：工作区排序整体替换。 */
+	/** workspace/follow 的增量帧：order / archived（两者都是整体替换）。 */
 	void handleWorkspaceReordered(const QStringList& workspaceIds);
-	/** workspace/follow 的 archived（归档集合整体替换）。 */
 	void handleWorkspaceArchiveChanged(const QJsonArray& archivedSessionIds);
 	/** 把缓存的工作区/归档状态推给侧栏 catalog 并重建视图。 */
 	void applyWorkspaceState();
@@ -196,8 +194,7 @@ private:
 	QVBoxLayout* m_messagesLayout = nullptr;
 	ChatInputWidget* m_chatInput = nullptr;
 
-	// 小灰字（会话统计）：数据全部服务端现算、客户端不读任何缓存；两块投影按块记（来源可能只带一块）。
-	// 每次变化整包重算一行文本推给控件；换会话时连同 asOfSeq 一起清空；无当前会话时擦掉文字、高度照旧占着。
+	// 小灰字（会话统计）：数据全部服务端现算、客户端不读任何缓存；两块投影按块记（来源可能只带一块），每次变化整包重算一行文本推给控件。
 	QJsonObject m_sessionStatsBlock;   // projections.values.sessionStats
 	QJsonObject m_tokenUsageBlock;     // projections.values.tokenUsage
 	int m_statsAsOfSeq = -1;           // 已并进来的投影反映到哪个 seq（higher-seq-wins）

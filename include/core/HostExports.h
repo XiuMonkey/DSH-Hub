@@ -57,9 +57,7 @@ namespace DshHost
 		return fn;
 	}
 
-	// 按 index 取宿主对象：返回 QPointer（长期持有也不会成野指针）；符号取不到 / index 为空 / 不在主线程 → 空。
-	//   if (auto* bar = qobject_cast<VirtualTopBar*>(DshHost::findObject("topbar")))
-	//       bar->GetLayout()->addWidget(myWidget);
+	// 按 index 取宿主对象，返回 QPointer（长期持有也不会成野指针）；符号取不到 / index 为空 / 不在主线程 → 空。用法：qobject_cast<VirtualTopBar*>(DshHost::findObject("topbar"))。
 	inline QPointer<QObject> findObject(const char* index)
 	{
 		const auto fn = registryFind();

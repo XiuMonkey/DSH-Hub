@@ -58,7 +58,6 @@ public:
 	/** 切到"刚创建的空会话"（loadHistory=false 时只接管会话，等首条 prompt 再拉）。 */
 	void showFreshSession(const QString& sessionId, bool loadHistory, int fallbackCursor,
 		int observedLastSeq);
-	/** 取消未完成的构建（切会话、丢弃会话时用）。 */
 	void cancelBuild();
 	/** session/follow 给的日志游标（= session/page 需要的 throughSeq）。 */
 	void setStreamCursor(int cursor);
@@ -79,7 +78,6 @@ public:
 	/** 清空当前列表内容（保留实例）。 */
 	void clearCurrent();
 
-	/** 预取页到达：按 PrefetchOutcome 判定（点亮 / 排入队列 / 忽略）。 */
 	PrefetchOutcome onPrefetched(const QString& sessionId, const QJsonArray& events,
 		int throughSeq, bool hasMore);
 
@@ -88,7 +86,6 @@ public:
 	/** 切换会话期间的"正在载入"提示（只盖聊天区，鼠标穿透）。 */
 	void showLoading();
 	void hideLoading();
-	/** 窗口尺寸变化时同步提示层的几何。 */
 	void syncLoadingGeometry();
 
 	/** mux 上的会话事件：更新气泡内容并维护流式态；返回是否"一次对话收尾"。 */
@@ -127,9 +124,8 @@ private:
 	void startFreshFetch(const QString& sessionId);
 	/** 用预取的一页点亮当前会话（并接管分页态，避免随后快照重建）。 */
 	void showPrefetched(const QString& sessionId, const QJsonArray& events, int throughSeq, bool hasMore);
-	/** 把离屏构建好的列表换成当前列表。 */
+	/** 把离屏构建好的列表换成当前列表，并把当前实例与分页元数据交给缓存。 */
 	void swapInBuilt(MessageQuery* query);
-	/** 把当前实例与分页元数据交给缓存。 */
 	void handOffToCache(int observedLastSeq);
 	void setLoadMoreVisible(bool visible);
 	void showNoMoreToast();

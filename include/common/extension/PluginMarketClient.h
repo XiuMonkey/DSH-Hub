@@ -38,7 +38,6 @@ public:
 signals:
 	// registry 拉取成功；source 可能是 "snapshot" / "cache" / 其它（实时数据）
 	void registryLoaded(const QJsonArray& plugins, const QString& source);
-	// registry 拉取失败
 	void registryFailed(const QString& error, int status);
 
 	// 已安装列表拉取成功（name -> version）

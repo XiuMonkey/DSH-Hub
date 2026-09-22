@@ -2,7 +2,7 @@
 
 // 全局对象注册表：以字符串为索引登记“程序级唯一对象”（只放全程序唯一的界面/服务对象），供其它模块按名取用，免去层层向下传指针。
 // ⚠️ 登记是覆盖语义（后来者胜，切主题时新旧窗口会短暂并存），因此 Destroy 必须带对象指针做身份校验，否则被顶掉的旧对象析构时会误删新记录。
-// ⚠️ 单例刻意不析构（必须活得比所有被登记对象更久）。用法：CommonRegistry::instance().AddToRegistry("sidebar", this) / Find<Sidebar>("sidebar") / Destroy("sidebar", this)。
+// ⚠️ 单例刻意不析构（必须活得比所有被登记对象更久）。用法：CommonRegistry::instance().AddToRegistry("sidebar", this) / FindFromRegistry("sidebar") / Destroy("sidebar", this)。
 
 #include <QHash>
 #include <QObject>
@@ -20,13 +20,12 @@ public:
 	// 登记对象（覆盖语义：同一 Index 上已有对象就换掉，后来者胜）；index 或 obj 为空返回 false，顶掉存活对象时记一条 qInfo 便于事后确认。
 	bool AddToRegistry(const QString& index, QObject* obj);
 
-	// 注销对象：只有该 Index 当前登记的指针与 obj 相同时才摘除并返回 true；Index 不存在或登记的已是别的对象 → false 且不做任何改动（这条身份校验不是可选项，它才是覆盖语义能安全的前提）。
+	// 注销对象：只有该 Index 当前登记的指针与 obj 相同时才摘除并返回 true；Index 不存在或登记的已是别的对象 → false 且不做任何改动（这条身份校验是覆盖语义能安全的前提）。
 	bool Destroy(const QString& index, QObject* obj);
 
 	// 按 Index 取对象；不存在或已销毁都返回空 QPointer。
 	QPointer<QObject> FindFromRegistry(const QString& index) const;
 
-	// 该 Index 上是否登记着一个存活的对象。
 	bool contains(const QString& index) const;
 
 private:

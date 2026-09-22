@@ -32,7 +32,6 @@ public:
 	// 删除扩展目录；失败时把原因写入 error
 	bool removeExtensionDirectory(const QString& name, QString* error = nullptr) const;
 
-	// 追加一条插件行的结果：失败 / 已存在（未改动）/ 本次追加
 	enum class PatchEntryResult
 	{
 		Failed,
@@ -50,7 +49,6 @@ public:
 		const QString& comment = QString(),
 		QString* error = nullptr);
 
-	// 清理残留配置的结果
 	struct CleanupResult
 	{
 		bool patchReadable = false; // cordis.patch.yml 是否可读

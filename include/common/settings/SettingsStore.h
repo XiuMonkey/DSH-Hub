@@ -1,7 +1,7 @@
 #pragma once
 
 // 本地 QSettings 持久化的统一入口：键名只允许出现在这里，避免在 UI / core 各处散落字符串字面量（当前只有 server/url）。
-// 界面语言与主题不在 QSettings（属“外观”，落在 <exe>/ClientSetting/AppearanceSetting.json，见 ClientSettings.h）；默认 Agent 预设归服务端设置（见 AgentPresetService），客户端刻意不留副本。
+// 界面语言与主题不在 QSettings（属“外观”，落在 <exe>/ClientSetting/AppearanceSetting.json，见 ClientSettings.h）；默认 Agent 预设归服务端设置，客户端刻意不留副本。
 // 陷阱：QSettings 定位依赖 QCoreApplication 的 organizationName + applicationName，使用方必须保证二者已设置（main.cpp 目前未设置，所以 server/url 也存不住）。
 
 #include <QString>

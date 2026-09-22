@@ -1,11 +1,10 @@
 #pragma once
 
-// DSH Mux 流 JSON 解析接口，独立于 UI。
+// DSH mux 流 JSON 的解析接口，独立于 UI。
 
 #include <QJsonObject>
 #include <QString>
 
-// 工具调用信息。
 struct ToolCallInfo
 {
 	QString name;
@@ -13,7 +12,6 @@ struct ToolCallInfo
 	bool valid = false;
 };
 
-// 工具执行结果信息。
 struct ToolResultInfo
 {
 	QString message;
