@@ -175,3 +175,221 @@
 - ⚠️ **`release()` 为什么不删舞台里的控件**：那些控件归扩展，其 vtable 可能已经不在本模块里（卸载扩展后 dll 已解映射），删一次就是崩；扩展必须在还台**同一时刻**自己删干净 —— 这是 `DshHostPlugin.h` 里 `detachHost()` 的既有契约。
 - **`releaseForOwner()` 这条兜底为什么必须有**：不能指望插件在自己的 `detachHost()` 里调 `ExternalReleaseStage` —— 插件崩了或忘了的话，宿主控件树里会留着一个 vtable 指向已解映射内存的控件，`unload()` 之后碰一下就崩。
 - 自绘窗口条：扩展自绘标题栏时**必须**调一次 `setCaptionBand()`，否则窗口只能靠 Alt+Space 拖动 / 贴边吸附；`captionBand()` 是供 `WindowFrame::hitTest` 回落用的查询入口，`height > 0` 才算有效。
+
+---
+
+## `include/core/DSHHub.h`
+
+- **遮罩与居中**走的就是宿主自己那条弹窗路径（`WindowFrame::showOverlayWithPopup`），所以"遮罩先到、弹窗后到"的缝不存在。插件必须**先把窗口建好**（控件搭完、尺寸定下）再调 `ExternalShowOverlay`。
+- 插件侧取接口的完整示例：`DshHost::findObject(DshHostIndex::kMainWindow)` → `qobject_cast<VirtualWindow*>` → `window->ExternalShowOverlay(myWindow)`。
+- **会话投影为什么必须按块合并、不能整包覆盖**：同一份数据有两个来源 —— `session/follow` 快照是**全量折叠**（`sessionStats` + `tokenUsage` 两块都有），`session/list` 行只是**投影缓存检查点**（可能只有 `tokenUsage`）。早先整包覆盖时，后到的列表行会把快照带来的"轮/步 + LLM/工具/首 token"那段擦掉，表现是闪一下然后只剩"缓存命中 / 输入输出"。
+- `asOfSeq` 用服务端那套 **higher-seq-wins**，旧值直接丢，避免用停得很旧的检查点盖掉新值。
+- 小灰字的数据源**曾用过 `session/list` 行，已弃用**（那是缓存检查点，冷会话会很旧）；现在只认 `session/follow` 的 projections 与 `session/control` 的 baseline + 实时帧。这块暂时留在 god class 里，等接口稳定再分离（候选：一个 `SessionStatsService` 取数 + 输入区的控制器推给控件）。
+- **新建会话的 `workspaceId` 只能来自 `workspace/follow` 基线**：服务端 `session/create` 的响应里没有 `workspaceId`，而 0.1.5 已删掉 `workspace list` 这个 RPC。
+- 架空让渡动作（摘原生客户区、建舞台、收宿主浮层、窗口条登记）**刻意全在 `ExtensionSystem/UiStage.cpp`**，`DSHHub` 里一行逻辑都不写；那 4 个 VirtualShell 转发定义在头文件里而不是另开 .cpp（都是单行转发，另开编译单元只多一份样板，也省得往 `.vcxproj` 再登一个源文件）。
+
+## `include/core/MessageHost.h`
+
+- **为什么这些不放进 `MessageQuery` 自己**：`MessageQuery` 是"每个会话一份、切会话就整体替换或被缓存接管"的**短命值对象**，而这里管的是**跨会话存活的单例**（滚动区、按钮、队列、缓存、当前会话身份）—— 单例的所有权放不进多实例对象，所以单独一层，`MessageQuery` 一行不改。
+- mux 帧路由（`handleMuxFrame`）原先在 `DSHHub` 里，拆出来后帧的第一个消费者就是这里，`DSHHub` 只把 `DshApiClient::muxFrameReceived` 接过来转发；拆出来时明确**不再碰**会话标题与工作区清单（都归 `DSHHub` 的侧栏）。
+- `m_sessionLastSeq` 原先住在 `DSHHub`，随 mux 帧路由一起搬来 —— 它是 **mux 观测**，不该由窗口持有。恢复缓存时用它判断缓存内容是否已被后来的事件超越：超越就得重建，没超越就秒开。
+- **载入中提示层**是懒建、常驻复用，父控件是聊天区 viewport（只盖聊天区、鼠标穿透）。
+- **流式渲染态用定时器节流 50ms 批量重渲染**，避免每个 chunk 都全量重排；`fitContentThenLayout` 是"消息列先撑够高度再铺布局"，避免流式期间气泡被挤扁。
+- **`m_followBottom` 是用户"意图"而不是滚动位置**：光看滚动位置不行 —— 流式输出时内容一直在长高，底部会从脚下溜走。
+- `SmoothWheelScroller` 由滚动区持有（父对象是滚动区），这里只借用：钉滚动位置前先 `stop()`，并借 `isAnimating()` 判断"用户正在滚"。
+- **`showSession` 的决策顺序就是"控件缓存 → 预取页 → 网络拉取"**，中间那些（缓存命中/预取/拉页/分批构建）都在这一类里拍板，`DSHHub` 只说"切到谁"。
+- 预构建控件树的**队列配额有限、每轮事件循环只建一个**（每个控件树占内存）。
+
+## `include/core/ServerManager.h`
+
+- **为什么要显式写空数组 `llm-deepseek: models: []`**：适配器自带的默认目录（deepseek-flash 等 4 条）**只在该路由的 `models` 缺席时才生效** —— 写了空数组才等于"这条路由一条也不公布"。
+- 只在文件缺失时写入：用户自己配置过的 harness **一个字都不动**。之所以落在客户端：数据根是客户端建的；缺这一步时"清空 harness"会让随附模型复活。
+- 内置插件台账（`.dsh-hub-builtin.json`）记录已装内容的 **revision** ⇒ 语义是"首次装一次、源码变了才重装"，**不是每次启动都覆盖**。
+- `takeProcess()` 的用途：主题切换等"重建窗口但复用同一服务端"的场景移交服务进程，接管方通过 `start()` 的 `initialServerProcess` 参数拿回。
+
+## `include/core/HostExports.h`
+
+- **为什么需要这层 C 导出**：宿主是 Application、无 `.def`、无 `dllexport`，导出表本来是空的 —— 插件直接调 `CommonRegistry::instance()` 会 **LNK2019**。而"插件也编一份 `CommonRegistry.cpp`"更糟：会得到**第二个单例**，插件的登记与查询和宿主静默分家。
+- ABI 规则：一律 `extern "C"`（导出表里是未修饰的名字），参数与返回值只用 POD；返回的 `void*` 实际是 `QObject*`，插件自己转成**全内联接口**再调，接口一旦有 out-of-line 成员就撞回 LNK2019。**动签名 = 动 ABI**，必须同步升 `DSHHUB_HOST_ABI_VERSION`。
+- 查询只在主线程可用：注册表未加锁，且表里是 UI 对象；非主线程返回 NULL 并（仅首次）打一条 `qWarning`。插件在 Worker 线程要用对象就得自己投到主线程。
+- **刻意不导出 `AddToRegistry`**：让插件往宿主全局表里塞对象，会把"谁负责析构"变成跨 DLL 的所有权问题。
+- `index` 是纯字符串、**没有编译期检查**，拼错只会静默拿到空对象（和"没登记""不在主线程"长得一模一样，无从区分），所以两侧都必须从 `DshHostIndex` 取，别手写字面量。
+- `resolveHostSymbol` 用 `QCoreApplication::applicationFilePath()` 而不是 `GetModuleHandle(NULL)`，是为了不必引 `<windows.h>`；用 `QLibrary::resolve` 的**静态**重载，是因为成员版本会被局部 `QLibrary` 对象的析构把库卸载掉。
+
+## `include/core/ToolRequestDispatcher.h`
+
+- 抽出动机：把"命名管道请求 → 线程池执行 → 回投 GUI 线程发送响应"从 `DSHHub` 里拿出来，控制器只保留一句 `dispatch()`。纯 header + inline ⇒ 无需链接改动。
+- `QLocalSocket` **只在 GUI 线程读写**，所以响应必须经 queued 连接回投；投递前要判 bridge/client 是否已空（客户端已断开或桥已销毁时直接丢弃响应）。
+- DLL/COM 调用挪到 Worker 线程执行：GUI 不被长任务卡住，不同 DLL 可并行。同一连接上多个请求的响应可能乱序返回，**Node 端按请求 id 配对**。
+
+---
+
+## `include/ExtensionSystem/ClientExtension.h`
+
+- **客户端扩展与工具扩展是两套东西**，只是都用 `.ext` 交付：工具扩展 → 服务端扩展目录、Worker 线程跑 JSON 工具调用、登记在 `extensions.json`；客户端扩展 → `<exe>/clientExtensions/`、GUI 线程用 `QPluginLoader` 装载。分流按 regulation 的 `Type` 字段。
+- **`installedNames()` 与 `loadedNames()` 的语义差别**：前者扫 `<dir>/<Name>/regulation.json5`、反映**磁盘状态**（重启后仍在、装载失败也在），安装与移除都以它为判据；后者是进程内已装载集合，同时是防重复装载的依据。
+- **`remove()` 的两条路径**：① 插件声明了 `detachHost()` 槽 → 先让它拆掉挂在宿主里的东西，再 `QPluginLoader::unload()`（会顺手删掉插件根组件、dll 随之解映射 ⇒ **目录当场删干净**；前提是装载时清掉了 `PreventUnloadHint`）；② 没声明 → 删 `regulation.json5`（判据，必定成功），再尽力删目录，被映射着的 dll 删不掉就写 `.pending-removal`，由**下次启动**清扫。
+- **`remove()` 返回 false 的完整含义**：判据已删（不再算已安装、下次启动也不会装载），但还有文件被占用删不掉。
+- **为什么不做"改名 / 移动目录"的花招**：Windows 上躲不开文件锁（实测：目录里有被占用的文件时，连**父目录改名都会被拒**）。
+
+## `include/ExtensionSystem/ComCaller.h`
+
+- **为什么名字里没有 "Json"**：参数虽以 JSON 传输，但执行的是 COM 自动化（`IDispatch`），与 `DllCaller` 的 json/native 风格是**并列关系**。
+- **组件白名单设计**：`ProgId` 只在 `regulation.json5` 的 `"Com"` 段声明，运行时 `args` **不能任意指定对象**。
+- `args` 字段契约：`member`（方法/属性名，必填）、`kind`（`method` 默认 | `get` | `put`）、`path`（可选，先沿属性链下行）、`params`（`kind=method` 的参数）、`value`（`kind=put` 要写入的值）。
+- 结果契约：成功 → `{ "value": <JSON 标量> }`，结果为对象时附带 `"object": true`（仅摘要）。
+- **能力边界**：当前只支持无状态的"一次一调"（每次新建组件实例、**无对象句柄保活**），对象继续下钻的会话能力留待后续。
+
+## `include/ExtensionSystem/DllCaller.h`
+
+- **为什么名字里没有 "Json"**：同一份描述里既有 `"json"` 风格，也有 `"native"` 风格（经 Thunk 按真实签名调用），本类两者都负责。
+- json 风格的三个桥接签名：`int Func(const char* argsJson, char** resultJson)` / `void Func(...)` / `string Func(const char* argsJson)`。
+- **结果内存契约**：json 风格（`ReturnType=string`）的工具若其 DLL 导出了 `ClearMem`，则返回值是 DLL `malloc` 的堆内存，本类读取后**立即调用 `ClearMem` 归还**；老扩展无 `ClearMem` 时保持"拷走即用、不释放"的兼容行为。
+- **`resolvedDllPath` 为什么必须有**：多扩展可能各有同名 `main.dll`，调用期一律按规范化**绝对路径**查找 / 加载，避免按短文件名缓存导致的**串库**。
+- **线程模型**：`callTool` 在 Worker 线程执行；**同一 DLL 的调用经 `runMutex` 串行**（旧扩展可能带 static 缓冲 / 非重入代码），不同 DLL 之间并行。
+- `inFlight` / `drained` 的用途：卸载 / 移除时等待在途调用结束，防止卸载中的 `QLibrary` 被使用。
+
+## `include/ExtensionSystem/ExtensionLoader.h`
+
+- **两条分流路线**：无 `Type` / 其它值 → 工具扩展（包内有 `Function[]` 与 `AttachedPlugin/`）；`ClientExtension[Debug]` → 客户端扩展（包里只需 regulation + 一个 dll）。**只共用 `.ext` 这层壳 —— 载荷、宿主、线程、登记位置都不同**。
+- `isClientExtension` 的调用方契约：true ⇒ 应在 GUI 线程调 `ClientExtension::loadOne(...)`，且**不要碰** `extensions.json` / `cordis.patch.yml` / 服务端重启。
+- 字段的安装期语义：`jsonPath` / `dllPath` 指的是"**已落到扩展目录的那份**"（不是包里临时解出来的那份）；`pluginName` 对客户端扩展取自 regulation 的 `Name`。
+- `regulation.json5` 是 **JSON5**（允许注释与尾随逗号）。
+
+## `include/ExtensionSystem/Thunk.h`
+
+- **Windows x64 专用**：运行时根据参数 / 返回值描述生成一段**可执行机器码**，把统一参数数组转换成目标 DLL 函数的**真实调用约定** —— 只有 native 风格需要它。
+- 统一参数槽的内存布局：每个参数固定占 **8 字节**；Bool/Int/String 用 int64/pointer，Double 用 double 的位模式（`Arg::as` 是 union，这也是 `Pointer32` 字段存在的原因）。
+- thunk 入口 ABI 统一为 `void (*)(const Arg* args, void* result)`；`build()` 失败原因经 `errorString()` 取（不抛异常）。
+
+---
+
+## `include/chat/`（6 个头文件）
+
+### 量高与渲染的坑**不在头文件里**，在 .cpp —— 以下是它们的准确地址
+
+这一层瘦身时最重要的一条发现：`documentSize()` 历史 bug、`QPlainTextDocumentLayout` 的单位、"按行数×行高"、延后到事件循环重算、`m_proseViews` 的 `deleteLater` 时序，**全都不在 `include/chat`**。要改这些行为，去看：
+
+- **不用 `documentSize()`、改按"行数 × 行高"** —— `src/chat/CodeBlockView.cpp:55-62`（`lines * lineSpacing + 20`；20 = viewport 6+6 + 文档 margin 约 8；注释写明历史 bug 是"会算成单行"）。
+- **`fitProseView` 的宽度陷阱 = 流式抖动的根因** —— `src/chat/AgentMessageUnit.cpp:160-178`：新建视图未入布局前宽度还是 Qt 默认 100px，而 `QTextBrowser` 的文档宽度跟随视口；此时读 `documentSize()` 得到的是"按 100px 窄宽换行"的高度（**实测长回复可达 7000+ px**），一旦 `setFixedHeight()` 提交，气泡瞬间被撑极高、下一轮拟合才恢复。**必须先 `setFixedWidth(contentWidth)` + `setTextWidth` 再量。**
+- **控件加入布局后要延后到事件循环再重算** —— `src/chat/AgentMessageUnit.cpp:203-205`（用 `QTimer::singleShot(0, ...)` 等布局真正跑完）。
+- **`clearParts` 的删除时序** —— `src/chat/AgentMessageUnit.cpp:262-273`：`takeAt` 逐个摘下，**先 `hide()` 再 `deleteLater()`**（可能正处在自身 `anchorClicked` 信号处理中），最后 `m_proseViews.clear()`；不能直接 `delete`。
+- `documentSize()` 已包含 `QTextDocument` 自身边距 —— `src/chat/UserMessageUnit.cpp:75`。
+- `QPlainTextDocumentLayout` 的高度单位是**行数不是像素** —— `src/ui/ChatInputWidget.cpp:599`。
+
+### `AgentMessageUnit.h`
+
+- 架构：旧实现是**单篇 QTextBrowser 文档**；现为 QWidget + 垂直布局的"部件流"。**动机**：同一气泡内普通文本与代码块必须严格按出现顺序排布。每"一段普通文本"一个 QTextBrowser（`objectName=agentProse`），Markdown 围栏切成独立 `CodeBlockView`（上方带语言小标签 `objectName=codeBlockLang`）。
+- **bulk 模式**：`append*` 期间不逐次拟合高度，整批结束后统一 `updateHeightToContent()`（对应 `MessageQuery::setBulkFitting`）。
+- **流式去重**：`m_lastFlushedFingerprint` = 最近一次已渲染内容的指纹（类型 + 内容哈希），无变化就跳过整段重建。
+- **流式增量渲染**：只重画"正在增长的最后一段"，7 个 `m_live*` / `m_streamSealedCount` 成员跟踪尾部 live 区域。
+- `proseHost()` 的宿主选择：只有"末尾部件本身就是 ProseView"才复用它；否则在布局末尾新建一个空 ProseView —— **保证锚点/分隔符总落在消息真实尾部之后**。
+- 行内代码**先替换成占位符**再交给 Qt，避免 Qt 解析丢失样式。
+
+### `MessageQuery.h`
+
+- 上翻走一元 `session/page`，**必须带 `throughSeq`**（缺了服务端回 `gateway/input-invalid`，所以必须有回落游标）；`beforeSeq` 是当前内容里最早一条事件的 seq（**排他上界**）；`maxMessages` 数的是**消息**不是事件。
+- `session/page` 返回的记录**全部**比 `beforeSeq` 更早 ⇒ 整页插到顶部即可，不需要旧版"比条数取差集"。
+- 游标可能来得晚：`load()` 在拿到游标前挂起并起看门狗；超时后若 `DSHHub` 喂过回落游标就直接发请求，否则**明确报错**，不让 UI 一直转圈。
+- **`firstHistoryArrived` 的时序约束**：只有首屏真正上屏（分批构建完成、控件已挂进实时布局）才发 —— **不能在"开始构建"时就收遮罩，否则会先露出空白聊天区**。
+- **`m_reachedEnd` 不能用 `m_history->hasMore()` 做门控**：部分流程里该值与服务端实际不符，会导致"明明还有更多却一直提示没有更多"。
+- **`seedFromPrefetched` 与 `seedFromSnapshot` 的区别**：前者不做新鲜度判定，直接走分批构建（每轮事件循环 5 条）。**原因：整树一次性冷布局会造成单帧阻塞（实测 116 条 ≈ 307ms）**。
+- 老页插入后按插入前记录的锚点校正滚动，且要**分多次直到几何稳定**。
+- 只播种最近 `kSeedEventCap = 200` 条（`src/chat/MessageQuery.cpp:605`）：快照一页可能几十条消息，全量构建会明显拖慢切会话。
+
+### `CacheHistoryManager.h`
+
+- ⚠️ 原文件头声称预取缓存"已删除"是**错的**（代码是活的）—— 该句已删除。
+- **判"缓存还能不能用"必须靠游标，不能靠内容条数**：0.1.5 起首屏来自 `session/follow` 快照，不再是"重拉同一个 maxMessages 尾窗口"，条数不再可比。
+- 三个游标：`throughSeq` = 缓存建立时的 follow 游标；`oldestSeq` = 缓存内容里最早一条事件的 seq（"加载更多"的 `beforeSeq`）；`lastSeq` = 最新一条事件的 seq（对比新快照 cursor 判过期）。
+- 三者齐全时恢复缓存可**完全跳过重拉与二次渲染**（秒开），且"加载更多"依旧可用。
+
+---
+
+## `include/ui/`（16 个头文件）
+
+### `ChatInputWidget.h`
+
+- **为什么 `ChatInputWidget` 不是卡片本身**而是"卡片 + 小灰字"的竖排容器：小灰字要落在卡片**外面**（原生 composer 就这么排），而它由本控件创建 —— 所以卡片本体下沉成一层内层控件（`m_capsule`）；样式规则仍认 `#inputCapsule`，后代选择器不受影响。
+- **阴影走绘制不走 QSS**：QSS 没有 `box-shadow`，而原版这张卡片带 `--dsw-shadow-lv2`，所以外面套一层 `ShadowPanel`（`m_capsuleShadow`）画阴影，**卡片自己的 QSS 规则一条都不用改**。
+- 阴影规格放在本类的原因：`Main.cpp` 要拿它的四周留白反推输入区边距（**边距 = 原边距 − 留白**，卡片宽度才不会被阴影挤窄），两处共用一个数字以免漂移。
+- **`SessionStatsLine` 与官方的有意差异**：官方在没有可显示内容时整行不渲染，这里改成「轮/步」与「输入/输出」两组**无条件出现** —— 新会话看到的是 `0 轮 · 0 步 | 输入 0 tok · 输出 0 tok` 而不是一片空白；其余组无有意义 0 表示，仍为 0 就不出现。
+- 字段语义与官方 `StatsLine.d.ts` / `turn-metrics.d.ts` **完全一致**（`sessionStats` @dsh-session-stats、`tokenUsage` @dsh-token-meter），所以"服务端给什么就画什么"两边同一套规则。
+- 那行小灰字固定 14px 行高、一行居中、超宽用省略号并把完整内容挂 tooltip；**有/无统计时行高不变，输入区不会上下跳**。
+
+### `Sidebar.h`
+
+- 数据与 RPC 逻辑在 common（`SessionCatalog` / `SessionService`），本文件**只保留控件与绘制**。
+- 会话列表的滚动容器：列表内容再长也只滚动，**不参与撑高侧栏**。
+
+### `TopBar.h`
+
+- **`m_expanded` 不用 `m_body->isVisible()` 反推**：窗口还没显示时（重建发生在打开之前那种情况）子控件的 `isVisible()` 一律 `false`，反推会让"第一次点击"被吞掉。
+- **判断"新会话"必须用 `m_collapsedSeedSession`，不能用 `m_sessionId`**：`setContext()` 会先把它覆盖成新会话，比较永远相等。
+- **目录默认全折叠**，展开状态是"这一次翻看"的状态；配置里的 `IsExpanded`（`"False"` = 整组隐藏）是另一回事 —— 后者写的是筛选语义。
+- **`m_layout` 必须是类级成员**：原先是构造里的局部变量，但外部要通过 `GetLayout()` 拿到它，局部变量在构造结束后就够不着了。布局顺序：标题 | stretch | 已挂的外部控件 | 工具按钮。
+- 跨 DLL 契约：插件侧 `qobject_cast<VirtualTopBar*>(host)` → `GetLayout()->addWidget(...)`；⚠️ 别改成 `dynamic_cast`（Itanium ABI 下跨模块静默返回 `nullptr`），也别 `qobject_cast<TopBar*>`（要 `TopBar::staticMetaObject` ⇒ **LNK2019**）。
+
+### `SmoothWheelScroller.h`
+
+- **为什么需要这一层**：Qt Widgets 默认的滚轮处理是一次同步 `setValue` —— 本机实测（Qt 6.11.2）一格（`angleDelta 120`）= `wheelScrollLines(3)` × `singleStep(20)` = **60px，中间没有任何过渡帧**，观感就是"跳格"。
+- **宿主还需要知道"用户正在滚"**：流式输出时宿主会"跟随底部"，原判定是"离底 80px 内"—— **比一格滚轮(60px)还大**，于是用户往上滚一格会被下一帧立刻拽回底部。
+- **光看位置不够**：滚轮事件是**同步**启动补间的，而那一帧可能赶在补间第一个步进之前（此时滚动条还没离开底部）—— 所以宿主必须能拿到"用户要离开底部"的同步信号（`userScrolledAway`）与"正在滚"状态（`isAnimating`）。
+- 装在任意滚动区上即可，不需要换控件类型；键盘 / 拖动滚动条 / 程序 `setValue` 都不受影响；**滚动区自己没得滚时不接管，事件照旧往上层的滚动区传（嵌套滚动链不变）**。
+- `stop()` 必须在宿主自己要把滚动位置钉到某处**之前**调用，否则两者打架。
+- 目标滚动位置用 `double`：高精度设备（触控板）给的是小增量，取整会把它磨没。
+
+### `Tooltip.h`
+
+- **为什么值得单独做一层**：`QToolTip` 是 Qt 内部自己建的顶层 `QLabel`，`QToolTip { ... }` 这套选择器只能改底色/文字，**圆角、描边、阴影、内外边距一概不生效**；在自绘圆角窗口里很突兀。
+- **零改动接管**：文案的唯一来源仍是 `QWidget::toolTip()`，所以既有的 20 余处 `setToolTip(...)` 一行都不用改；`TranslationUi` 的"按快照就地换文案"读的也正是它。
+- **首次悬浮的延时由 Qt 给**（实测 `QEvent::ToolTip` 到达时距鼠标移动约 700ms，且从一个有提示的控件移到另一个时 Qt 会自己缩短延时）—— 所以**不叠加任何自定义延时**，加了就是双重等待、手感发黏。
+- 气泡窗口是**常驻单例**，而 `setMode()` 只换全局调色板、不重挂已存在的顶层窗口 ⇒ 显示前要检查深浅色是否变过，变了就重挂一次样式表。
+
+### `TitleBar.h`
+
+- 按钮只发"意图"信号，动作由 `common/WindowFrame` 落地（接线在 `DSHHub` 构造函数）；外观全走 QSS，这里只换字形与发信号。
+- 拖动 / 双击最大化 / 贴边吸附 / 右键系统菜单**都不在这里实现** —— 命中测试把本控件覆盖的区域（按钮除外）当成系统标题栏交回系统。
+- **两条对外约定**：`objectName` 固定 `windowTitleBar`（拖动区/遮罩范围按它算）；三个窗口按钮带动态属性 `dshWindowControl=true`（命中测试排除，否则点按钮会变成拖窗口）。
+- `kHeight = 42`，`Main.cpp` 据此换算窗口高度。
+
+### `ShadowPanel.h`
+
+- 外壳透明，只在四周留白里画一圈阴影（`CardShadow`）；**被包的卡片保持原样** —— QSS 里的背景、圆角、边框一条都不用改。
+- `spec` **必须显式给**：各面的留白成本不一样（浮层不占布局、贴边的面板要从布局里切），用默认值容易悄悄用错档。
+- `setPadding` 的硬约束：要让外壳外面的布局不受影响，**覆盖值四边之和必须与 `padding(spec)` 保持一致**（总高不变）；传 `QMargins(-1,-1,-1,-1)` 恢复"按 spec 推导"。
+- 卡片圆角要跟卡片自己的 QSS 一致，阴影形状才对得上。
+
+### `StatusPopupWindow.h`
+
+- **为什么提取成基类**：插件市场弹窗与扩展管理弹窗原本各自复制了一份状态文本排版代码。排版逻辑是纯绘制辅助（`QFontMetrics`），所以留在 ui 层而不是 common。
+- `setStatus` 的完整文本**同时作为 tooltip**，并按当前标签宽度重排。
+
+### `ModelSelector.h`
+
+- 历史沿革：**原来是只管档位的 `ThinkingDepthSelector`**，改名并扩写后模型选择也归它，两者共用同一份目录数据。
+- 菜单在 chip **正上方**弹出（上拉），高度按内容适配、装不下才滚动。
+- **换模型时把档位清空**（交给新模型的默认档位），换档位时沿用当前 `provider/model`；两次都走 `session.selectModel`，**以服务端回显为准**。
+- **会话自己的选择在 `session/list` 行的 `projections.values.modelSelection` 里**（`modelCatalog` 只给部署默认值 `default`），由 `DSHHub` 从 `SessionCatalog` 取出来喂给 `overrideCurrentSelection`；`provider/model` 为空表示"服务端还没记录"，此时保持目录给的默认值不动。
+- 用 `QPushButton` 而非裸 `QWidget`：与原生 composer 的 `<button>` 语义一致，同时天然获得键盘焦点与无障碍/自动化可调用性。要自己覆写 `sizeHint`/`minimumSizeHint`（自身无文本，默认值偏小）。
+- `submitSelection` 是**乐观更新**：先改 chip → 发 RPC → 以服务端回显为准。
+
+### `ModelListPanel.h`
+
+- 表单放在滚动区**内部**（而不是窗口底部）：这样面板高度不随表单开合变化，"添加模型"按钮就不会跟着上下跳。
+- 数据与写入都在服务端：本面板**不保存任何模型清单**（刷新即重新向服务端要）。
+- 「获取模型」按当前路由问一次 `llm/discoverModels`，候选在输入框下方展开成下拉、点一条回填模型 ID（**只读，不写配置**）。
+
+### `Settings.h` / `PluginsManager.h`
+
+- 两者都是**随主窗口创建后一直存在的常驻对象**，不是一次性窗口实例；职责都是"界面搭建与交互 + 窗口本身的开关管理（遮罩、居中、判重、关闭清理）"。
+- 开关统一走 `openSettings()/closeSettings()`、`openPlugins()/closePlugins()`：主窗口只保留少量调用，**不再在 `DSHHub` 里管理遮罩成员**。
+- 遮罩是**窗口级**的（设置/插件/扩展管理/工具过滤共用同一层，由 `WindowFrame::showOverlay/hideOverlay` 持有）；宿主 resize 时通过 `syncOverlayToHost()` 保持铺满。
+- **每次打开都 `refreshOnOpen()` 重新拉数据**，避免常驻对象在服务端未就绪时就联网请求。
+- 模型与凭据**一律只与"当前所连服务端"打交道**：客户端不做任何本地配置读写，也不针对某个具体提供方写死任何东西（引用名由服务端 profile 给出）。
+- `agentPresetChanged` 的**生效范围由服务端定：只影响此后新建的会话，已有会话不受影响**。
+
+### `PopupWindow.h` / `ExtensionManagerPopup.h` / `LoadMoreButton.h` / `SpinnerWidget.h`
+
+- `PopupWindow`：无系统边框（无原生边框/圆角/白底/灰细边框/右上角关闭按钮）；空标题显示**可翻译的默认名**；语言切换后标题与关闭提示要跟着换。
+- `ExtensionManagerPopup` 继承 `StatusPopupWindow` 是为了与插件弹窗样式一致；逻辑分工：`extensions.json`/扩展目录/`cordis.patch.yml` → `ExtensionRegistry`，后台解压与安装 → `ExtensionInstallTask`。交互上**不直接弹文件选择框**，而是先打开管理窗口在其中安装。
