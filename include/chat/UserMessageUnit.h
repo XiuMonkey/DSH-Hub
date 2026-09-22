@@ -1,5 +1,7 @@
 #pragma once
 
+// 用户消息单元：QTextBrowser 子类，宽度限制在 [MinWidth, MaxWidth]，高度按内容自适应。
+
 #include <QString>
 #include <QTextBrowser>
 
@@ -16,7 +18,6 @@ public:
 	explicit UserMessageUnit(QWidget* parent = nullptr);
 	void setMessage(const QString& text);
 
-	/** 根据内容自动调整控件高度。 */
 	void updateHeightToContent();
 
 protected:
