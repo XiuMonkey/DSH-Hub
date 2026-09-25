@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>DSH Hub 代码风格整理 · 变更报告</title>
+<style>
+  :root {
+    --bg:#f7f8fa; --card:#ffffff; --ink:#1b1f26; --dim:#5d6875; --line:#e3e7ec;
+    --accent:#1a6fe8; --ok:#0f8a5f; --warn:#b4650a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:14px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:36px 28px 64px; }
+  h1 { font-size:25px; margin:0 0 6px; letter-spacing:-.2px; }
+  .sub { color:var(--dim); margin-bottom:26px; }
+  .sub code { background:#eceff3; padding:1px 6px; border-radius:4px; color:#334; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(158px,1fr)); gap:12px; margin:0 0 30px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .card .k { font-size:12px; color:var(--dim); margin-bottom:3px; }
+  .card .v { font-size:23px; font-weight:640; letter-spacing:-.4px; }
+  .card .d { font-size:12px; color:var(--ok); margin-top:1px; }
+  h2 { font-size:17px; margin:32px 0 12px; padding-bottom:7px; border-bottom:1px solid var(--line); }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line);
+    border-radius:10px; overflow:hidden; font-size:13px; }
+  th,td { padding:7px 11px; border-bottom:1px solid var(--line); text-align:left; }
+  th { background:#f0f3f7; font-weight:600; color:#3a4552; font-size:12px; }
+  tr:last-child td { border-bottom:none; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; color:var(--dim); }
+  td.ok { color:var(--ok); font-weight:600; }
+  td.fn { font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .col h3 { font-size:12.5px; margin:0 0 6px; color:var(--dim); font-weight:600; }
+  pre { margin:0; background:var(--card); border:1px solid var(--line); border-radius:9px;
+    padding:12px 14px; overflow-x:auto; font:12px/1.62 ui-monospace,Consolas,monospace; }
+  .bad { border-left:3px solid #d05a5a; }
+  .good { border-left:3px solid var(--ok); }
+  ul { padding-left:22px; } li { margin:5px 0; }
+  .tag { display:inline-block; background:#e8f0fd; color:var(--accent); border-radius:5px;
+    padding:1px 7px; font-size:12px; font-weight:600; margin-right:6px; }
+</style></head><body><div class="wrap">
+
+<h1>DSH Hub 代码风格整理 · 变更报告</h1>
+<div class="sub">提交 <code>b8edba2e</code> ｜ 基线快照 <code>cf9ba8ab</code> ｜ 124 files changed, 2418 insertions(+), 4899 deletions(-)</div>
+
+<div class="cards">
+  <div class="card"><div class="k">改动文件</div><div class="v">123</div><div class="d">全部源码</div></div>
+  <div class="card"><div class="k">总行数</div><div class="v">27157</div><div class="d">原 29574 ｜ -8%</div></div>
+  <div class="card"><div class="k">注释行</div><div class="v">2040</div><div class="d">原 3619 ｜ -44%</div></div>
+  <div class="card"><div class="k">include 区空行</div><div class="v">98</div><div class="d">原 147 ｜ -33%</div></div>
+  <div class="card"><div class="k">令牌校验</div><div class="v">123</div><div class="d">全部一致，0 失败</div></div>
+  <div class="card"><div class="k">编译</div><div class="v">0 错</div><div class="d">Release 链接通过</div></div>
+</div>
+
+<h2>三条规则的落实</h2>
+<ul>
+  <li><span class="tag">规则 1</span><b>空行只在逻辑块之间。</b>
+      include 区连成一片（收掉 33% 的 include 区空行）；块内不再撒空行，
+      同类连续语句连排；任何地方最多连续 1 个空行。</li>
+  <li><span class="tag">规则 2</span><b>注释只留约束与坑。</b>
+      删掉论证过程、历史沿革、举例与括号补充、复述代码的注释、ASCII 分节横幅、空注释行。
+      每个注释块 ≤ 2 行，文件头 ≤ 4 行；行尾 <code>//</code> 一律 ≤ 25 字。
+      注释行 3619 → 2040（<b>-44%</b>）。</li>
+  <li><span class="tag">规则 3</span><b>函数实参不拆行。</b>
+      能塞进 120 列的实参合并回同一行，用 <code>, </code> 分隔；续行只加 1 个 Tab，
+      不再对齐到括号下方；lambda 等"体内多行"的实参仍各占自己那一段。</li>
+</ul>
+
+<h2>改动前后对照</h2>
+<div class="cols">
+<div class="col"><h3>改前</h3><pre class="bad">void installWindowShell() 上方 7 行 Doxygen 注释
+// ------------------------------
+// DSHHub.cpp  （还有 21 行分节横幅）
+// ------------------------------
+TimingLogger::mark(...);
+                                     ← 空行
+installWindowShell();
+installServer(...);
+                                     ← 空行
+buildUi();
+                                     ← 空行
+installInputWiring();
+                                     ← 空行
+installSettingsAndPlugins();
+                                     ← 空行
+void fetch(
+    DshApiClient* api,
+    const QString& sessionId,
+    const std::function&lt;...&gt;&amp; onLoaded,
+    const std::function&lt;...&gt;&amp; onError)</pre></div>
+<div class="col"><h3>改后</h3><pre class="good">// 装配顺序三个约束：installWindowShell 最早
+// （无边框标志须在原生窗口创建前设置）… 共 3 行
+TimingLogger::mark(...);
+installWindowShell();
+installServer(...);
+installToolRuntime();
+buildUi();
+loadHighlightRules();
+installInputWiring();
+...
+installSettingsAndPlugins();
+
+void fetch(DshApiClient* api, const QString& sessionId,
+    const std::function&lt;...&gt;&amp; onLoaded,
+    const std::function&lt;...&gt;&amp; onError)
+
+api-&gt;callMethod(QLatin1String(kModelsMethod), SessionCommands::emptyArgs(),
+    [onLoaded](const QJsonObject&amp; v) { ... },</pre></div>
+</div>
+
+<h2>怎么证明没改坏代码</h2>
+<ul>
+  <li><b>令牌流等价校验</b>：写了个 C++ 词法器，把源码切成 token
+      （标识符/数字/字符串/字符/运算符/原始字符串），<b>丢弃注释与全部空白</b>后逐项比对。
+      123 个改动文件与基线快照<b>全部一致</b> —— 说明只动了注释、空行、换行，
+      标识符、字面量、数字、运算符、控制流、声明顺序、include 顺序、宏一个都没变。</li>
+  <li><b>编译器验证</b>：<code>build/windows-ninja</code> Release 全量重建，
+      60 个编译单元 + 链接，0 error / 0 FAILED，产出 <code>DSH Hub.exe</code>。</li>
+  <li><b>人工抽查</b>：逐一看过 DSHHub.cpp、ModelSelectionService.cpp/.h、
+      DshHostPlugin.h、VirtualCommon.h、ModelListPanel.cpp 等，注释成句、空行成块。</li>
+</ul>
+
+<h2>改得最多的文件（前 45）</h2>
+<table>
+<thead><tr><th>文件（source/ 下）</th><th>行数<br>前</th><th>行数<br>后</th>
+<th>注释行<br>前</th><th>注释行<br>后</th><th>行数<br>减少</th><th>注释<br>减少</th></tr></thead>
+<tbody><tr><td class=fn>src/core/DSHHub.cpp</td><td class=num>1494</td><td class=num>1211</td><td class=num>316</td><td class=num>102</td><td class=num ok>-283</td><td class=num ok>-214</td></tr>
+<tr><td class=fn>src/ui/ModelListPanel.cpp</td><td class=num>1701</td><td class=num>1534</td><td class=num>174</td><td class=num>44</td><td class=num ok>-167</td><td class=num ok>-130</td></tr>
+<tr><td class=fn>src/chat/MessageQuery.cpp</td><td class=num>1143</td><td class=num>1023</td><td class=num>136</td><td class=num>41</td><td class=num ok>-120</td><td class=num ok>-95</td></tr>
+<tr><td class=fn>src/network/DshApiClient.cpp</td><td class=num>1226</td><td class=num>1087</td><td class=num>145</td><td class=num>72</td><td class=num ok>-139</td><td class=num ok>-73</td></tr>
+<tr><td class=fn>src/core/MessageHost.cpp</td><td class=num>1022</td><td class=num>910</td><td class=num>190</td><td class=num>110</td><td class=num ok>-112</td><td class=num ok>-80</td></tr>
+<tr><td class=fn>src/ui/ChatInputWidget.cpp</td><td class=num>630</td><td class=num>536</td><td class=num>105</td><td class=num>25</td><td class=num ok>-94</td><td class=num ok>-80</td></tr>
+<tr><td class=fn>src/core/ServerManager.cpp</td><td class=num>839</td><td class=num>745</td><td class=num>110</td><td class=num>36</td><td class=num ok>-94</td><td class=num ok>-74</td></tr>
+<tr><td class=fn>src/ui/Tooltip.cpp</td><td class=num>501</td><td class=num>417</td><td class=num>124</td><td class=num>40</td><td class=num ok>-84</td><td class=num ok>-84</td></tr>
+<tr><td class=fn>src/ui/ModelSelector.cpp</td><td class=num>725</td><td class=num>631</td><td class=num>99</td><td class=num>30</td><td class=num ok>-94</td><td class=num ok>-69</td></tr>
+<tr><td class=fn>include/common/session/ModelSelectionService.h</td><td class=num>984</td><td class=num>860</td><td class=num>68</td><td class=num>46</td><td class=num ok>-124</td><td class=num ok>-22</td></tr>
+<tr><td class=fn>src/ui/Main.cpp</td><td class=num>364</td><td class=num>291</td><td class=num>98</td><td class=num>28</td><td class=num ok>-73</td><td class=num ok>-70</td></tr>
+<tr><td class=fn>include/network/DshApiClient.h</td><td class=num>319</td><td class=num>235</td><td class=num>98</td><td class=num>50</td><td class=num ok>-84</td><td class=num ok>-48</td></tr>
+<tr><td class=fn>src/chat/AgentMessageUnit.cpp</td><td class=num>1087</td><td class=num>1019</td><td class=num>83</td><td class=num>30</td><td class=num ok>-68</td><td class=num ok>-53</td></tr>
+<tr><td class=fn>src/common/session/ModelSelectionService.cpp</td><td class=num>417</td><td class=num>333</td><td class=num>63</td><td class=num>29</td><td class=num ok>-84</td><td class=num ok>-34</td></tr>
+<tr><td class=fn>src/ui/TopBar.cpp</td><td class=num>872</td><td class=num>813</td><td class=num>112</td><td class=num>64</td><td class=num ok>-59</td><td class=num ok>-48</td></tr>
+<tr><td class=fn>src/ui/Sidebar.cpp</td><td class=num>684</td><td class=num>629</td><td class=num>67</td><td class=num>30</td><td class=num ok>-55</td><td class=num ok>-37</td></tr>
+<tr><td class=fn>include/VirtualClass/VirtualCommon.h</td><td class=num>110</td><td class=num>75</td><td class=num>47</td><td class=num>12</td><td class=num ok>-35</td><td class=num ok>-35</td></tr>
+<tr><td class=fn>src/ui/TranslationUi.cpp</td><td class=num>187</td><td class=num>151</td><td class=num>49</td><td class=num>17</td><td class=num ok>-36</td><td class=num ok>-32</td></tr>
+<tr><td class=fn>src/ui/ExtensionManagerPopup.cpp</td><td class=num>327</td><td class=num>287</td><td class=num>37</td><td class=num>11</td><td class=num ok>-40</td><td class=num ok>-26</td></tr>
+<tr><td class=fn>include/core/MessageHost.h</td><td class=num>185</td><td class=num>148</td><td class=num>41</td><td class=num>13</td><td class=num ok>-37</td><td class=num ok>-28</td></tr>
+<tr><td class=fn>include/VirtualClass/VirtualApiTakeover.h</td><td class=num>110</td><td class=num>79</td><td class=num>81</td><td class=num>50</td><td class=num ok>-31</td><td class=num ok>-31</td></tr>
+<tr><td class=fn>src/ExtensionSystem/DllCaller.cpp</td><td class=num>851</td><td class=num>819</td><td class=num>47</td><td class=num>27</td><td class=num ok>-32</td><td class=num ok>-20</td></tr>
+<tr><td class=fn>src/ui/Settings.cpp</td><td class=num>441</td><td class=num>411</td><td class=num>41</td><td class=num>19</td><td class=num ok>-30</td><td class=num ok>-22</td></tr>
+<tr><td class=fn>src/ui/TitleBar.cpp</td><td class=num>163</td><td class=num>137</td><td class=num>32</td><td class=num>9</td><td class=num ok>-26</td><td class=num ok>-23</td></tr>
+<tr><td class=fn>include/core/DshHostPlugin.h</td><td class=num>49</td><td class=num>25</td><td class=num>33</td><td class=num>9</td><td class=num ok>-24</td><td class=num ok>-24</td></tr>
+<tr><td class=fn>include/core/DSHHub.h</td><td class=num>235</td><td class=num>205</td><td class=num>40</td><td class=num>23</td><td class=num ok>-30</td><td class=num ok>-17</td></tr>
+<tr><td class=fn>src/common/session/SessionCatalog.cpp</td><td class=num>287</td><td class=num>264</td><td class=num>23</td><td class=num>8</td><td class=num ok>-23</td><td class=num ok>-15</td></tr>
+<tr><td class=fn>include/ui/Sidebar.h</td><td class=num>256</td><td class=num>233</td><td class=num>22</td><td class=num>7</td><td class=num ok>-23</td><td class=num ok>-15</td></tr>
+<tr><td class=fn>src/common/extension/PluginMarketClient.cpp</td><td class=num>264</td><td class=num>246</td><td class=num>26</td><td class=num>9</td><td class=num ok>-18</td><td class=num ok>-17</td></tr>
+<tr><td class=fn>src/ui/PluginsManager.cpp</td><td class=num>462</td><td class=num>439</td><td class=num>27</td><td class=num>17</td><td class=num ok>-23</td><td class=num ok>-10</td></tr>
+<tr><td class=fn>include/common/appearance/ThemeManager.h</td><td class=num>129</td><td class=num>108</td><td class=num>26</td><td class=num>14</td><td class=num ok>-21</td><td class=num ok>-12</td></tr>
+<tr><td class=fn>src/ExtensionSystem/Thunk.cpp</td><td class=num>353</td><td class=num>338</td><td class=num>24</td><td class=num>8</td><td class=num ok>-15</td><td class=num ok>-16</td></tr>
+<tr><td class=fn>src/ui/SmoothWheelScroller.cpp</td><td class=num>186</td><td class=num>167</td><td class=num>24</td><td class=num>12</td><td class=num ok>-19</td><td class=num ok>-12</td></tr>
+<tr><td class=fn>src/common/extension/ExtensionRegistry.cpp</td><td class=num>326</td><td class=num>308</td><td class=num>18</td><td class=num>6</td><td class=num ok>-18</td><td class=num ok>-12</td></tr>
+<tr><td class=fn>src/common/appearance/ThemeManager.cpp</td><td class=num>692</td><td class=num>676</td><td class=num>46</td><td class=num>33</td><td class=num ok>-16</td><td class=num ok>-13</td></tr>
+<tr><td class=fn>src/ui/PopupWindow.cpp</td><td class=num>145</td><td class=num>131</td><td class=num>18</td><td class=num>5</td><td class=num ok>-14</td><td class=num ok>-13</td></tr>
+<tr><td class=fn>src/ExtensionSystem/ClientExtension.cpp</td><td class=num>352</td><td class=num>338</td><td class=num>39</td><td class=num>30</td><td class=num ok>-14</td><td class=num ok>-9</td></tr>
+<tr><td class=fn>include/ExtensionSystem/ExtensionDllLoader.h</td><td class=num>92</td><td class=num>80</td><td class=num>15</td><td class=num>4</td><td class=num ok>-12</td><td class=num ok>-11</td></tr>
+<tr><td class=fn>include/core/ServerManager.h</td><td class=num>74</td><td class=num>60</td><td class=num>14</td><td class=num>7</td><td class=num ok>-14</td><td class=num ok>-7</td></tr>
+<tr><td class=fn>src/chat/UserMessageUnit.cpp</td><td class=num>91</td><td class=num>80</td><td class=num>13</td><td class=num>5</td><td class=num ok>-11</td><td class=num ok>-8</td></tr>
+<tr><td class=fn>src/common/session/SessionService.cpp</td><td class=num>137</td><td class=num>120</td><td class=num>4</td><td class=num>2</td><td class=num ok>-17</td><td class=num ok>-2</td></tr>
+<tr><td class=fn>src/ExtensionSystem/DshNamedPipeBridge.cpp</td><td class=num>155</td><td class=num>140</td><td class=num>6</td><td class=num>3</td><td class=num ok>-15</td><td class=num ok>-3</td></tr>
+<tr><td class=fn>include/ui/LayoutUtils.h</td><td class=num>64</td><td class=num>55</td><td class=num>15</td><td class=num>6</td><td class=num ok>-9</td><td class=num ok>-9</td></tr>
+<tr><td class=fn>src/common/session/AgentPresetService.cpp</td><td class=num>86</td><td class=num>74</td><td class=num>13</td><td class=num>8</td><td class=num ok>-12</td><td class=num ok>-5</td></tr>
+<tr><td class=fn>src/common/settings/ClientSettings.cpp</td><td class=num>197</td><td class=num>188</td><td class=num>12</td><td class=num>5</td><td class=num ok>-9</td><td class=num ok>-7</td></tr></tbody>
+</table>
+
+<h2>怎么回退 / 怎么继续</h2>
+<ul>
+  <li><b>整体回退</b>：<code>git revert b8edba2e</code>，或
+      <code>git checkout cf9ba8ab -- source/</code> 只还原源码。</li>
+  <li><b>看单个文件</b>：<code>git diff cf9ba8ab..b8edba2e -- source/src/core/DSHHub.cpp</code></li>
+  <li><b>防止再被弄脏</b>：根目录已放 <code>.clang-format</code>（Tab 缩进、列宽 120、
+      实参不拆行、大括号 Allman）。改完代码跑一次
+      <code>clang-format -i &lt;文件&gt;</code> 即可对齐。按你的选择，现有代码没有被它批量重排。</li>
+  <li><b>被删掉的信息</b>：注释里的设计论证/历史沿革被删了，原文都在
+      <code>cf9ba8ab</code> 这个快照里，需要时用 git 翻。</li>
+</ul>
+
+</div></body></html>
