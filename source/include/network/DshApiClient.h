@@ -15,6 +15,11 @@
 #include <QUrl>
 #include <functional>
 
+// 后端接管的两半接口：本类实现接口一（VirtualApiHost，插件调用宿主），
+// 扩展实现接口二（VirtualApiSink，宿主调用扩展）。全内联、独立头文件
+// —— 本类的成员全在 .cpp（out-of-line），插件一碰这个类型就 LNK2019。
+#include "VirtualClass/VirtualApiTakeover.h"
+
 class QJsonDocument;
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -22,9 +27,18 @@ class QTimer;
 class QWebSocket;
 
 // DSH API 客户端；典型用法：setBaseUrl()（内部换掉 cookie）→ openStreams() → callMethod() / 监听 muxFrameReceived。
-class DshApiClient : public QObject
+//
+// 本类是全项目**唯一的出站咽喉**（8 个出站方法、18 个一元端点、4 条 mux 流、认证握手），
+// 所以"让客户端扩展接管后端"只需要在类内按 m_takenover 分流：接管态下不走 HTTP，
+// 把请求交给扩展（VirtualApiSink::OnOutboundRequest），扩展回填后由本类触发原回调。
+// 宿主上层（DSHHub / MessageHost / 服务层 / MessageQuery / HistoryLoader）一行不改。
+class DshApiClient : public QObject, public VirtualApiHost
 {
 	Q_OBJECT
+	// ⚠️ 不能漏：qobject_cast<VirtualApiHost*> 走 moc 生成的 qt_metacast，而它只认这里
+	// 列出的 IID —— 漏了就**永远 cast 出 nullptr 且不报错**（插件侧因此拿不到接口）。
+	// 与 core/ConnectionManager.h 的 Q_OBJECT + Q_INTERFACES 成对写法同款。
+	Q_INTERFACES(VirtualApiHost)
 
 public:
 	// RPC 业务错误：HTTP 成功但 result.ok == false 时使用。
@@ -41,28 +55,51 @@ public:
 	~DshApiClient() override;
 
 	// 设置 DSH 服务的基础 URL（例如 http://127.0.0.1:3080）；会取走 ?token= 并启动认证握手。
+	// 接管态下忽略（只记日志）：那条地址指向的是即将被停掉的内置服务端，接了也没用。
 	void setBaseUrl(const QUrl& url);
 
-	// 当前设置的 DSH 基础 URL。
+	// 当前设置的 DSH 基础 URL；**接管态下恒为空**（D6=B）。
+	// 理由：那个地址指向的 DSH 已经不在了，回显给设置界面（Settings.cpp:361）只会误导；
+	// 而唯一的"靠它干活"的路径（authenticatedBaseUrl → 切主题带地址给新窗口）在接管态
+	// 由 ServerManager 的进程级接管标记挡住，不会因为拿到空值就去重新拉起内置服务端。
 	QUrl baseUrl() const;
 
 	// 启动令牌（认证 URL 上的 ?token=）：重建主窗口（切主题）时必须一起带过去，否则新窗口换不到 cookie、界面永远停在初始化里。
-	QString launchToken() const { return m_launchToken; }
+	// **接管态下恒为空**（D6=B）：接管后没有内置服务端，也就没有令牌可带。
+	QString launchToken() const { return m_takenover ? QString() : m_launchToken; }
 
 	// 打开 mux 上的逻辑流；$events 收到 ready 帧后发出 connected()。
+	// 接管态下忽略（只记日志）：流由扩展负责，它开始喂数据的时机是自己那次 Takenover(true)。
 	void openStreams();
 
 	// 关闭流通道（WebSocket + 它上面的全部逻辑流）。
+	// 接管态下只清本地账本（不碰 WebSocket、也不通知扩展）—— 这条路径会被本类析构调用，
+	// 而析构期间回调进扩展是不安全的；扩展要退出靠自己的 detachHost() 调 Takenover(false)。
 	void closeStreams();
 
 	// 跟随一个会话（在 mux 上开 session/follow，换会话时自动换流）；快照经 sessionSnapshotReady，之后的实时日志走 muxFrameReceived。
+	// 接管态下改成通知扩展（"$takeover/stream-open"）—— 扩展必须知道界面要看哪个会话。
 	void followSession(const QString& sessionId);
 
-	// 关闭当前的 session/follow 逻辑流。
+	// 关闭当前的 session/follow 逻辑流。接管态下通知扩展（"$takeover/stream-cancel"）。
 	void unfollowSession();
 
 	// 判定标准：mux WebSocket 已打开，且 $events 逻辑流已收到 ready 帧。
+	// **接管态下恒为 true**（D6=B）：传输已归扩展所有，宿主这边没有任何"没连上"的判据；
+	// 恒 true 还能顺带压掉唯一那处调用（DSHHub.cpp:169 的"服务端已退出"提示）——
+	// 接管时正是我们主动把那个进程杀掉的，不该弹给用户。
 	bool isConnected() const;
+
+	// 后端是否处于接管态（原始上报/提问应答的分流、DSHHub 的旁路开关都看它）。
+	bool isTakenover() const { return m_takenover; }
+
+	// ---- VirtualApiHost：插件调用宿主（插件 → 宿主）----
+	// D1=A / D0=A。幂等；拿不到扩展接收端（kApiSink 未登记或已卸载）时**拒绝接管**并记警告。
+	void Takenover(bool on) override;
+	// D3：扩展回填一次出站请求的成功结果（resultJson = 成功回调该拿到的那份 value）。
+	void CompleteCall(const char* rpcId, const char* resultJson) override;
+	// D3：扩展回填失败（code / message 原样进 RpcError）。
+	void FailCall(const char* rpcId, const char* code, const char* message) override;
 
 	// 发一元 RPC：payload 是本端点的 args 内容（这里负责包一层 {"args": …}，键名用描述符里的 wire 名）；endpoint 用斜杠（"session/list"，不是点号），返回裸数组的端点改用 callMethodValue。
 	void callMethod(
@@ -86,6 +123,13 @@ public:
 		std::function<void(const RpcError& error)> onError = {});
 
 signals:
+	// 接管开关被拨动（插件调 VirtualApiHost::Takenover 时发）。
+	// ⚠️ 这是**宿主内部**的信号（DSHHub 靠它停掉内置 DSH 进程、关掉三条 DSH 专属旁路），
+	// 与"插件 ↔ 宿主不走信号"那条设计决定无关：插件侧那两个方向走的是 VirtualApiHost /
+	// VirtualApiSink 两个公共虚接口，入站注入走字符串 invokeMethod。
+	// 幂等：重复拨到同一个状态也会发一次（宿主侧的动作本来幂等，漏掉才危险）。
+	void takeoverChanged(bool takenover);
+
 	// mux 上 $events 逻辑流收到 ready 帧（事件源就绪）。
 	void connected();
 
@@ -121,9 +165,12 @@ private:
 	// 一个尚未收到响应的 HTTP RPC（在响应返回时按 rpcId 匹配回调）。
 	struct PendingCall
 	{
-		QString path;       // 请求的 API 路径，例如 /api/session/list
+		QString path;       // 请求的 API 路径，例如 /api/session/list（接管路径记 "takeover:<方法名>"）
 		std::function<void(const QJsonValue& value)> onSuccess;
 		std::function<void(const RpcError& error)> onError;
+		// ---- 以下两项只有接管路径会置位（HTTP 路径保持默认值）----
+		bool takeover = false;                        // 这条请求是交给扩展的
+		qint64 takeoverDeadlineMs = 0;                // 回填最后期限（ms since epoch）；0 = 不检查
 	};
 
 	// 认证还没就绪时先挂起来的 RPC：服务端刚重启那一两秒里直发必然 401，挂起来等握手完成再按顺序补发。
@@ -149,7 +196,43 @@ private:
 	};
 
 	// 主线程处理解析完成后的响应（拆 result 信封并调用成功/失败回调）。
+	// ⚠️ **接管路径的回填不走这里**：它第一步查的是 m_parsing，而接管路径的条目只登记在
+	//    m_pending 里 —— 复用它只会命中 "stale parsed response" 分支，静默丢掉回调。
 	void handleParsedResponse(const QString& rpcId, const QJsonDocument& doc);
+
+	// ------------------------------------------------------------------
+	// 后端接管（DshApiClient 内部按 m_takenover 分流）
+	// ------------------------------------------------------------------
+	// 接管态下一次出站请求的回填时限（ms）：扩展不回填时不能让调用方永久挂起
+	// —— 未接管路径有认证硬失败（failAuthQueue）兜底，接管路径什么都没有。
+	static constexpr qint64 kTakeoverCallTimeoutMs = 120000;
+
+	// 取当前登记为接收端的扩展根对象（kApiSink）。**每次现取**：插件可能已被卸载
+	// （注册表的值是 QPointer，自动置空），也可能被另一个扩展顶掉。
+	VirtualApiSink* apiSink() const;
+
+	// 把一次请求交给扩展。返回 false = 没有接收端，调用方应当当场把这条请求失败掉。
+	bool sendToSink(const QString& rpcId, const QString& method, const QJsonObject& args);
+
+	// 接管路径的一元 RPC 入口：回调留在本类的 m_pending（std::function 不是 metatype，
+	// 不能随接口/信号传出去），入表 + 记超时期限 + 交给扩展。
+	void dispatchTakeoverCall(const QString& rpcId, const QString& method, const QJsonObject& args,
+		std::function<void(const QJsonValue&)> onSuccess,
+		std::function<void(const RpcError&)> onError);
+
+	// 按 rpcId 取出挂着的一条请求并用错误收尾；rpcId 不在表里返回 false。
+	bool failPending(const QString& rpcId, const QString& code, const QString& message);
+
+	// 把所有还挂着的**接管**请求用错误收尾（扩展交还后端时用）。
+	void failTakeoverPending(const QString& code, const QString& message);
+
+	// 回填超时扫描（接管态下由 m_takeoverSweep 周期驱动）。
+	void sweepTakeoverTimeouts();
+
+	// 进入接管态的一次性收尾（判废在途认证 / 断开 mux / 把等认证的请求改投扩展）。
+	void enterTakenoverState();
+	// 交还后端的一次性收尾（失败掉挂着的接管请求）。
+	void leaveTakenoverState();
 
 	// 把 HTTP URL 转换成对应的 WebSocket URL（http→ws、https→wss）。
 	QUrl makeUrl(const QString& path) const;
@@ -224,6 +307,12 @@ private:
 	bool m_streamClosing = false;           // 正在主动关闭：此时断线不触发重连
 	QTimer* m_reconnectTimer = nullptr;     // 断线后的重连定时器
 	int m_reconnectDelayMs = 1000;          // 重连退避（重连成功后复位）
+
+	// 后端接管：true = 本客户端的全部出站交给客户端扩展（见 VirtualApiTakeover.h），
+	// 不走 HTTP、不开 mux、不启动认证握手；由插件调 VirtualApiHost::Takenover 拨动。
+	bool m_takenover = false;
+	// 接管态下的回填超时扫描（只有接管态才跑；未接管路径不经过它）。
+	QTimer* m_takeoverSweep = nullptr;
 
 	bool m_destroyed = false;               // 正在析构，忽略后续回调
 };

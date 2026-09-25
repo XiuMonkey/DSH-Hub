@@ -142,6 +142,9 @@ public:
 	void setSessionId(const QString& sessionId);
 	// 服务端地址用回调现取（它会随启动/重启变化，回调省掉排序问题）
 	void setBaseUrlProvider(std::function<QUrl()> provider);
+	// 工具过滤入口的开关：后端被客户端扩展接管时关掉（那颗按钮走的是 DSH 服务端专属的
+	// /api/tools-filter，自带 QNetworkAccessManager，与接管后的后端无关）。
+	void setToolsFilterEnabled(bool enabled);
 	// 窗口缩放或移动后由 DSHHub 统一调：遮罩重新铺满 + 工具过滤窗口重新居中
 	void syncOverlayToHost();
 

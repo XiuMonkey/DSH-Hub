@@ -791,6 +791,20 @@ void TopBar::loadTools(bool pushToPopup)
 		});
 }
 
+// 工具过滤入口的开关（后端接管时关掉）。关掉时顺手收起已经打开的窗口 —— 它拉的是
+// DSH 服务端专属的 /api/tools-filter，接管后那个服务端已经不在了，留着只会显示失败。
+void TopBar::setToolsFilterEnabled(bool enabled)
+{
+	// ⚠️ 不要拿 isVisible() 当"当前是否已隐藏"来判重：窗口还没 show() 时子控件的
+	// isVisible() 一律是 false（切主题重建窗口 + 插件重新接管正好走这条时序），那样会漏掉
+	// 这一次 setVisible(false)。直接设，重复调用本身无副作用。
+	if (m_toolsButton)
+		m_toolsButton->setVisible(enabled);
+
+	if (!enabled)
+		closeToolsFilter();
+}
+
 void TopBar::openToolsFilter()
 {
 	QWidget* host = window();

@@ -6,11 +6,6 @@
 #include <QString>
 #include <QThread>
 
-// HostExports.h 里那两个 C 入口的**定义**（只有宿主 exe 编这个文件）。
-
-// extern "C" 保证导出表里是未修饰的名字。用显式 __declspec 而不是 Q_DECL_EXPORT：
-// 后者是"给 Qt 自己建库用"的宏，展开随编译器/平台分支变化，末尾还有一段展开成空的
-// 兜底（<Qt>/include/QtCore/qcompilerdetection.h），表达不了"这个 exe 必须导出"。
 #if defined(Q_OS_WIN)
 #  define DSHHUB_HOST_EXPORT extern "C" __declspec(dllexport)
 #else

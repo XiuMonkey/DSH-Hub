@@ -188,6 +188,16 @@ namespace
 		"# Delete the two lines below to get the adapter's shipped catalog back.\n"
 		"llm-deepseek:\n"
 		"  models: []\n";
+
+	// ------------------------------------------------------------------
+	// 进程级"后端已被接管"标记
+	// ------------------------------------------------------------------
+	// 客户端扩展接管 DSH API 时置上（见 DshApiClient::Takenover）。刻意是**文件作用域静态**
+	// 而不是成员：ServerManager 每个主窗口一份，切主题会新建一个，而接管状态跨窗口存活
+	// （插件实例在进程内复用、新窗口会对它再调一次 attachHost）。用成员的话，切主题后新窗口
+	// 的 start() 会把内置 DSH 进程重新拉起来 —— 而那正是接管要避免的事。
+	// 只在 GUI 线程读写。
+	bool g_backendTakenover = false;
 } // namespace
 
 ServerManager::ServerManager(QObject* parent)
@@ -208,6 +218,22 @@ void ServerManager::start(const QUrl& initialBaseUrl, QProcess* initialServerPro
 	const QString appDir = QCoreApplication::applicationDirPath();
 	m_dshHome = appDir + QStringLiteral("/resources/server/harness");
 
+	// 接管态：不启动内置 DSH 服务端（它是这条路线上唯一的后端，而它已经被扩展取代了）。
+	// ⚠️ 位置刻意在 m_dshHome 赋值**之后**：Settings / PluginsManager 是在 start() 之后
+	//    创建的，它们要用 dshHome；提前 return 会把它们带进"空 dshHome"的坑里。
+	if (g_backendTakenover) {
+		// 接管之后还有进程被移交给本窗口（takeProcess()）：那种情况把那条进程一并停掉，
+		// 否则它就成了一条没人管、还在跑的内置服务端（stopForTakeover 幂等）。
+		if (initialServerProcess) {
+			m_serverProcess = initialServerProcess;
+			m_serverProcess->setParent(this);
+			stopForTakeover();
+		}
+		qInfo().noquote() << QStringLiteral(
+			"[ServerManager] 后端已被客户端扩展接管：不启动内置 DSH 服务端");
+		return;
+	}
+
 	QUrl baseUrl = initialBaseUrl;
 	if (baseUrl.isEmpty())
 		baseUrl = storedServerUrl();
@@ -227,6 +253,15 @@ void ServerManager::start(const QUrl& initialBaseUrl, QProcess* initialServerPro
 
 void ServerManager::restart()
 {
+	// 接管态：重启内置服务端没有任何意义（它已经被扩展取代，且进程早就停了）。
+	// 触达这条路径的有：设置里保存服务端设置（DSHHub.042）、插件里的"重启服务"——
+	// 市场入口已禁用，但这条线仍可能从别处走到，所以在这里明确变成 no-op 而不是"假装成功"。
+	if (g_backendTakenover) {
+		qInfo().noquote() << QStringLiteral(
+			"[ServerManager] 后端已被客户端扩展接管：restart() 不重启内置 DSH 服务端");
+		return;
+	}
+
 	m_restarting = true;
 
 	if (m_serverProcess && m_serverProcess->state() != QProcess::NotRunning) {
@@ -250,6 +285,55 @@ void ServerManager::publishBaseUrl(const QUrl& url)
 	m_baseUrl = url;
 	m_restarting = false;
 	emit baseUrlReady(m_baseUrl);
+}
+
+// 接管时停掉已经启动的内置 DSH 进程。
+//
+// ⚠️ 不用 takeProcess()：那是"把进程移交给下一个窗口"（会把 parent 置空并交出去），
+//    这里要的是真停掉 —— 所以照 restart() 里那段现成的 kill 写法，只是把"停止"和
+//    "重启"分开。
+// ⚠️ 幂等：切断点有四种，都必须当成功处理 —— ① 进程还没 spawn（nullptr）；
+//    ② 正在启动；③ 已经退出（NotRunning）；④ 已经停过（nullptr）。所以判空 + 判状态，
+//    并且无论哪种都把指针清干净。
+void ServerManager::stopForTakeover()
+{
+	setTakenover(true);
+
+	if (!m_serverProcess) {
+		qInfo().noquote() << QStringLiteral(
+			"[ServerManager] 接管：当前没有内置 DSH 进程可停（还没启动 / 已移交）");
+		return;
+	}
+
+	if (m_serverProcess->state() != QProcess::NotRunning) {
+		qInfo().noquote() << QStringLiteral("[ServerManager] 接管：停掉内置 DSH 进程 pid=")
+			<< m_serverProcess->processId();
+		m_serverProcess->kill();
+		m_serverProcess->waitForFinished(2000);
+	}
+	else {
+		qInfo().noquote() << QStringLiteral(
+			"[ServerManager] 接管：内置 DSH 进程已退出，只做清理");
+	}
+
+	delete m_serverProcess;
+	m_serverProcess = nullptr;
+}
+
+void ServerManager::setTakenover(bool takenover)
+{
+	if (g_backendTakenover == takenover)
+		return;
+
+	g_backendTakenover = takenover;
+	qInfo().noquote() << QStringLiteral("[ServerManager] 后端接管标记 ->")
+		<< (takenover ? QStringLiteral("已接管（不再启动/重启内置 DSH 服务端）")
+			: QStringLiteral("已复位（内置 DSH 服务端可再次启动/重启）"));
+}
+
+bool ServerManager::isTakenover()
+{
+	return g_backendTakenover;
 }
 
 QProcess* ServerManager::takeProcess()

@@ -173,6 +173,9 @@ private:
 	void installSettingsAndPlugins();
 	// 登记宿主对象 + 装载客户端扩展（必须最后：插件要查注册表、往已建好的布局挂控件）
 	void registerHostObjects();
+	// 后端接管态下的三条 DSH 专属旁路开关（工具过滤 / 插件市场 / 启动 DSH 进程），
+	// 由 DshApiClient::takeoverChanged 驱动；幂等。**不动"扩展管理"**。
+	void applyTakeoverBypasses(bool takenover);
 
 	void callSessionCreate();
 	// 新建会话挂到哪个工作区：优先"当前会话所在的那个"，其次退回基线里的第一个（服务端 session/create 响应里没有 workspaceId，归属只能来自 workspace/follow 基线）。

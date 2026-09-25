@@ -604,6 +604,16 @@ WorkspaceList* Sidebar::workspaceList() const
 	return m_workspaceList;
 }
 
+// 插件市场入口的开关（后端接管时收掉）。扩展管理那颗按钮不在这里 —— 它是客户端扩展的
+// 装载通道，接管态下必须照旧可用（接管机制本身要靠它把扩展装进来）。
+// ⚠️ 不拿 isVisible() 判重：窗口还没 show() 时它恒为 false（切主题重建窗口 + 插件重新
+// 接管正好走这条时序），那样会漏掉这一次 setVisible(false)。直接设，重复调用无副作用。
+void Sidebar::setPluginsEntryEnabled(bool enabled)
+{
+	if (m_pluginsButton)
+		m_pluginsButton->setVisible(enabled);
+}
+
 void Sidebar::addCreatedSession(const QString& sessionId, const QString& workspaceId)
 {
 	if (sessionId.isEmpty() || !m_workspaceList)

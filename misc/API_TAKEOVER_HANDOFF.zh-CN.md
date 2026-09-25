@@ -167,6 +167,18 @@ call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 "D:\Qt\Tools\CMake_64\bin\cmake.exe" --build "<仓库>\build\windows-ninja" --target dshhub_tests
 ```
 
+> ⚠️ **改过任何头文件之后必须整编这个目标**（`build/windows-ninja` 的 `dshhub_tests` 目标
+> **记不到头部依赖**：Ninja 规则是 `deps = msvc`，而本机 MSVC 输出的是本地化前缀
+> `注意: 包含文件:`（`VSLANG=1033` 也不改），Ninja 只认英文 `Note: including file:` ⇒
+> 每个 `.obj` 的 depfile 都是 0 条依赖。表现：改了 `include/**.h` 之后增量构建只重编少数
+> 几个 `.cpp`，其余仍是旧布局 ⇒ **同一个类在不同 TU 里布局不一致（ODR）⇒ 0xC0000005 崩溃
+> 或莫名的断言失败**，而且换个编译开关就"自动好了"，极难查。实证：只给 `DshApiClient`
+> 加两个空成员、其它一律不动，就能把这套崩溃复现出来。
+> 整编办法：`Get-ChildItem source,tests -Recurse -Include *.cpp,*.h | % { $_.LastWriteTime = (Get-Date) }`
+> 然后重新构建（或直接删掉构建目录重建）。**判断是否踩坑**：`ninja -t deps` 里看
+> `<某个>.obj: #deps 0` —— `#deps 0` 就是没记到依赖。`ninja -n` 在改过头文件后应当列出
+> 一串待重编的目标，什么都不列就是踩了。
+
 **跑测试**（两个坑）：
 
 1. 程序是 **WIN32 子系统，抓不到 stdout** —— 用 `DSHHUB_TEST_REPORT_DIR` 取逐类报告：
@@ -200,6 +212,47 @@ call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 
 ## 8. 交接时的工作树状态
 
+> ✅ **更新（宿主侧已实现）**：本文 §3 里那 8 个文件已经全部改完，另有 2 个文件为连带改动
+> （见下表）。接口 IID 与两半方法签名已经落地，**不要改**（改了旧插件静默 `nullptr`）。
+> `dshhub_tests` 整编后基线仍是 **209 passed / 0 failed / 3 skipped**（接管分支无测试覆盖）。
+>
+> | # | 文件 | 本轮改动 |
+> |---|---|---|
+> | 1 | `source/include/VirtualClass/VirtualApiTakeover.h`（新） | `VirtualApiHost`（宿主实现）+ `VirtualApiSink`（插件实现），**两个 IID 已定**；文件头写明了出站下发形态与错误码词汇表 |
+> | 2 | `source/include/core/HostExports.h` | 新增 `kApiClient` / `kApiSink` 两个 index |
+> | 3 | `source/include/network/DshApiClient.h` | 多继承 `VirtualApiHost` + `Q_INTERFACES`；`m_takenover`；`takeoverChanged` 信号（宿主内部用）；三个 `override`；接管辅助方法声明 |
+> | 4 | `source/src/network/DshApiClient.cpp` | 8 个出站方法分流（一元 RPC 的分流点统一在 `post()` 顶部、认证队列之前）+ `Takenover` / `CompleteCall` / `FailCall` + 超时兜底 + 进/出接管态的一次性收尾 |
+> | 5 | `source/src/core/DSHHub.cpp`（+`.h`） | 登记/注销 `kApiClient`；`DSHHub.045` 接线（停进程 + 关旁路）；`DSHHub.026` 拦截市场入口；`applyTakeoverBypasses()` |
+> | 6 | `source/src/ExtensionSystem/ClientExtension.cpp` | 装载时 `qobject_cast<VirtualApiSink*>(root)` → 登记 `kApiSink`；**拿不到只记日志、不拒绝装载**（既有扩展都没实现接口二，拒绝装载会把它们全废掉）；真正的拒绝发生在 `Takenover(true)` |
+> | 7 | `source/include/core/ServerManager.h`（+`.cpp`） | `stopForTakeover()`（幂等：判空/已退出/已停过都算成功）+ **进程级**接管标记 `setTakenover()`/`isTakenover()`；接管态下 `start()`/`restart()` 变 no-op（`start()` 仍先填 `dshHome`，Settings/PluginsManager 要用） |
+> | 8 | `source/include/core/DshHostPlugin.h` | `detachHost()` 契约补"接管了后端的扩展必须在这里复位" |
+> | 9 | `source/include/ui/TopBar.h`(+`.cpp`)、`source/include/ui/Sidebar.h`(+`.cpp`) | `setToolsFilterEnabled()` / `setPluginsEntryEnabled()`（**只关市场那一颗，扩展管理照旧**） |
+> | 10 | `source/CMake/CMakeLists.txt` + 两个 `.vcxproj`（+`.filters`） | 测试目标补 `CommonRegistry.cpp`/`.h`（`DshApiClient.cpp` 新增了对公共注册表的引用）；新增接口头进 `.vcxproj` |
+>
+> **实现期定下的两件事**（D6/D7，已回填到方案文档 §2.8）：接管态下 `baseUrl()`/`launchToken()`
+> 返回空、`isConnected()` 恒 true；宿主产生的错误码统一 `takenover-` 前缀。
+>
+> **留给插件侧（下一轮）的接口契约**：出站请求的形态、`$takeover/stream-open`/`stream-cancel`
+> 两条流控制、以及"开始喂数据的时机是 `Takenover(true)`" —— 都写在
+> `VirtualClass/VirtualApiTakeover.h` 的文件头，实现插件前先读它。
+>
+> **宿主侧已做的运行期验证**（仓库外一次性冒烟程序：把 `DshApiClient` / `ConnectionManager` /
+> `CommonRegistry` 的 `.obj` 直接从 `build/windows-ninja/CMakeFiles/dshhub_tests.dir/` 链进来，
+> 配一个自己 moc 出来的假扩展根对象，28 项断言全过；它不进仓库、不动 209 基线）。覆盖到的有：
+> 没有接收端时**拒绝接管**、登记后接管成功、D6 三个读接口、接管态下 `setBaseUrl` 被忽略、
+> `callMethod` 下发（方法名 / 原始 args payload / 宿主生成的 rpcId）、`CompleteCall` 的对象 /
+> 数组 / **裸标量**三种形态、`FailCall` 的 code 透传、不认识的 rpcId 只记日志、
+> `respond` 绕过 `m_clientId` 门槛且不带空 clientId、两条流控制通知（含 sessionId）、
+> 还台时挂着的请求以 `takenover-released` 收尾、还台后普通 DSH 路径恢复、重复 `Takenover(true)` 幂等。
+> **未覆盖**：真实 QPlugin DLL 装载路径、入站槽注入（`invokeMethod` 那 11 个槽）、
+> 停内置 DSH 进程与三条旁路的实际界面效果 —— 这些要么属于插件侧，要么要在真客户端里手工看。
+>
+> ⚠️ 冒烟测试抓出过一个真 bug（已修）：`CompleteCall` 的裸标量回退把值包进 `[]` 之后
+> **忘了把那一层拆掉**，于是裸标量会变成单元素数组。这类"看着对、跑起来才知道"的点，
+> 说明下一轮也要照同样的方式跑一遍，别只靠读代码。
+
+**（以下为交接当时的原始状态，留档）**
+
 **本项工作还没有写过任何实现代码** —— 只有方案文档。
 
 **本轮讨论新增的两个文档**（未跟踪，`git status` 会显示）：
@@ -219,6 +272,13 @@ call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 ---
 
 ## 9. 给接手者的第一条行动建议
+
+> ✅ **这一条已经做完了**（两个接口头 + 宿主侧全部接线，见 §8 的更新表）。
+> 现在的第一条建议变成：**读 `VirtualClass/VirtualApiTakeover.h` 的文件头**（出站下发形态与
+> 错误码词汇表都在那儿），然后按它写插件侧的接收端（根对象上 `Q_INTERFACES(DshHostPlugin
+> VirtualApiSink)`、`attachHost()` 里取 `kApiClient` 调 `Takenover(true)`、回填走
+> `CompleteCall`/`FailCall`、入站用字符串 `invokeMethod` 调 DSHHub 的槽）。
+> （下面是交接当时的原文，留档。）
 
 先把 **§2.6 的两个接口头文件**写出来（纯虚、全内联、两个 IID），编译通过即可 —— 它不依赖任何其他改动，且能立刻验证"接口形态 + 多继承"这套在本项目的构建里没问题。之后再动 `DshApiClient` 的分支。
 

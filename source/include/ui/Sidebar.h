@@ -216,6 +216,12 @@ public:
 		const std::function<void()>& onCleared,
 		const std::function<void()>& onCreateNew);
 
+	// 插件市场入口的开关：后端被客户端扩展接管时收掉那颗按钮（市场整条路都是 DSH 服务端
+	// 专属的 7 个 /dsh-market/* 端点 + pnpm/dsh CLI）。
+	// ⚠️ **只管市场那一颗**：扩展管理（m_extensionButton，extensionsRequested）是客户端扩展
+	// 的装载通道，接管时绝不能跟着关 —— 见 misc/API_TAKEOVER_PLAN.zh-CN.md §2.5-A 那张表。
+	void setPluginsEntryEnabled(bool enabled);
+
 signals:
 	void newWorkspaceRequested();
 	void createSessionInWorkspaceRequested(const QString& workspaceId);

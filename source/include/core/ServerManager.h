@@ -20,6 +20,18 @@ public:
 		QProcess* initialServerProcess = nullptr);
 	void restart();
 
+	// ---- 后端接管（客户端扩展接管 DSH API 时用，见 core/DshApiClient.h）----
+	// 停掉已启动的内置 DSH 进程，并把进程级接管标记置上。⚠️ 幂等：进程不存在、已经退出、
+	// 已经停过都算成功（切主题会让同一个插件实例再接管一次，重复到来是常态）。
+	void stopForTakeover();
+
+	// 拨动"本进程的后端已被接管"标记。**进程级**（文件作用域静态）而不是实例成员：
+	// ServerManager 每个窗口一份，切主题会新建，而接管状态跨窗口存活 —— 用实例成员会在
+	// 切主题后丢掉，新窗口的 start() 又会把 DSH 进程拉回来。
+	// 接管态下 start() / restart() 一律 no-op（唯一例外：start() 仍会填充 dshHome）。
+	static void setTakenover(bool takenover);
+	static bool isTakenover();
+
 	// 移交服务进程（接管方通过 start() 的 initialServerProcess 参数拿回）
 	QProcess* takeProcess();
 

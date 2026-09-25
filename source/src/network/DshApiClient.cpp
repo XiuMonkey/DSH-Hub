@@ -3,9 +3,13 @@
 
 #include "network/DshApiClient.h"
 #include "core/ConnectionManager.h"
+#include "core/HostExports.h"
+#include "common/util/CommonRegistry.h"
 
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonParseError>
 #include <QMetaObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -95,6 +99,14 @@ DshApiClient::DshApiClient(QObject* parent)
 		if (wasConnected)
 			scheduleReconnect();
 	});
+
+	// 接管态下的回填超时扫描：扩展拿到请求却不回填时，这是唯一能让调用方脱身的机制。
+	// 用一个周期定时器而不是每条请求建一个 QTimer —— 首屏那批出站（session/list +
+	// 十几条 session/page）一口气就是十几条，逐个建定时器不划算。
+	m_takeoverSweep = new QTimer(this);
+	m_takeoverSweep->setInterval(5000);
+	dshRegister("DshApiClient.006",
+		m_takeoverSweep, &QTimer::timeout, this, &DshApiClient::sweepTakeoverTimeouts);
 }
 
 // 析构：先关闭流通道，再释放 QWebSocket 对象。
@@ -113,6 +125,15 @@ DshApiClient::~DshApiClient()
 // 设置 DSH 服务基础 URL，后续所有 HTTP/WebSocket 请求都基于它拼接；dsh 0.1.5 起服务端打印的是认证 URL（http://127.0.0.1:<port>/?token=<令牌>），这里把令牌单独保存、基础 URL 保持干净，避免把 ?token= 拼到每个请求上。
 void DshApiClient::setBaseUrl(const QUrl& url)
 {
+	// 接管态：这条地址指向的正是我们即将停掉（或已经停掉）的内置服务端，接下来还会在
+	// baseUrlReady 的接线里顺带调 openStreams()。一句"忽略"就把 §3.1 里最容易漏的那条
+	// 堵住了 —— 否则接管后仍会做 token→cookie 握手、连真 DSH。
+	if (m_takenover) {
+		qInfo().noquote() << "[DshApi] setBaseUrl ignored (backend taken over):"
+			<< url.toString(QUrl::RemoveQuery);
+		return;
+	}
+
 	m_launchToken.clear();
 	const QUrlQuery query(url);
 	if (query.hasQueryItem(QStringLiteral("token")))
@@ -131,6 +152,11 @@ void DshApiClient::setBaseUrl(const QUrl& url)
 
 QUrl DshApiClient::baseUrl() const
 {
+	// D6=B：接管态下恒为空 —— 那条地址指向的 DSH 已经不在了，回显（Settings.cpp:361）只会
+	// 误导用户；而唯一靠它干活的路径（切主题把地址带给新窗口）由 ServerManager 的进程级
+	// 接管标记挡住，不会因为拿到空值就把内置服务端重新拉起来。
+	if (m_takenover)
+		return QUrl();
 	return m_baseUrl;
 }
 
@@ -234,6 +260,13 @@ void DshApiClient::failAuthQueue(const QString& code, const QString& message)
 // 打开 WebSocket 事件流；尚未设置 baseUrl 就直接返回，带令牌但还没换到 cookie 时先做认证握手（握手成功会再回到这里）。
 void DshApiClient::openStreams()
 {
+	// 接管态：流由扩展负责，宿主不开任何 mux。扩展开始喂数据的时机是它自己那次
+	// Takenover(true)，所以这里不需要（也没有）回执。
+	if (m_takenover) {
+		qInfo().noquote() << "[DshApi] openStreams ignored (backend taken over)";
+		return;
+	}
+
 	if (m_baseUrl.isEmpty()) {
 		qWarning().noquote() << "[DshApi] openStreams ignored: baseUrl is empty";
 		return;
@@ -294,14 +327,19 @@ void DshApiClient::scheduleReconnect()
 
 void DshApiClient::closeStreams()
 {
-	qInfo().noquote() << "[DshApi] closing stream channel";
+	qInfo().noquote() << "[DshApi] closing stream channel"
+		<< (m_takenover ? QStringLiteral("(takenover: local bookkeeping only)") : QString());
 
 	if (m_reconnectTimer)
 		m_reconnectTimer->stop();
 
-	m_streamClosing = true;
-	if (m_stream)
-		m_stream->close();
+	// 接管态：不碰 WebSocket、也不通知扩展 —— 这条路径会被析构调用（~DshApiClient），
+	// 那一刻回调进插件不安全。扩展要退场靠自己的 detachHost() 调 Takenover(false)。
+	if (!m_takenover) {
+		m_streamClosing = true;
+		if (m_stream)
+			m_stream->close();
+	}
 
 	m_streamConnected = false;
 	m_eventsReady = false;
@@ -367,12 +405,40 @@ void DshApiClient::followSession(const QString& sessionId)
 	args.insert(QStringLiteral("request"), request);
 
 	m_followedSessionId = sessionId;
+
+	// 接管态：不开真流，改成把"界面要看哪个会话"告诉扩展 —— 它不知道这件事就没法喂历史。
+	// 载荷用的是与 mux open 帧**同一份** args（endpoint + args），便于扩展照着 DSH 的形状做。
+	if (m_takenover) {
+		QJsonObject frame;
+		frame.insert(QStringLiteral("endpoint"), QStringLiteral("session/follow"));
+		frame.insert(QStringLiteral("args"), args);
+		const QString rpcId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+		// fire-and-forget：不入 m_pending、不等回填（回填了也只会记一条"不认识的 rpcId"）
+		sendToSink(rpcId, QStringLiteral("$takeover/stream-open"), frame);
+		return;
+	}
+
 	m_sessionStreamId = nextStreamId(QStringLiteral("session"));
 	sendStreamOpen(QStringLiteral("session/follow"), m_sessionStreamId, args);
 }
 
 void DshApiClient::unfollowSession()
 {
+	// 接管态：通知扩展收掉 follow（同样是 fire-and-forget）
+	if (m_takenover) {
+		if (!m_followedSessionId.isEmpty()) {
+			QJsonObject frame;
+			frame.insert(QStringLiteral("endpoint"), QStringLiteral("session/follow"));
+			QJsonObject args;
+			frame.insert(QStringLiteral("args"), args);
+			const QString rpcId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+			sendToSink(rpcId, QStringLiteral("$takeover/stream-cancel"), frame);
+		}
+		m_sessionStreamId.clear();
+		m_followedSessionId.clear();
+		return;
+	}
+
 	if (!m_sessionStreamId.isEmpty())
 		sendStreamCancel(m_sessionStreamId);
 	m_sessionStreamId.clear();
@@ -382,10 +448,16 @@ void DshApiClient::unfollowSession()
 // 是否已连接 DSH：mux WebSocket 已打开，且 $events 逻辑流已收到 ready 帧。
 bool DshApiClient::isConnected() const
 {
+	// D6=B：接管态下恒 true —— 传输归扩展所有，宿主这边没有任何"没连上"的判据。
+	// 顺带压掉唯一那处调用（DSHHub.cpp:169 的"服务端已退出"提示）：接管时那个进程
+	// 正是我们主动杀掉的，不该弹给用户。
+	if (m_takenover)
+		return true;
 	return m_streamConnected && m_eventsReady;
 }
 
 // 发送一元 RPC 请求：请求体 {"type":"client-request","rpcId":<随机 UUID>,"method":<方法名>,"payload":{...}}，然后 POST 到 /api/<method>。
+// 接管态的分流在 post() 里（本方法没有 HTTP 之前的副作用，只需汇到那一处）。
 void DshApiClient::callMethod(
 	const QString& method,
 	const QJsonObject& payload,
@@ -415,6 +487,7 @@ void DshApiClient::callMethod(
 }
 
 // 同 callMethod，但成功回调拿裸 JSON 值；用于返回数组的端点（例如 llm/listConfigurableProviders）。
+// 接管态的分流在 post() 里（与 callMethod 同一处）。
 void DshApiClient::callMethodValue(
 	const QString& method,
 	const QJsonObject& payload,
@@ -444,7 +517,9 @@ void DshApiClient::respond(
 	std::function<void(const QJsonObject& receipt)> onSuccess,
 	std::function<void(const RpcError& error)> onError)
 {
-	if (m_clientId.isEmpty()) {
+	// ⚠️ 接管态必须绕过这个前置门槛：接管后不连 mux ⇒ m_clientId 永远为空 ⇒ 审批/提问的
+	// 应答会被这里直接吞掉（只发一个 stream-not-ready 错误），扩展根本收不到。
+	if (!m_takenover && m_clientId.isEmpty()) {
 		qWarning().noquote() << "[DshApi] respond ignored: $events stream not ready";
 		if (onError) {
 			RpcError error;
@@ -460,7 +535,10 @@ void DshApiClient::respond(
 	outcome.insert(QStringLiteral("value"), value);
 
 	QJsonObject args;
-	args.insert(QStringLiteral("clientId"), m_clientId);
+	// 接管态下 m_clientId 是空的：这里就**不带** clientId 交出去（扩展自己那份 clientId /
+	// 会话映射由它自己补），而不是塞一个空串让它去猜。
+	if (!m_clientId.isEmpty())
+		args.insert(QStringLiteral("clientId"), m_clientId);
 	args.insert(QStringLiteral("eventId"), rpcId);
 	args.insert(QStringLiteral("outcome"), outcome);
 
@@ -487,6 +565,22 @@ void DshApiClient::post(
 	std::function<void(const QJsonValue& value)> onSuccess,
 	std::function<void(const RpcError& error)> onError)
 {
+	// ⚠️ 接管态：不走 HTTP —— 三个一元 RPC 方法（callMethod / callMethodValue / respond）
+	// 最终都汇到这一个函数，所以分流转发写在这里就覆盖了它们三个。
+	// 位置刻意在下面的**认证队列之前**：反过来的话，接管态下的请求会排进 m_authQueue 去等
+	// 一个永远不会到来的 DSH 认证握手（m_authenticated 在接管态恒为假）。
+	// 交给扩展的只有可序列化的部分：回填靠 rpcId，两个回调留在本类的 m_pending 里。
+	if (m_takenover) {
+		const QJsonObject payload = body.value(QStringLiteral("payload")).toObject();
+		dispatchTakeoverCall(
+			body.value(QStringLiteral("rpcId")).toString(),
+			body.value(QStringLiteral("method")).toString(),
+			payload.value(QStringLiteral("args")).toObject(),
+			std::move(onSuccess),
+			std::move(onError));
+		return;
+	}
+
 	// 认证还没就绪（启动早期 / 服务端刚重启）：先挂起来，等握手完成再补发；直发必然 401（0.1.5 的 /api 在认证围栏后面），用户看到的就是"发出去的消息莫名失败"。ServerManager 重启服务端、扩展安装触发重启时都会走这里。
 	if (!m_authenticated && !m_launchToken.isEmpty()) {
 		static constexpr int kMaxQueuedCalls = 256;
@@ -577,6 +671,9 @@ void DshApiClient::onReplyFinished()
 }
 
 // 主线程：处理线程池解析完成的 HTTP 响应（拆 result 信封并调用回调）。
+// ⚠️ **接管路径的回填不走这里**：它第一步查的是 m_parsing，而接管路径的条目只登记在
+//    m_pending 里 —— 复用它只会命中下面的 "stale parsed response" 分支，静默丢掉回调。
+//    （接管路径的回填入口是 CompleteCall / FailCall。）
 void DshApiClient::handleParsedResponse(
 	const QString& rpcId, const QJsonDocument& doc)
 {
@@ -609,6 +706,305 @@ void DshApiClient::handleParsedResponse(
 				});
 		}
 	}
+}
+
+// ==================================================================
+// 后端接管：宿主侧的开关、下发与回填
+// ==================================================================
+// 分工（见 VirtualClass/VirtualApiTakeover.h）：
+//   插件 → 宿主：VirtualApiHost（本类实现）—— Takenover / CompleteCall / FailCall
+//   宿主 → 插件：VirtualApiSink（插件根对象实现，登记在 kApiSink）—— OnOutboundRequest
+// 出站请求只把**可序列化**的部分交给扩展；两个回调留在本类的 m_pending 里，
+// 扩展回传结果后由本类触发原来那个回调（std::function 不是 metatype，传不出去）。
+
+// 取当前登记为接收端的扩展根对象。每次现取而不是缓存：注册表的值是 QPointer，插件被
+// unload 时自动置空；也可能被后装载的另一个扩展顶掉（多扩展并发接管是本期明确暂缓的事）。
+VirtualApiSink* DshApiClient::apiSink() const
+{
+	QObject* const root =
+		CommonRegistry::instance().FindFromRegistry(QString::fromUtf8(DshHostIndex::kApiSink)).data();
+	if (!root)
+		return nullptr;
+	return qobject_cast<VirtualApiSink*>(root);
+}
+
+// 把一次请求交给扩展。返回 false = 没有接收端（未装载扩展 / 扩展已被卸载），调用方应当
+// 当场把这条请求失败掉，而不是让它挂到超时。
+bool DshApiClient::sendToSink(const QString& rpcId, const QString& method, const QJsonObject& args)
+{
+	VirtualApiSink* const sink = apiSink();
+	if (!sink) {
+		qWarning().noquote() << "[DshApi] 接管态出站失败：注册表里没有实现 VirtualApiSink 的扩展"
+			" method=" << method << "rpcId=" << rpcId;
+		return false;
+	}
+
+	const QByteArray rpcIdUtf8 = rpcId.toUtf8();
+	const QByteArray methodUtf8 = method.toUtf8();
+	const QByteArray argsUtf8 = QJsonDocument(args).toJson(QJsonDocument::Compact);
+
+	qInfo().noquote() << "[DshApi] 接管态出站 ->" << method << "rpcId=" << rpcId;
+	// ⚠️ 三个指针只在这次调用期间有效（接口契约），扩展要自己拷贝
+	sink->OnOutboundRequest(rpcIdUtf8.constData(), methodUtf8.constData(), argsUtf8.constData());
+	return true;
+}
+
+// 接管路径的一元 RPC 入口：入表（回调 + 超时期限）后交给扩展。
+void DshApiClient::dispatchTakeoverCall(const QString& rpcId, const QString& method,
+	const QJsonObject& args, std::function<void(const QJsonValue&)> onSuccess,
+	std::function<void(const RpcError&)> onError)
+{
+	if (rpcId.isEmpty()) {
+		// 理论上到不了这里（rpcId 由 callMethod / callMethodValue 生成）；真到不了就当失败处理
+		qWarning().noquote() << "[DshApi] 接管态出站请求缺 rpcId，已丢弃 method=" << method;
+		if (onError)
+			onError(RpcError{ QStringLiteral("takenover-no-rpcid"),
+				QStringLiteral("outbound request has no rpcId") });
+		return;
+	}
+
+	PendingCall pending;
+	// path 在接管路径上只用于日志：写成 "takeover:<方法名>"，一眼能分辨它没走过 HTTP
+	pending.path = QStringLiteral("takeover:") + method;
+	pending.onSuccess = std::move(onSuccess);
+	pending.onError = std::move(onError);
+	pending.takeover = true;
+	pending.takeoverDeadlineMs = QDateTime::currentMSecsSinceEpoch() + kTakeoverCallTimeoutMs;
+	m_pending.insert(rpcId, pending);
+
+	if (!sendToSink(rpcId, method, args)) {
+		// 没有接收端：当场用错误收尾（此刻条目已在表里，failPending 会摘掉它）
+		failPending(rpcId, QStringLiteral("takenover-no-sink"),
+			QStringLiteral("no client extension implements VirtualApiSink"));
+	}
+}
+
+// 按 rpcId 取出挂着的一条请求并用错误收尾。返回 false = 这条 rpcId 不在表里。
+bool DshApiClient::failPending(const QString& rpcId, const QString& code, const QString& message)
+{
+	const auto it = m_pending.constFind(rpcId);
+	if (it == m_pending.constEnd())
+		return false;
+
+	PendingCall pending = it.value();
+	m_pending.erase(it);
+
+	// ⚠️ 回填路径也要做析构保护：HTTP 路径上那道 m_destroyed 检查（onReplyFinished）在
+	// 接管路径上不存在，而回填时机改由扩展决定 ⇒ "调用方已析构而回调才到"的概率更高。
+	if (m_destroyed)
+		return true;
+
+	qWarning().noquote() << "[DshApi] 接管态请求失败 path=" << pending.path
+		<< "rpcId=" << rpcId << "code=" << code << "message=" << message;
+	if (pending.onError)
+		pending.onError(RpcError{ code, message });
+	return true;
+}
+
+// 把还挂着的接管请求全部用错误收尾（扩展交还后端时用）。HTTP 路径的条目不动。
+void DshApiClient::failTakeoverPending(const QString& code, const QString& message)
+{
+	QStringList pendingIds;
+	for (auto it = m_pending.constBegin(); it != m_pending.constEnd(); ++it) {
+		if (it.value().takeover)
+			pendingIds.append(it.key());
+	}
+
+	for (const QString& rpcId : pendingIds)
+		failPending(rpcId, code, message);
+}
+
+// 回填超时扫描。未接管路径靠 HTTP 的 transferTimeout/认证硬失败兜底；接管路径上唯一的
+// 兜底就是这个 —— 扩展不回填 = 调用方永久挂着、界面停在加载中，而且没有任何报错。
+void DshApiClient::sweepTakeoverTimeouts()
+{
+	if (!m_takenover || m_pending.isEmpty())
+		return;
+
+	const qint64 now = QDateTime::currentMSecsSinceEpoch();
+	QStringList expired;
+	for (auto it = m_pending.constBegin(); it != m_pending.constEnd(); ++it) {
+		const PendingCall& pending = it.value();
+		if (pending.takeover && pending.takeoverDeadlineMs > 0 && now >= pending.takeoverDeadlineMs)
+			expired.append(it.key());
+	}
+
+	for (const QString& rpcId : expired) {
+		failPending(rpcId, QStringLiteral("takenover-timeout"),
+			QStringLiteral("backend extension did not answer within %1 ms")
+				.arg(kTakeoverCallTimeoutMs));
+	}
+}
+
+// 进入接管态的一次性收尾：把"内置 DSH 那边已经开始的事"全部作废。
+// ⚠️ 装配顺序决定了接管到来时内置服务端**已经起来过**（见 misc/API_TAKEOVER_PLAN.zh-CN.md
+//    D8=C）：baseUrlReady 可能已经发过、setBaseUrl 已经调过、认证握手与开流可能已经开始。
+//    这一段就是那批连带项的处置。
+void DshApiClient::enterTakenoverState()
+{
+	// ① 认证握手：判废在途的那一代（握手回包按 m_authAttempt 校验，代次一对不上就被丢掉，
+	//    不会再把 cookie 写回来、也不会清掉新一轮的在途标记），清掉 cookie 与队列状态。
+	++m_authAttempt;
+	m_authInFlight = false;
+	m_authenticated = false;
+	m_authCookie.clear();
+
+	// ② 物理断开 mux：它连的正是即将被停掉的内置服务端。先置 m_streamClosing 再关，
+	//    否则 disconnected 处理会把它当成"意外断线"并安排重连。
+	if (m_reconnectTimer)
+		m_reconnectTimer->stop();
+	m_streamClosing = true;
+	if (m_stream)
+		m_stream->close();
+	closeStreams();   // 接管态分支：只清本地账本，不碰 WebSocket
+
+	// ③ 启动早期那批"还在等认证"的请求（post() 的 m_authQueue）：它们既等不到认证、
+	//    也不会自己走进接管路径。按新后端重新下发，否则用户点的那一下就是永久挂起。
+	if (!m_authQueue.isEmpty()) {
+		const QList<QueuedCall> queued = m_authQueue;
+		m_authQueue.clear();
+		qInfo().noquote() << "[DshApi] 接管态：把" << queued.size() << "条等待认证的请求改投扩展";
+		for (const QueuedCall& call : queued) {
+			const QJsonObject payload = call.body.value(QStringLiteral("payload")).toObject();
+			dispatchTakeoverCall(
+				call.body.value(QStringLiteral("rpcId")).toString(),
+				call.body.value(QStringLiteral("method")).toString(),
+				payload.value(QStringLiteral("args")).toObject(),
+				call.onSuccess,
+				call.onError);
+		}
+	}
+
+	// ④ 超时兜底开跑
+	if (m_takeoverSweep)
+		m_takeoverSweep->start();
+}
+
+// 交还后端的一次性收尾。⚠️ 刻意**不**重启内置 DSH 服务端：那个进程在接管时已经被停掉了，
+// 而"要不要把它拉回来"是用户的决定（重启客户端，或设置里保存一次服务端设置触发 restart()）。
+void DshApiClient::leaveTakenoverState()
+{
+	if (m_takeoverSweep)
+		m_takeoverSweep->stop();
+
+	failTakeoverPending(QStringLiteral("takenover-released"),
+		QStringLiteral("backend takeover released by the extension"));
+
+	// 回到普通状态：断线重连逻辑恢复有效（接管期间它是被主动关闭掉的）
+	m_streamClosing = false;
+}
+
+void DshApiClient::Takenover(bool on)
+{
+	// 拒绝接管：注册表里没有实现接口二的扩展。装载期已经判定过一次（ClientExtension 只在
+	// cast 成功时才登记 kApiSink），但插件可能刚被卸载、或者调用方根本不是那个扩展
+	// —— 放行的话接管态下所有出站都会石沉大海，比拒绝难查得多。
+	if (on && !apiSink()) {
+		qWarning().noquote() << "[DshApi] 拒绝接管：没有客户端扩展实现 VirtualApiSink"
+			"（kApiSink 未登记或该扩展已被卸载）";
+		return;
+	}
+
+	const bool changed = (on != m_takenover);
+	m_takenover = on;
+
+	if (changed) {
+		if (on)
+			enterTakenoverState();
+		else
+			leaveTakenoverState();
+	}
+
+	// 幂等：宿主侧的动作（停内置 DSH 进程、关三条 DSH 专属旁路）本来就是幂等的，所以重复拨到
+	// 同一个状态也照发一次 —— 漏发的代价远大于多发。切主题会让**新窗口**的 m_api 接管一次
+	// （那个实例的 changed 为真），只有插件自己重复调用才会走到"没变也通知"这一支。
+	emit takeoverChanged(on);
+
+	qInfo().noquote() << "[DshApi] 后端接管" << (on ? "开启" : "关闭")
+		<< "changed=" << changed;
+}
+
+void DshApiClient::CompleteCall(const char* rpcId, const char* resultJson)
+{
+	if (m_destroyed)
+		return;
+
+	const QString id = QString::fromUtf8(rpcId ? rpcId : "");
+	if (id.isEmpty()) {
+		qWarning().noquote() << "[DshApi] CompleteCall ignored: empty rpcId";
+		return;
+	}
+
+	const auto it = m_pending.constFind(id);
+	if (it == m_pending.constEnd()) {
+		// 正常情形之一：回填的是一个 fire-and-forget 的 rpcId（$takeover/stream-open 那两条
+		// 流控制请求本来就没入表）。所以这里只是警告，不算错误。
+		qWarning().noquote() << "[DshApi] CompleteCall: 不认识的 rpcId（重复回填 / 流控制的 id）:"
+			<< id;
+		return;
+	}
+
+	PendingCall pending = it.value();
+	m_pending.erase(it);
+	if (!pending.takeover)
+		qWarning().noquote() << "[DshApi] CompleteCall 命中一条非接管态的请求: path=" << pending.path;
+
+	QJsonParseError parseError{};
+	const QByteArray json = QByteArray(resultJson ? resultJson : "");
+	QJsonDocument doc = QJsonDocument::fromJson(json, &parseError);
+	// 走了"包一层数组"的回退就为真：取值时必须把那一层拆掉（否则裸标量会变成单元素数组）。
+	bool unwrapScalar = false;
+	if (parseError.error != QJsonParseError::NoError) {
+		// QJsonDocument 只接受"对象或数组"作为顶层：裸标量（12 / "x" / true）在这里必然
+		// 解析失败，而 callMethodValue 的成功值可以是**裸值**。包一层数组再取回唯一的元素
+		// 即可 —— 顶层标量本来就不是合法 JSON 文档，所以这个回退没有歧义。
+		// （resultJson 为空串也走这条：`[]` 解析成功，取回一个 undefined 值。）
+		parseError = QJsonParseError{};
+		const QJsonDocument wrapped =
+			QJsonDocument::fromJson(QByteArray("[") + json + QByteArray("]"), &parseError);
+		if (parseError.error != QJsonParseError::NoError) {
+			qWarning().noquote() << "[DshApi] CompleteCall: resultJson 不是合法 JSON rpcId=" << id
+				<< "error=" << parseError.errorString();
+			if (pending.onError)
+				pending.onError(RpcError{ QStringLiteral("takenover-bad-result"),
+					parseError.errorString() });
+			return;
+		}
+		doc = wrapped;
+		unwrapScalar = true;
+	}
+
+	// 三种结果语义在这里汇合（与未接管路径逐字对应）：
+	//   callMethod       —— 存进来的回调已经包了 toObject()（callMethod 里那个 lambda）
+	//   callMethodValue  —— 存进来的就是裸值回调
+	//   respond          —— 存进来的是收据回调（内部再 toObject()）
+	// 所以本方法本身不需要区分它们是哪一种，照存进去的那个回调喂就行。
+	const QJsonValue value = unwrapScalar ? doc.array().at(0)
+		: doc.isArray() ? QJsonValue(doc.array())
+		: doc.isObject() ? QJsonValue(doc.object())
+		: QJsonValue();
+
+	qInfo().noquote() << "[DshApi] 接管态回填 path=" << pending.path << "rpcId=" << id;
+	if (pending.onSuccess)
+		pending.onSuccess(value);
+}
+
+void DshApiClient::FailCall(const char* rpcId, const char* code, const char* message)
+{
+	if (m_destroyed)
+		return;
+
+	const QString id = QString::fromUtf8(rpcId ? rpcId : "");
+	if (id.isEmpty()) {
+		qWarning().noquote() << "[DshApi] FailCall ignored: empty rpcId";
+		return;
+	}
+
+	QString errorCode = QString::fromUtf8(code ? code : "");
+	if (errorCode.isEmpty())
+		errorCode = QStringLiteral("takenover-error");
+
+	failPending(id, errorCode, QString::fromUtf8(message ? message : ""));
 }
 
 // $events 逻辑流的一项：ready -> 记下 clientId 并宣告 connected；emit -> 单向事件（当前 UI 用不到，留好分发点）；waterfall -> 需要回执的审批/提问，翻成旧帧形状交给 UI（rpcId 位置放 eventId）。

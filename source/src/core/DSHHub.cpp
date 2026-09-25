@@ -264,7 +264,17 @@ void DSHHub::installSidebarWiring()
 		[this]() { if (m_settings) m_settings->openSettings(); });
 	dshRegister("DSHHub.026",
 		m_sidebar, &Sidebar::pluginsRequested, this,
-		[this]() { if (m_pluginsManager) m_pluginsManager->openPlugins(); });
+		[this]() {
+			// 接管态：插件市场是 DSH 服务端专属的那条线，入口已收（Sidebar 那颗按钮不可见），
+			// 这里再挡一道 —— 信号也可能从别处被触发（侧栏是登记在册的对象）。
+			if (m_api && m_api->isTakenover()) {
+				qInfo().noquote() << QStringLiteral(
+					"[DSH Hub] 后端已被接管：插件市场入口不可用");
+				return;
+			}
+			if (m_pluginsManager)
+				m_pluginsManager->openPlugins();
+		});
 	dshRegister("DSHHub.027",
 		m_sidebar, &Sidebar::themeToggleRequested, this, &DSHHub::toggleTheme);
 	dshRegister("DSHHub.028",
@@ -317,6 +327,53 @@ void DSHHub::installApiWiring()
 		m_api, &DshApiClient::workspaceArchiveChanged, this, &DSHHub::handleWorkspaceArchiveChanged);
 	dshRegister("DSHHub.024",
 		m_api, &DshApiClient::transportError, this, &DSHHub::handleTransportError);
+
+	// 045 · 后端接管开关：插件调 VirtualApiHost::Takenover 时从这里收回执。
+	// 只管三件"接管特有的收尾"（宿主上层其余部分一行不改，它们照常调出站方法、
+	// 照常收回调、照常 emit 回执，因为分流在 DshApiClient 内部）：
+	//   ① 停掉已经启动的内置 DSH 进程（装配顺序决定了它一定先起来过，见 D8=C）
+	//   ② 关掉三条 DSH 专属旁路里需要 UI 配合的两条（工具过滤 / 插件市场入口）
+	//   ③ 进程级接管标记：接管态下不再启动/重启内置 DSH 服务端
+	dshRegister("DSHHub.045",
+		m_api, &DshApiClient::takeoverChanged, this, [this](bool takenover) {
+			if (m_serverManager) {
+				if (takenover)
+					m_serverManager->stopForTakeover();
+				else
+					m_serverManager->setTakenover(false);
+			}
+			applyTakeoverBypasses(takenover);
+		});
+}
+
+/**
+ * 后端接管态下的三条 DSH 专属旁路（见 misc/API_TAKEOVER_PLAN.zh-CN.md §2.5-A）。
+ *
+ * ⚠️ 只关这三条，**绝不**碰"扩展管理"：那是客户端扩展的装载通道（ExtensionManagerPopup →
+ *    ClientExtension::loadOne），接管机制本身要靠它把扩展装进来。
+ * 幂等：重复拨同一状态只重复设置同一批控件的可见性，没有副作用。
+ */
+void DSHHub::applyTakeoverBypasses(bool takenover)
+{
+	// ① 顶栏"工具过滤"：面板走 /api/tools-filter，自带 QNetworkAccessManager，
+	//    服务的完全是 DSH 服务端那套工具清单
+	if (m_topBar)
+		m_topBar->setToolsFilterEnabled(!takenover);
+
+	// ② 插件市场入口：DSH 服务端侧的 cordis 插件（7 个 /dsh-market/* + pnpm/dsh CLI）。
+	//    接管时连同已经打开的窗口一起收掉，别留一个注定刷不出东西的空壳。
+	//    （扩展管理那颗按钮是 Sidebar::m_extensionButton，不在这里动。）
+	if (m_sidebar)
+		m_sidebar->setPluginsEntryEnabled(!takenover);
+
+	if (takenover && m_pluginsManager)
+		m_pluginsManager->closePlugins();
+
+	// ③ "启动 DSH 进程"这条旁路不在这里关：接管到来时进程已经起来了（装配顺序如此），
+	//    所以处置是"停掉 + 之后不再启动/重启"，两者都在 ServerManager 里（stopForTakeover()
+	//    与进程级接管标记），见上面 045 那条接线。
+	qInfo().noquote() << QStringLiteral("[DSH Hub] 后端接管态") << (takenover ? "已生效" : "已复位")
+		<< QStringLiteral("（工具过滤/插件市场入口已按态切换；扩展管理照旧）");
 }
 
 /**
@@ -449,6 +506,14 @@ void DSHHub::registerHostObjects()
 	// 登记是覆盖语义 —— 切主题时新窗口先建、旧窗口下一轮事件循环才析构，
 	// 新窗口这一句会直接顶掉旧窗口的登记（见 CommonRegistry.h 的设计要点）。
 	CommonRegistry::instance().AddToRegistry(DshHostIndex::kMainWindow, this);
+
+	// 登记 DSH API 客户端：客户端扩展要用它拿**后端接管**的宿主侧接口
+	// （VirtualClass/VirtualApiTakeover.h 的 VirtualApiHost：Takenover / CompleteCall / FailCall）。
+	// 时序是现成可用的：m_api 在构造函数开头创建、这里登记，而下面的 ClientExtension::loadAll()
+	// 在登记之后才跑 —— 插件在 attachHost() 里查得到。
+	// ⚠️ 切主题会重建主窗口、连带换掉 m_api（m_api 是窗口的子对象）⇒ 插件必须在**每次**
+	//    attachHost() 里重新 findObject + 重新 cast；旧指针是 QPointer，只会变空、不会变野。
+	CommonRegistry::instance().AddToRegistry(DshHostIndex::kApiClient, m_api);
 
 	// 装载「客户端扩展」（ClientExtension）：装进本进程、在 GUI 线程直接改宿主界面。
 	// 位置很关键：必须在窗口、顶栏/侧栏都建好且已登记之后 —— 插件在 attachHost()
@@ -609,6 +674,11 @@ DSHHub::~DSHHub()
 	// 先摘除登记：一旦开始拆成员，这个窗口就不再是"可用的主窗口"了，
 	// 继续登记着只会让插件拿到半残对象。Destroy 带身份校验，安全。
 	CommonRegistry::instance().Destroy(DshHostIndex::kMainWindow, this);
+
+	// 摘除 DSH API 客户端的登记（Destroy 带身份校验）：切主题时新窗口已经顶掉了这条登记，
+	// 旧窗口在这里的注销会被拒绝，不会误删新记录。
+	if (m_api)
+		CommonRegistry::instance().Destroy(DshHostIndex::kApiClient, m_api);
 
 	// 先停掉工具调用线程池，避免 Worker 仍在 m_dllCaller / 排队任务中引用 this
 	if (m_toolPool) {

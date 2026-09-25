@@ -32,6 +32,12 @@ namespace DshHostIndex
 	inline constexpr const char* kThemeManager = "themeManager";
 	// 信号槽登记表单例（ConnectionManager），启动期登记；插件转成 VirtualConnectionManager* 登记/接管自己的连接。
 	inline constexpr const char* kConnectionManager = "connectionManager";
+	// DSH API 客户端（DshApiClient），随主窗口创建/销毁；后端接管的宿主侧接口就在它上面
+	// —— 插件转成 VirtualClass/VirtualApiTakeover.h 的 VirtualApiHost* 调 Takenover /
+	// CompleteCall / FailCall。⚠️ 切主题会换掉这个对象，插件必须在**每次** attachHost()
+	// 里重新取（旧 QPointer 只会变空，不会变野）。
+	inline constexpr const char* kApiClient = "apiClient";
+	inline constexpr const char* kApiSink = "apiSink";
 }
 
 namespace DshHost

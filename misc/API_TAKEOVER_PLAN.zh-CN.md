@@ -10,28 +10,9 @@
 
 # 1. 需要你决定的事项
 
-> **D0–D5、D8 已定案** —— 形态见 **2.6 接口与通讯机制（定案）** 与 **2.5-A**。以下只剩两项，**可以边写边定**。
-
-### D6 · 接管态下读接口的返回值
-
-涉及 `baseUrl()`（5 处调用）、`launchToken()`（1 处）、`isConnected()`（1 处）。例：`source/src/ui/Settings.cpp:361` 把 `baseUrl()` 回显到设置输入框。
-
-| 选项 | 形态 |
-|---|---|
-| **A** | 保持原值 → UI 会显示一个已经没在用的真 DSH 地址 |
-| **B** | 返回空/占位（`baseUrl()` 空、`isConnected()` 恒 true） |
-| **C** | 让扩展通过接口提供（接口上加 getter） |
-
-### D7 · 扩展侧的错误码词汇表
-
-| 选项 | 形态 |
-|---|---|
-| **A** | 跑通阶段自定几个（如 `takenover-no-result`、`takenover-transport`） |
-| **B** | 与 DSH 的 code 保持语义对应（`session-not-found` 等） |
-
-【事实】上层**没有任何一处拿 `error.code` 与字符串比较**，全部是 `.arg(error.code, error.message)` 拼进用户可见文本或原样转发（`MessageQuery.cpp:824`、`Sidebar.cpp:641/653`、`MessageHost.cpp:708/737`、`DSHHub.cpp:744/767/797/989/1066`、`ModelListPanel.cpp` 多处）→ **A 完全可行**。
-
-> 定完之后：把决定回填到第 2 节，并删掉本节对应条目。
+> **D0–D8 全部已定案**，没有待定项了：
+> 通讯机制见 **2.6（定案）**、三条旁路与进程处置见 **2.5-A**、
+> 实现期定下的 D6/D7 见 **2.8**（按本节原约定回填，条目已清空）。
 
 ---
 
@@ -218,6 +199,32 @@ QMetaObject::invokeMethod(hub, "forwardMuxFrame", Q_ARG(QJsonObject, frame));
 **不采用**"接管 A 类语义意图信号"（用 `TakeoverConnection` 接管 `newWorkspaceRequested` / `sendRequested` 等）作为主要手段。
 原因：接管只关掉某一个入口；而**类内分流**下任何入口最终都要调 `DshApiClient` 的出站方法，必然进分支——覆盖更完整，且不必动宿主上层。
 
+## 2.8 D6 / D7 定案（实现期定下，已落地）
+
+### D6 = B · 接管态下读接口的返回值
+
+| 读接口 | 接管态返回 | 为什么这么定 |
+|---|---|---|
+| `baseUrl()` | 空 `QUrl()` | 唯一"靠它干活"的路径是"切主题把地址带给新窗口"，而接管态下那个地址指向的 DSH 已经不在了（而且 `setBaseUrl` 在接管态本来就忽略新地址）。空值**不会**导致重新拉起内置服务端：`ServerManager` 有**进程级**接管标记，接管态下 `start()`/`restart()` 直接 no-op。回显那条（`Settings.cpp:361`）拿到空值也正好表达"没有内置服务端"。 |
+| `launchToken()` | 空 `QString()` | 接管后没有内置服务端，也就没有令牌可带；`authenticatedBaseUrl()` 因此退化成空地址（同上，被标记挡住）。 |
+| `isConnected()` | 恒 `true` | 传输归扩展所有，宿主这边没有任何"没连上"的判据。顺带压掉唯一那处调用（`DSHHub.cpp:169` 的"服务端已退出"提示）—— 接管时那个进程正是宿主主动杀掉的，不该弹给用户。 |
+
+三个都是 const 读接口、只改返回值 ⇒ **未接管路径逐字不变**，既有 11 个 `TestDshApiClient` 用例照旧全过。
+
+### D7 = A · 错误码词汇表
+
+宿主自己产生的码统一带 `takenover-` 前缀（上层不比较 code，只拼进文本）：
+
+| code | 场景 |
+|---|---|
+| `takenover-no-sink` | 接管态下取不到接收端（未装载 / 已被卸载） |
+| `takenover-timeout` | 扩展在时限内没回填（`kTakeoverCallTimeoutMs = 120000`，每 5s 扫一次） |
+| `takenover-released` | 扩展调 `Takenover(false)` 交还后端时，仍挂着的请求 |
+| `takenover-bad-result` | `CompleteCall` 的 `resultJson` 不是合法 JSON |
+| `takenover-error` | `FailCall` 的 code 为空时的兜底 |
+
+完整约定（含扩展侧建议的前缀）写在 `include/VirtualClass/VirtualApiTakeover.h` 的文件头。
+
 ---
 
 # 3. 必须写到、但不构成决策的点
@@ -321,4 +328,16 @@ QMetaObject::invokeMethod(hub, "forwardMuxFrame", Q_ARG(QJsonObject, frame));
 
 ## 6.6 未接管路径的测试基线
 
-`build/windows-ninja/DSH Hub.Tests.exe`（用 `DSHHUB_TEST_REPORT_DIR` 取逐类报告，必须从**仓库根**运行）：**209 passed / 0 failed / 3 skipped**（3 个 skip 是依赖 `test extension/` 样例目录的 `DllCaller` 用例，该目录不在仓库里）。
+`build/windows-ninja/DSH Hub.Tests.exe`（用 `DSHHUB_TEST_REPORT_DIR` 取逐类报告，必须从**仓库根**运行）：**209 passed / 0 failed / 3 skipped**（3 个 skip 是依赖 `test extension/` 样例目录的 `DllCaller` 用例，该目录不在仓库里）。接管实现落地后整编重测，仍是这个数。
+
+> ⚠️ **这个构建目录记不到头部依赖，改头文件之后必须整编，否则会得到"坏掉但不明显"的二进制。**
+> Ninja 规则是 `deps = msvc`（`/showIncludes`），但本机 MSVC 输出本地化前缀 `注意: 包含文件:`
+> （`VSLANG=1033` 也不改），而 Ninja 只认英文 `Note: including file:` ⇒ 所有 `.obj` 的 depfile
+> 里依赖数为 0（`ninja -t deps` 里显示 `#deps 0`），**改头文件不会触发任何重编**。
+> 后果不是"没生效"而是**同一个类在不同 TU 里布局不一致**（ODR）⇒ 随机 `0xC0000005`
+> 或莫名的断言失败；换个编译开关/加 `/Zi` 就"自动好了"，极难查。
+> 实测复现：给 `DshApiClient` 只加两个**没人用**的空成员、其它一律不动，`dshhub_tests`
+> 就会在 `TestDshApiClient::setBaseUrl` 崩掉；整编之后同样的代码 209/0/3 全过。
+> 判断办法：改过头文件后 `ninja -n` **什么都不列**就是踩了（应列出该头文件的所有包含者）。
+> 整编办法：`Get-ChildItem source,tests -Recurse -Include *.cpp,*.h | % { $_.LastWriteTime = (Get-Date) }`
+> 再构建（或删掉构建目录重建）。

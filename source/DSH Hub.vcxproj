@@ -248,6 +248,7 @@
     <ClInclude Include="include\ExtensionSystem\UiStage.h" />
     <ClInclude Include="include\common\appearance\TopBarTools.h" />
     <ClInclude Include="include\VirtualClass\VirtualCommon.h" />
+    <ClInclude Include="include\VirtualClass\VirtualApiTakeover.h" />
     <ClInclude Include="include\core\HostExports.h" />
     <ClInclude Include="include\core\DshHostPlugin.h" />
     <ClInclude Include="include\common\appearance\WindowFrame.h" />

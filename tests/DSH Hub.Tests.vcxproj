@@ -158,6 +158,8 @@
     <ClCompile Include="..\source\src\core\ServerManager.cpp" />
     <!-- ServerManager.cpp 与 DshApiClient.cpp 都经 dshRegister 引用 ConnectionManager::instance()，必须一起编，否则 LNK2019 -->
     <ClCompile Include="..\source\src\core\ConnectionManager.cpp" />
+    <!-- DshApiClient.cpp 按 kApiSink 从 CommonRegistry 取"后端接管的接收端"，必须一起编，否则 LNK2019 -->
+    <ClCompile Include="..\source\src\common\util\CommonRegistry.cpp" />
     <ClCompile Include="..\source\src\common\extension\ExtensionRegistry.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -181,6 +183,7 @@
     <QtMoc Include="..\source\include\core\ServerManager.h" />
     <QtMoc Include="..\source\include\network\SessionPrefetcher.h" />
     <QtMoc Include="..\source\include\common\appearance\TranslationManager.h" />
+    <QtMoc Include="..\source\include\common\util\CommonRegistry.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\source\include\ExtensionSystem\Thunk.h" />

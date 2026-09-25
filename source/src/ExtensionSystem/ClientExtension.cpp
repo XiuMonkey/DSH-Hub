@@ -1,6 +1,9 @@
 #include "ExtensionSystem/ClientExtension.h"
 
 #include "core/DshHostPlugin.h"
+#include "core/HostExports.h"
+#include "common/util/CommonRegistry.h"
+#include "VirtualClass/VirtualApiTakeover.h"
 
 // 架空（VirtualShell）的兜底收台，见下面 remove() 里那段说明
 #include "ExtensionSystem/UiStage.h"
@@ -131,6 +134,26 @@ namespace ClientExtension
 					*error = reason;
 				qWarning("[ClientExtension] %s: %s", qPrintable(fileName), qPrintable(reason));
 				return false; // loader 留在 qApp 下，随进程一起走
+			}
+
+			// 后端接管的接收端（可选的能力，不是必备）：插件实现了 VirtualApiSink 才有资格
+			// 接管 DSH API 的出站。这里**只登记、不装载判定**：没实现接口二的扩展照常装载
+			// （既有扩展——样式表、架空那几类——都只实现 DshHostPlugin，把"没实现"当成装载
+			// 失败会把它们全废掉）。真正拒绝发生在它调 VirtualApiHost::Takenover(true) 时。
+			//
+			// 登记进宿主注册表（覆盖语义）：DshApiClient 在接管态下按 kApiSink 现取接收端。
+			// ⚠️ 插件侧必须在根对象上写 `Q_INTERFACES(DshHostPlugin VirtualApiSink)`，
+			//    否则这个 cast 永远是 nullptr（不报错，只是接管请求被拒绝）。
+			// ⚠️ 只在这一支（首次装载）登记：切主题走的是上面"已装载 → 重新 attach"那一支，
+			//    那时登记项还在（插件没被 unload，QPointer 仍有效），重复登记只会把后来的
+			//    扩展顶掉。
+			if (qobject_cast<VirtualApiSink*>(root)) {
+				CommonRegistry::instance().AddToRegistry(DshHostIndex::kApiSink, root);
+				qInfo("[ClientExtension] %s: 后端接管接收端（VirtualApiSink）已登记", qPrintable(name));
+			}
+			else {
+				qInfo("[ClientExtension] %s: 未实现 VirtualApiSink —— 它不能接管后端出站",
+					qPrintable(name));
 			}
 
 			// 先把身份交给插件（可选槽；老插件没有它，indexOfMethod 一查便知，不做任何事、也不会踩空槽位）—— 插件要架空就必须知道自己的安装名。

@@ -116,6 +116,9 @@
     <ClCompile Include="..\source\src\core\ServerManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\source\src\common\util\CommonRegistry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="TestDshEventParser.h">
@@ -162,6 +165,9 @@
     </QtMoc>
     <QtMoc Include="TestServerManager.h">
       <Filter>Test Files</Filter>
+    </QtMoc>
+    <QtMoc Include="..\source\include\common\util\CommonRegistry.h">
+      <Filter>Source Files</Filter>
     </QtMoc>
   </ItemGroup>
 </Project>
