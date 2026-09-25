@@ -118,21 +118,31 @@ void DllCaller::unloadLibrary()
 {
 	QMutexLocker stateLock(&m_mutex);
 
-	for (auto it = m_librariesByPath.begin(); it != m_librariesByPath.end(); ++it) {
-		LoadedLibrary* entry = it.value();
+	// 先清描述符再等：这样卸载期间不会有新的调用认领到工具（callTool 只从 m_extensions 里找
+	// 工具名），否则可能在"等 inFlight 归零"之后、delete 之前又冒出一个新调用。
+	m_extensions.clear();
+
+	// 先收集路径再逐个等 —— 不要拿着迭代器 wait：等待会放开 m_mutex，期间别的线程若加载了
+	// 别的 DLL，QHash 可能重哈希，迭代器就悬了。
+	const QStringList paths = m_librariesByPath.keys();
+	for (const QString& key : paths) {
+		LoadedLibrary* entry = m_librariesByPath.value(key);
 		if (!entry)
 			continue;
 		// 等待该 DLL 上的在途调用结束，避免卸载中的 QLibrary 被使用
 		while (entry->inFlight > 0)
 			entry->drained.wait(&m_mutex);
+		if (m_librariesByPath.value(key) != entry)
+			continue;
+		m_librariesByPath.remove(key);
 		if (entry->library) {
 			entry->library->unload();
 			delete entry->library;
 		}
 		delete entry;
 	}
-	m_librariesByPath.clear();
-	m_extensions.clear();
+	// 这里刻意不再 clear()：循环已逐个 remove + delete，条目归本函数所有；
+	// 若还留着 clear()，万一有条目被上面的 continue 跳过，就成了"不删除就丢指针"。
 	m_errorString.clear();
 }
 
@@ -172,11 +182,25 @@ bool DllCaller::removeExtension(const QString& name)
 			drop.append(it.key());
 	}
 	for (const QString& key : drop) {
-		LoadedLibrary* entry = m_librariesByPath.take(key);
+		// ⚠️ 顺序：先等在途调用归零，**再**把条目从表里摘掉。反过来的顺序（先 take）会让在途
+		// 调用内部的 libraryForPath() 查不到条目，于是**重新加载同一个 DLL** 并拿到一把全新的
+		// runMutex —— 同一 DLL 的串行保证在窗口内失效，而且旧条目的 unload() 会与新映射并发。
+		// 等到归零是安全的：该扩展的工具已从 m_extensions 移除，不会再有新调用查到这条 DLL。
+		LoadedLibrary* entry = m_librariesByPath.value(key);
 		if (!entry)
 			continue;
+
 		while (entry->inFlight > 0)
 			entry->drained.wait(&m_mutex);
+
+		// 等待期间别的线程可能加载过别的 DLL（QHash 可能重哈希），所以不复用等待前拿到的
+		// 迭代器，这里重新确认一次条目没被换掉。
+		if (m_librariesByPath.value(key) != entry)
+			continue;
+
+		// 此刻 inFlight 已归零、且 last caller 已释放 runMutex（见 callTool 里的作用域顺序），
+		// 摘除并销毁不会再有人碰它。
+		m_librariesByPath.remove(key);
 		if (entry->library) {
 			entry->library->unload();
 			delete entry->library;
@@ -326,19 +350,26 @@ bool DllCaller::callTool(const QString& tool,
 			return false;
 		}
 
-		QMutexLocker runLock(&runtime->runMutex);
 		bool invoked = false;
-		if (spec.style == QStringLiteral("json")) {
-			invoked = invokeJsonFunction(spec, args, result, errOut);
-		}
-		else if (spec.style == QStringLiteral("native")) {
-			invoked = invokeNativeFunction(spec, args, result, errOut);
-		}
-		else {
-			qWarning().noquote() << "[DllCaller] unsupported calling style:" << spec.style;
-			recordError(errOut, QStringLiteral("unsupported calling style: %1").arg(spec.style));
+		{
+			QMutexLocker runLock(&runtime->runMutex);
+			if (spec.style == QStringLiteral("json")) {
+				invoked = invokeJsonFunction(spec, args, result, errOut);
+			}
+			else if (spec.style == QStringLiteral("native")) {
+				invoked = invokeNativeFunction(spec, args, result, errOut);
+			}
+			else {
+				qWarning().noquote() << "[DllCaller] unsupported calling style:" << spec.style;
+				recordError(errOut, QStringLiteral("unsupported calling style: %1").arg(spec.style));
+			}
 		}
 
+		// ⚠️ runMutex 必须在这个作用域结束时（也就是这里之前）就释放掉，**然后**才递减 inFlight。
+		// 卸载方等到 inFlight 归零就会 delete 那个 LoadedLibrary —— 连同它的 runMutex 一起。
+		// 若递减与 wakeAll 发生在仍持有 runMutex 的时候，被唤醒的卸载方会在这个线程退出
+		// ~QMutexLocker（去 unlock 一块已 delete 的 QMutex）之前就把它释放掉：用后释放。
+		// 注意此后不能再碰 runtime。
 		{
 			QMutexLocker stateLock(&m_mutex);
 			if (--runtime->inFlight == 0)
@@ -472,13 +503,22 @@ bool DllCaller::invokeJsonFunction(const FunctionSpec& fn,
 
 	const QByteArray argsJson = QJsonDocument(args).toJson(QJsonDocument::Compact);
 
+	// 取一次库句柄、一处判空。原先每个分支都裸解引用 libraryForPath() 的返回值，
+	// 而它在 DLL 文件缺失 / 加载失败时返回 nullptr —— 纯空指针解引用（且是所有失败路径里最普通的一条）。
+	QLibrary* library = libraryForPath(fn.resolvedDllPath);
+	if (!library) {
+		recordError(error, QStringLiteral("DLL not loaded for function %1: %2")
+			.arg(fn.function, errorString()));
+		return false;
+	}
+
 	// 方式一：const char* Func(const char* argsJson)
 	if (fn.returnType == QStringLiteral("string")) {
 		using StringFn = const char* (*)(const char*);
-		auto* symbol = reinterpret_cast<StringFn>(libraryForPath(fn.resolvedDllPath)->resolve(fn.function.toUtf8().constData()));
+		auto* symbol = reinterpret_cast<StringFn>(library->resolve(fn.function.toUtf8().constData()));
 		if (!symbol) {
 			recordError(error, QStringLiteral("cannot resolve function: %1 (%2)")
-				.arg(fn.function, libraryForPath(fn.resolvedDllPath)->errorString()));
+				.arg(fn.function, library->errorString()));
 			return false;
 		}
 
@@ -514,19 +554,19 @@ bool DllCaller::invokeJsonFunction(const FunctionSpec& fn,
 	char* resultPtr = nullptr;
 
 	if (fn.returnType == QStringLiteral("void")) {
-		auto* symbol = reinterpret_cast<VoidFn>(libraryForPath(fn.resolvedDllPath)->resolve(fn.function.toUtf8().constData()));
+		auto* symbol = reinterpret_cast<VoidFn>(library->resolve(fn.function.toUtf8().constData()));
 		if (!symbol) {
 			recordError(error, QStringLiteral("cannot resolve function: %1 (%2)")
-				.arg(fn.function, libraryForPath(fn.resolvedDllPath)->errorString()));
+				.arg(fn.function, library->errorString()));
 			return false;
 		}
 		symbol(argsJson.constData(), &resultPtr);
 	}
 	else {
-		auto* symbol = reinterpret_cast<IntFn>(libraryForPath(fn.resolvedDllPath)->resolve(fn.function.toUtf8().constData()));
+		auto* symbol = reinterpret_cast<IntFn>(library->resolve(fn.function.toUtf8().constData()));
 		if (!symbol) {
 			recordError(error, QStringLiteral("cannot resolve function: %1 (%2)")
-				.arg(fn.function, libraryForPath(fn.resolvedDllPath)->errorString()));
+				.arg(fn.function, library->errorString()));
 			return false;
 		}
 
@@ -645,10 +685,18 @@ bool DllCaller::invokeNativeFunction(const FunctionSpec& fn,
 		}
 	}
 
-	auto* symbol = libraryForPath(fn.resolvedDllPath)->resolve(fn.function.toUtf8().constData());
+	// 同 invokeJsonFunction：取一次句柄并判空（DLL 缺失/加载失败时 libraryForPath 返回 nullptr）。
+	QLibrary* library = libraryForPath(fn.resolvedDllPath);
+	if (!library) {
+		recordError(error, QStringLiteral("DLL not loaded for function %1: %2")
+			.arg(fn.function, errorString()));
+		return false;
+	}
+
+	auto* symbol = library->resolve(fn.function.toUtf8().constData());
 	if (!symbol) {
 		recordError(error, QStringLiteral("cannot resolve function: %1 (%2)")
-			.arg(fn.function, libraryForPath(fn.resolvedDllPath)->errorString()));
+			.arg(fn.function, library->errorString()));
 		return false;
 	}
 

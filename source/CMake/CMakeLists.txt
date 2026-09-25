@@ -210,6 +210,9 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/src/common/appearance/TranslationManager.cpp"
 		"${DSHHUB_ROOT}/src/ui/TranslationUi.cpp"
 		"${DSHHUB_ROOT}/src/core/ServerManager.cpp"
+		# ServerManager.cpp 与 DshApiClient.cpp 都经 dshRegister 引用 ConnectionManager::instance()，
+		# 所以测试目标也必须编它，否则 LNK2019（理由同上一条）。
+		"${DSHHUB_ROOT}/src/core/ConnectionManager.cpp"
 		"${DSHHUB_ROOT}/src/common/extension/ExtensionRegistry.cpp")
 
 	# 测试类头文件带 Q_OBJECT，交给 AUTOMOC
@@ -230,7 +233,8 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/include/network/DshApiClient.h"
 		"${DSHHUB_ROOT}/include/network/SessionPrefetcher.h"
 		"${DSHHUB_ROOT}/include/common/appearance/TranslationManager.h"
-		"${DSHHUB_ROOT}/include/core/ServerManager.h")
+		"${DSHHUB_ROOT}/include/core/ServerManager.h"
+		"${DSHHUB_ROOT}/include/core/ConnectionManager.h")
 
 	qt_add_executable(dshhub_tests
 		${DSHHUB_TEST_SOURCES}

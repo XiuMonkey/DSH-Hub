@@ -19,6 +19,7 @@ private slots:
 	void testPointer64();
 	void testVoid();
 	void testStackArguments();
+	void testMaximumStackArguments();
 	void testTooManyArguments();
 	void testSignatureFromJson();
 	void testNativeExtensionViaDllCaller();

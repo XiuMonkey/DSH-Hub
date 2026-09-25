@@ -156,6 +156,8 @@
     <ClCompile Include="..\source\src\common\appearance\TranslationManager.cpp" />
     <ClCompile Include="..\source\src\ui\TranslationUi.cpp" />
     <ClCompile Include="..\source\src\core\ServerManager.cpp" />
+    <!-- ServerManager.cpp 与 DshApiClient.cpp 都经 dshRegister 引用 ConnectionManager::instance()，必须一起编，否则 LNK2019 -->
+    <ClCompile Include="..\source\src\core\ConnectionManager.cpp" />
     <ClCompile Include="..\source\src\common\extension\ExtensionRegistry.cpp" />
   </ItemGroup>
   <ItemGroup>

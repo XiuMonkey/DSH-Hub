@@ -40,6 +40,46 @@ namespace
 		return a + b + c + d + e + f + g + h + i;
 	}
 
+	// 15 与 16 个参数：stackAlloc 正好等于 128，是 SubRsp imm8 符号扩展那个坑的边界
+	// （历史 bug：sub rsp, 0x80 被解释成 sub rsp, -128 ⇒ 栈帧没有分配，影子空间与栈参数
+	// 被写到调用者栈帧之上）。add9 覆盖不到这段。
+	__declspec(noinline) int add15(int a, int b, int c, int d, int e,
+		int f, int g, int h, int i, int j, int k, int l, int m, int n, int o)
+	{
+		return a + b + c + d + e + f + g + h + i + j + k + l + m + n + o;
+	}
+
+	__declspec(noinline) int add16(int a, int b, int c, int d, int e,
+		int f, int g, int h, int i, int j, int k, int l, int m, int n, int o, int p)
+	{
+		return a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p;
+	}
+
+	// 断言 thunk 的 prologue 用 imm32 形式做栈帧调整。期望前 14 字节：
+	//   53            push rbx
+	//   4C 8B D1      mov r10, rcx
+	//   48 8B DA      mov rbx, rdx
+	//   48 81 EC xx   sub rsp, imm32      ← 关键是 81 而不是 83
+	// 为什么必须断言编码、不能只断言求和值：栈帧编码错掉之后**参数投递本身仍然是对的**
+	// （call 把返回地址推到 thunk 写好的位置之上，thunk 的写入偏移与被调函数的读取偏移
+	// 两边自洽），所以求和值照样正确；被破坏的是 thunk 入口 rsp **之上**那片调用者栈帧。
+	// 是否立刻崩完全看调用者布局，实测 15 参数侥幸返回正确值、16 参数直接 0xC0000005。
+	void verifyStackFrameEncoding(const Thunk::Thunk& thunk,
+		std::uint32_t expectedAlloc, const char* what)
+	{
+		const std::uint8_t expected[14] = {
+			0x53, 0x4C, 0x8B, 0xD1, 0x48, 0x8B, 0xDA, 0x48, 0x81, 0xEC,
+			static_cast<std::uint8_t>(expectedAlloc),
+			static_cast<std::uint8_t>(expectedAlloc >> 8),
+			static_cast<std::uint8_t>(expectedAlloc >> 16),
+			static_cast<std::uint8_t>(expectedAlloc >> 24)
+		};
+
+		const std::uint8_t* code = thunk.codeBytes();
+		QVERIFY2(code && thunk.codeSize() >= sizeof(expected), what);
+		QVERIFY2(std::memcmp(code, expected, sizeof(expected)) == 0, what);
+	}
+
 	__declspec(noinline) double mix(int a, double b, const char* s)
 	{
 		return a + b + static_cast<double>(std::strlen(s));
@@ -355,6 +395,57 @@ void TestThunk::testStackArguments()
 	int result = 0;
 	thunk.call(args, &result);
 	QCOMPARE(result, 45);
+}
+
+void TestThunk::testMaximumStackArguments()
+{
+	// 15/16 个参数是合法签名（上限 16）里唯二让 stackAlloc 达到 128 的取值：
+	//   stackAlloc = (32 + stackBytes + 15) & ~15  ⇒  16 个参数时 = 128。
+	// 128 无法用 SubRsp 的 imm8 形式表达，而 imm8 是**符号扩展**的：0x80 会被当成 -128，
+	// 于是"分配栈帧"变成"抬高栈顶"，影子空间与全部栈参数被写到 thunk 入口 rsp **之上**的
+	// 调用者栈帧里（最多写穿 ~128 字节）。见 verifyStackFrameEncoding() 的说明：
+	// 求和值锁不住这个缺陷，所以下面除求和外还要断言 prologue 的编码形式。
+	{
+		Thunk::Thunk thunk;
+		Thunk::Signature signature;
+		signature.returnType = Thunk::ReturnType::Int;
+		for (int i = 0; i < 15; ++i)
+			signature.args.append(Thunk::ArgType::Int);
+
+		QVERIFY2(thunk.build(signature, reinterpret_cast<void*>(&add15)),
+			qPrintable(thunk.errorString()));
+		// 4 个寄存器参数 + 11 个栈参数 ⇒ 栈帧必须分配 128 字节，且必须是 imm32 编码。
+		verifyStackFrameEncoding(thunk, 128, "15-arg thunk must allocate its frame with imm32");
+
+		Thunk::Arg args[15] = {};
+		for (int i = 0; i < 15; ++i)
+			args[i].as.i = i + 1;
+
+		int result = 0;
+		thunk.call(args, &result);
+		QCOMPARE(result, 120); // 1+2+...+15
+	}
+
+	{
+		Thunk::Thunk thunk;
+		Thunk::Signature signature;
+		signature.returnType = Thunk::ReturnType::Int;
+		for (int i = 0; i < 16; ++i)
+			signature.args.append(Thunk::ArgType::Int);
+
+		QVERIFY2(thunk.build(signature, reinterpret_cast<void*>(&add16)),
+			qPrintable(thunk.errorString()));
+		// 4 个寄存器参数 + 12 个栈参数 ⇒ 同样是 128 字节 imm32。
+		verifyStackFrameEncoding(thunk, 128, "16-arg thunk must allocate its frame with imm32");
+
+		Thunk::Arg args[16] = {};
+		for (int i = 0; i < 16; ++i)
+			args[i].as.i = i + 1;
+
+		int result = 0;
+		thunk.call(args, &result);
+		QCOMPARE(result, 136); // 1+2+...+16
+	}
 }
 
 void TestThunk::testTooManyArguments()

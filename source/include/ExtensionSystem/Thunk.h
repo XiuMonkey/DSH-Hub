@@ -67,6 +67,19 @@ namespace Thunk
 
 		QString errorString() const;
 
+		// 仅用于测试/诊断：已生成机器码的首字节与长度（未成功 build 时为 nullptr / 0）。
+		// 用例靠它校验栈帧调整用的是 imm32 形式 —— 这是"参数一多就写穿调用者栈帧"那个
+		// 边界唯一可确定性断言的地方（见 Thunk.cpp 里 subRspImm32 的说明）。
+		const std::uint8_t* codeBytes() const
+		{
+			return static_cast<const std::uint8_t*>(m_code);
+		}
+
+		std::size_t codeSize() const
+		{
+			return m_codeSize;
+		}
+
 	private:
 		bool emitMachineCode(const Signature& signature, void* target);
 
