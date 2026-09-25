@@ -1,8 +1,8 @@
 #pragma once
 
-// Agent 消息气泡：QWidget + 垂直布局的“部件流”，同一气泡内普通文本与代码块严格按出现顺序排布。
-// 每“一段普通文本”用一个 QTextBrowser（objectName=agentProse）；Markdown 代码围栏切成独立 CodeBlockView
-// （不换行、自带横/纵滚动、上方带语言小标签）；Thinking/Tool 折叠块走 dsh:// 锚点，锚点宿主见 proseHost()。
+// Agent 消息气泡：垂直布局的“部件流”，同一气泡内正文与代码块严格按出现顺序排布。每段正文一个
+// QTextBrowser（objectName=agentProse）；代码围栏切成独立 CodeBlockView（不换行、自带滚动、上方带语言标签）；
+// Thinking/Tool 折叠块走 dsh:// 锚点，锚点宿主见 proseHost()。
 
 #include <QList>
 #include <QSet>
@@ -34,22 +34,14 @@ public:
 	explicit AgentMessageUnit(QWidget* parent = nullptr);
 	~AgentMessageUnit() override;
 
+	// 追加 Markdown（含代码阴影）；合并多段输出时用 appendSeparator 插入段落分隔、明确换行
 	void appendMarkdownWithCodeShadow(const QString& markdown);
-
-	// 合并多段输出时插入段落分隔，明确换行
 	void appendSeparator();
-
 	void appendThinking(const QString& thinking);
-
 	void appendToolCall(const QString& name, const QString& argumentsHtml);
-
 	void appendToolResult(const QString& resultHtml);
-
-	void appendStreamChunk(StreamSegment::Type type, const QString& content,
-		const QString& toolName = QString());
-
+	void appendStreamChunk(StreamSegment::Type type, const QString& content, const QString& toolName = QString());
 	void flushStream();
-
 	void clearStreamSegments();
 
 	// 对全部内容子部件做一次高度刷新（可安全对外调用）
@@ -115,19 +107,19 @@ private:
 	bool m_rebuilding = false;
 	bool m_bulkFit = false; // 批量渲染期间跳过逐次高度拟合（见 setBulkFit）
 
-	// 流式去重：最近一次已渲染的流式内容指纹；无变化时跳过整段重建
+	// 流式去重：最近一次已渲染的流式内容指纹，无变化时跳过整段重建
 	QString m_lastFlushedFingerprint;
 	// m_streamSegments 的内容指纹（类型 + 内容哈希）
 	QString streamFingerprint() const;
 
 	// 流式增量渲染：只重画“正在增长的最后一段”，不整条清空重建；已封闭段由既有 append* 一次性插入
 	int m_streamSealedCount = 0; // 已渲染完的“封闭段”数量（不含 live 段）
-	int m_liveIndex = -1;        // live Reply 在 m_streamSegments 的下标；-1=无
-	int m_liveLayoutMark = -1;   // live 区域在 m_partsLayout 中的起始项下标
+	int m_liveIndex = -1; // live Reply 在 m_streamSegments 的下标；-1=无
+	int m_liveLayoutMark = -1; // live 区域在 m_partsLayout 中的起始项下标
 	int m_liveSegmentEntry = -1; // live Reply 在 m_segments 里对应的 Markdown 段下标
-	QString m_liveRenderedText;  // 上次已渲染的 live Reply 全文（未变则跳过）
+	QString m_liveRenderedText; // 上次已渲染的 live Reply 全文（未变则跳过）
 	int m_liveThinkingSegment = -1; // live Thinking 在 m_streamSegments 的下标；-1=无
-	int m_liveThinkingBlock = -1;   // live Thinking 对应 m_thinkingBlocks 的下标；-1=未建卡
+	int m_liveThinkingBlock = -1; // live Thinking 对应 m_thinkingBlocks 的下标；-1=未建卡
 
 	// 排版诊断（DSH_HUB_LAYOUT_TRACE=1）：打印本气泡及子部件的高度/宽度/尺寸提示
 	void debugTraceLayout(const QString& stage) const;
@@ -181,6 +173,5 @@ private:
 
 	// 把 Markdown 行内代码替换成占位符，避免 Qt 解析丢失样式
 	QString replaceInlineCodeWithPlaceholders(const QString& markdown, QStringList& codes) const;
-
 	QString restoreInlineCodeHtml(const QString& html, const QStringList& codes) const;
 };

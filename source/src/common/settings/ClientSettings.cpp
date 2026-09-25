@@ -17,11 +17,9 @@ namespace
 
 	const char* const kAppearanceFile = "AppearanceSetting.json";
 
-	// 文件里的字段名
 	const char* const kLanguageKey = "language";
 	const char* const kThemeKey = "theme";
 
-	// 字段取值。语言用 "system" 表示"跟随系统"（比空串好读，便于用户手改）
 	const char* const kSystemValue = "system";
 	const char* const kLightValue = "light";
 	const char* const kDarkValue = "dark";
@@ -29,8 +27,7 @@ namespace
 
 QString ClientSettings::dir()
 {
-	// 覆盖目录：单元测试用它把设置指到临时目录；用户也可以借此把设置挪出运行目录。
-	// 每次现读环境变量、不做缓存，这样测试改完立刻生效。
+	// 覆盖目录（供测试与用户挪位）；每次现读不做缓存
 	const QByteArray override = qgetenv(kDirEnvVar);
 	const QString trimmed = QString::fromLocal8Bit(override).trimmed();
 	if (!trimmed.isEmpty())
@@ -51,7 +48,7 @@ QJsonObject ClientSettings::read(const QString& fileName)
 
 	QFile file(path);
 	if (!file.exists())
-		return {}; // 首次运行：静默用默认值，不必告警
+		return {};
 
 	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
 		qWarning().noquote() << QStringLiteral("[ClientSettings] cannot read:")
@@ -71,7 +68,7 @@ QJsonObject ClientSettings::read(const QString& fileName)
 		return {};
 	}
 	if (!doc.isObject()) {
-		// 合法 JSON 但根不是对象（例如数组）：按没有处理，别让后面的 .value() 落空
+		// 合法 JSON 但根不是对象：按没有处理，别让后面的 .value() 落空
 		qWarning().noquote() << QStringLiteral("[ClientSettings] root is not an object:")
 			<< path << QStringLiteral("-> using defaults");
 		return {};
@@ -91,7 +88,7 @@ bool ClientSettings::write(const QString& fileName, const QJsonObject& object)
 		return false;
 	}
 
-	// QSaveFile：写临时文件，commit() 时原子替换目标 —— 中途失败不会留下半截 JSON
+	// QSaveFile：commit() 时原子替换，中途失败不留半截 JSON
 	QSaveFile file(path);
 	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
 		qWarning().noquote() << QStringLiteral("[ClientSettings] cannot write:")
@@ -110,10 +107,6 @@ bool ClientSettings::write(const QString& fileName, const QJsonObject& object)
 	return true;
 }
 
-// ------------------------------------------------------------------
-// AppearanceSetting
-// ------------------------------------------------------------------
-
 QString AppearanceSetting::fileName()
 {
 	return QLatin1String(kAppearanceFile);
@@ -123,7 +116,7 @@ void AppearanceSetting::ensureFile()
 {
 	const QString path = ClientSettings::filePath(kAppearanceFile);
 	if (QFile::exists(path))
-		return; // 已有用户的文件：一个字都不动
+		return;
 
 	QJsonObject object;
 	object.insert(QLatin1String(kLanguageKey), QLatin1String(kSystemValue));
@@ -138,7 +131,7 @@ QString AppearanceSetting::languageCode()
 	const QString raw = ClientSettings::read(kAppearanceFile)
 		.value(QLatin1String(kLanguageKey)).toString().trimmed();
 
-	// 文件里写 "system" 更可读；代码里统一以空串表示"跟随系统"（沿用原有约定）
+	// 文件里写 "system"，代码里统一用空串表示"跟随系统"
 	if (raw.isEmpty() || raw.compare(QLatin1String(kSystemValue), Qt::CaseInsensitive) == 0)
 		return QString();
 
@@ -150,16 +143,14 @@ void AppearanceSetting::setLanguageCode(const QString& code)
 	QJsonObject object = ClientSettings::read(kAppearanceFile);
 
 	const QString trimmed = code.trimmed();
-	object.insert(QLatin1String(kLanguageKey),
-		trimmed.isEmpty() ? QString::fromLatin1(kSystemValue) : trimmed);
+	object.insert(QLatin1String(kLanguageKey), trimmed.isEmpty() ? QString::fromLatin1(kSystemValue) : trimmed);
 
 	ClientSettings::write(kAppearanceFile, object);
 }
 
 AppearanceSetting::ThemeMode AppearanceSetting::themeMode()
 {
-	return themeModeFromName(
-		ClientSettings::read(kAppearanceFile).value(QLatin1String(kThemeKey)).toString());
+	return themeModeFromName(ClientSettings::read(kAppearanceFile).value(QLatin1String(kThemeKey)).toString());
 }
 
 void AppearanceSetting::setThemeMode(ThemeMode mode)
@@ -186,12 +177,11 @@ AppearanceSetting::ThemeMode AppearanceSetting::themeModeFromName(const QString&
 {
 	const QString trimmed = name.trimmed();
 
-	// 大小写不敏感：用户手写 "Dark" / "DARK" 都认
 	if (trimmed.compare(QLatin1String(kLightValue), Qt::CaseInsensitive) == 0)
 		return ThemeMode::Light;
 	if (trimmed.compare(QLatin1String(kDarkValue), Qt::CaseInsensitive) == 0)
 		return ThemeMode::Dark;
 
-	// "system"、空串、以及任何拼错的值，一律当跟随系统（最不容易出错的兜底）
+	// 空串、拼错的值一律当跟随系统
 	return ThemeMode::System;
 }

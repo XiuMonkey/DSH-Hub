@@ -1,7 +1,8 @@
 #pragma once
 
 // 插件市场（/dsh-market/*）的 HTTP 客户端（无控件）：只负责请求与解析，失败时自动附带服务端诊断日志。
-// GET registry/installed 与 POST install/uninstall/update/restart；分别以 registryLoaded / installedLoaded / operationCompleted / operationFailed 通知。
+// GET registry/installed 与 POST install/uninstall/update/restart；分别以 registryLoaded /
+// installedLoaded / operationCompleted / operationFailed 通知。
 
 #include <QJsonArray>
 #include <QJsonObject>

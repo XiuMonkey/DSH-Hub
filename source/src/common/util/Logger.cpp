@@ -111,7 +111,6 @@ namespace
 
 		for (int i = 0; i < LogTypeCount; ++i) {
 			const QString filePath = dirPath + QStringLiteral("/") + QString::fromUtf8(kLevelFileNames[i]);
-
 			QFile* file = new QFile(filePath);
 			if (!file->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
 				delete file;

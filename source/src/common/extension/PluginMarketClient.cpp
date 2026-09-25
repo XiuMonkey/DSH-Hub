@@ -34,18 +34,9 @@ void PluginMarketClient::setBaseUrl(const QUrl& url)
 	m_baseUrl = url;
 }
 
-/**
- * 由 baseUrl 拼出接口地址：**只借它的 scheme/host/port**，path 重设、query 与 fragment 清掉。
- *
- * 为什么必须这样：ServerManager::baseUrlReady 交出来的 baseUrl 是"带启动令牌"的那条
- * （http://127.0.0.1:<port>/?token=…）。老写法
- *     QUrl(base.toString(QUrl::RemovePath) + path)
- * 会得到 http://127.0.0.1:<port>?token=…/dsh-market/registry —— path 为空、接口地址被
- * 当成 token 的参数值，请求实际落到 `GET /`：
- *   · 没有 cookie 时 → index 围栏 401；
- *   · 有 cookie 时   → index 路由 303 到 index.html，客户端把 HTML 当 JSON 解析，
- *                      于是市场显示"0 个插件"（静默故障，最难查的那种）。
- */
+// 由 baseUrl 拼出接口地址：只借它的 scheme/host/port，path 重设、query 与 fragment 清掉。
+// ⚠️ 不能用 `QUrl(base.toString(QUrl::RemovePath) + path)`：带令牌的 baseUrl 会把接口地址当成 token 的值、
+// 请求落到 `GET /`（无 cookie → 401；有 cookie → 303 到 index.html，HTML 被当 JSON，市场显示"0 个插件"）。
 QUrl PluginMarketClient::endpointUrl(const QString& path) const
 {
 	QUrl url = m_baseUrl;
@@ -55,7 +46,7 @@ QUrl PluginMarketClient::endpointUrl(const QString& path) const
 	return url;
 }
 
-/** 纯 origin（scheme://host:port），给 POST 的 Origin 头用。 */
+// 纯 origin（scheme://host:port），给 POST 的 Origin 头用。
 static QUrl originOf(const QUrl& base)
 {
 	QUrl url = base;
@@ -95,10 +86,6 @@ QString PluginMarketClient::restartPath()
 	return QLatin1String(kRestartPath);
 }
 
-// ------------------------------------------------------------------
-// GET
-// ------------------------------------------------------------------
-
 void PluginMarketClient::fetchRegistry()
 {
 	const QString path = registryPath();
@@ -128,8 +115,7 @@ void PluginMarketClient::fetchRegistry()
 		const QJsonArray plugins = root.value(QStringLiteral("registry")).toObject()
 			.value(QStringLiteral("plugins")).toArray();
 
-		// 契约没满足就喊出来：这类"静默 0 个插件"（例如被前端回退喂了一份 HTML）
-		// 过去只能靠猜，这里把状态码/字节数/响应开头都打出来
+		// 契约没满足就喊出来：这类"静默 0 个插件"过去只能靠猜，这里把状态码/字节数/响应开头都打出来
 		if (plugins.isEmpty())
 			qWarning().noquote() << "[PluginMarketClient] registry payload unexpected"
 			<< "status=" << status << "bytes=" << raw.size() << "body=" << bodyPreview(raw);
@@ -167,10 +153,6 @@ void PluginMarketClient::fetchInstalled()
 		emit installedLoaded(root.value(QStringLiteral("installed")).toObject());
 		});
 }
-
-// ------------------------------------------------------------------
-// POST
-// ------------------------------------------------------------------
 
 void PluginMarketClient::installPlugin(const QString& url)
 {
@@ -230,8 +212,7 @@ void PluginMarketClient::post(const QString& path, const QJsonObject& body)
 				<< "error=" << serverError;
 			emit operationFailed(path, serverError, status);
 
-			// 5xx / 传输错误多半只在服务端可见（pnpm、网络、路由抛异常），
-			// 顺手拉取 dshmarket 内存日志，定位 502 的具体原因
+			// 5xx / 传输错误多半只在服务端可见（pnpm、网络、路由抛异常），顺手拉 dshmarket 日志定位 502
 			if (status >= 500 || transportError)
 				fetchDiagnosticLogs(path);
 			return;

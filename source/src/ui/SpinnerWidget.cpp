@@ -1,6 +1,5 @@
 #include "ui/SpinnerWidget.h"
 #include "core/ConnectionManager.h"
-
 #include "common/appearance/ThemeManager.h"
 
 #include <QPainter>
@@ -11,9 +10,9 @@ SpinnerWidget::SpinnerWidget(QWidget* parent)
 {
 	m_timer = new QTimer(this);
 	m_timer->setInterval(30);
+
 	// 转圈控件有多实例，index 带上自身地址
-	dshRegister(
-		QStringLiteral("SpinnerWidget.%1").arg(reinterpret_cast<quintptr>(this)),
+	dshRegister(QStringLiteral("SpinnerWidget.%1").arg(reinterpret_cast<quintptr>(this)),
 		m_timer, &QTimer::timeout, this, [this]() {
 			m_angle = (m_angle + 12) % 360;
 			update();
@@ -30,7 +29,7 @@ void SpinnerWidget::paintEvent(QPaintEvent* event)
 {
 	Q_UNUSED(event)
 
-		QPainter painter(this);
+	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 
 	const int side = qMin(width(), height());

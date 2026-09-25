@@ -12,7 +12,6 @@ class SpinnerWidget : public QWidget
 
 public:
 	explicit SpinnerWidget(QWidget* parent = nullptr);
-
 	void start();
 
 protected:

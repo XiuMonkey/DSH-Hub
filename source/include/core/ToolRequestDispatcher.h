@@ -28,8 +28,8 @@ namespace ToolRequestDispatcher
 		class ToolTask : public QRunnable
 		{
 		public:
-			ToolTask(DllCaller* dllCaller, DshNamedPipeBridge* bridge,
-				int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket)
+			ToolTask(DllCaller* dllCaller, DshNamedPipeBridge* bridge, int id, const QString& tool,
+				const QJsonObject& args, QLocalSocket* socket)
 				: m_dllCaller(dllCaller)
 				, m_bridge(bridge)
 			{
@@ -57,8 +57,7 @@ namespace ToolRequestDispatcher
 
 				// QLocalSocket 只在 GUI 线程读写：响应经 queued 连接回投
 				QMetaObject::invokeMethod(m_bridge,
-					[bridge = QPointer<DshNamedPipeBridge>(m_bridge),
-					jobId, client, success, payload, errText]() {
+					[bridge = QPointer<DshNamedPipeBridge>(m_bridge), jobId, client, success, payload, errText]() {
 						if (bridge.isNull() || client.isNull())
 							return; // 客户端已断开/桥已销毁，丢弃响应
 						if (success)
@@ -77,8 +76,8 @@ namespace ToolRequestDispatcher
 	} // namespace detail
 
 	// DLL/COM 调用挪到 Worker 线程执行（GUI 不卡、不同 DLL 并行）；同一连接上响应可能乱序，Node 端按请求 id 配对。
-	inline void dispatch(DllCaller* dllCaller, DshNamedPipeBridge* bridge, QThreadPool* pool,
-		int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket)
+	inline void dispatch(DllCaller* dllCaller, DshNamedPipeBridge* bridge, QThreadPool* pool, int id,
+		const QString& tool, const QJsonObject& args, QLocalSocket* socket)
 	{
 		if (!dllCaller || !bridge || !pool)
 			return;

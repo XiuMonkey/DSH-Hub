@@ -1,4 +1,3 @@
-// DshEventParser.cpp
 // DSH Mux 流 JSON 解析接口实现；不依赖任何 UI 类，可单独复用。
 
 #include "network/DshEventParser.h"
@@ -21,7 +20,6 @@ QString extractEventText(const QJsonObject& event)
 
 		if (content.isString())
 			return content.toString();
-
 		if (content.isArray()) {
 			QStringList parts;
 			const QJsonArray blocks = content.toArray();
@@ -103,7 +101,6 @@ QString extractReply(const QJsonObject& event)
 
 	if (content.isString())
 		return content.toString();
-
 	if (!content.isArray())
 		return QString();
 
@@ -133,8 +130,7 @@ ToolCallInfo extractToolCall(const QJsonObject& event)
 		info.arguments = argumentsValue.toObject();
 	}
 	else if (argumentsValue.isString()) {
-		info.arguments = QJsonDocument::fromJson(
-			argumentsValue.toString().toUtf8()).object();
+		info.arguments = QJsonDocument::fromJson(argumentsValue.toString().toUtf8()).object();
 	}
 
 	return info;

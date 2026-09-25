@@ -1,16 +1,16 @@
 ---
-# DSH Hub 的 C++ 排版规则。改代码前请先按本文件格式化，避免风格漂移。
+# DSH Hub 的 C++ 排版规则。改代码前先按本文件格式化，避免风格漂移（clang-format -i <file>）。
 # 三条硬规则：
-#   1. 空行只在"逻辑块之间"，块内不撒空行（尤其 include 连成一片）
-#   2. 注释要么在若干行代码上方成块，要么行尾简短一句；不搞一行代码一行注释
-#   3. 函数调用的实参不跨行拆开
+#   1. 空行只留在"逻辑块之间"；块内不撒空行，include 连成一片不空行
+#   2. 注释要么在若干行代码上方成块，要么在行尾简短一句；不搞一行代码一行注释，能短则短
+#   3. 函数调用的实参不要一个一行地拆开，尽量排在一行
 Language: Cpp
 BasedOnStyle: LLVM
 
 # ---- 缩进：沿用现有风格（Tab 缩进，视觉宽度 4）----
 IndentWidth: 4
 TabWidth: 4
-UseTab: ForIndentation
+UseTab: ForContinuationAndIndentation
 ContinuationIndentWidth: 4
 NamespaceIndentation: All
 AccessModifierOffset: -4
@@ -52,8 +52,10 @@ MaxEmptyLinesToKeep: 1
 # ---- 不动 include 顺序（本项目按模块手工分组）与 using 顺序 ----
 SortIncludes: false
 SortUsingDeclarations: false
+IncludeBlocks: Preserve
+FixNamespaceComments: false
 
-# ---- 规则 2：注释文字不自动重排（中英文混排重排会乱），交给人工/审阅 ----
+# ---- 规则 2：注释文字不自动重排（中英混排重排会乱）----
 ReflowComments: false
 
 # ---- 少做无谓对齐，减少噪声 diff ----
@@ -63,7 +65,7 @@ AlignConsecutiveMacros: false
 AlignTrailingComments: false
 AlignEscapedNewlines: Left
 
-# ---- 短结构不合并成一行（Qt/lambda 代码里单行化反而难读）----
+# ---- 短结构不合并成一行（Qt/lambda 代码单行化反而难读）----
 AllowShortBlocksOnASingleLine: Never
 AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: Never
@@ -77,11 +79,9 @@ ReferenceAlignment: Left
 DerivePointerAlignment: false
 
 # ---- 其它 ----
-IncludeBlocks: Preserve
 EmptyLineBeforeAccessModifier: Leave
 IndentCaseLabels: false
 IndentPPDirectives: None
-FixNamespaceComments: true
 SpaceAfterTemplateKeyword: false
 Cpp11BracedListStyle: false
 BreakConstructorInitializers: BeforeComma

@@ -8,19 +8,15 @@
 #include <QFile>
 #include <QHash>
 #include <QJsonObject>
-
 #include <memory>
 
 namespace
 {
-	// dsh 0.1.5：endpoint 用斜杠；session/list 的 wire 名是 _request
 	const char* const kSessionListMethod = "session/list";
 	const char* const kSessionCreateMethod = "session/create";
 }
 
-void SessionService::refreshSessions(
-	DshApiClient* api,
-	SessionCatalog* catalog,
+void SessionService::refreshSessions(DshApiClient* api, SessionCatalog* catalog,
 	const std::function<void(const QString& autoSelectSessionId)>& onReady,
 	const std::function<void(const DshApiClient::RpcError& error)>& onError)
 {
@@ -31,7 +27,6 @@ void SessionService::refreshSessions(
 
 	auto applySnapshot = [api, catalog, state, onReady, onError]() {
 		catalog->applySnapshot(*state);
-
 		if (!state->sessionsOk) {
 			if (onError)
 				onError(DshApiClient::RpcError{ state->errorCode, state->errorMessage });
@@ -40,22 +35,17 @@ void SessionService::refreshSessions(
 
 		const QString autoSelectId = catalog->autoSelectSessionId();
 
-		TimingLogger::mark(QStringLiteral("session/list loaded (%1 items)")
-			.arg(state->sessions.size()));
-
+		TimingLogger::mark(QStringLiteral("session/list loaded (%1 items)").arg(state->sessions.size()));
 		if (onReady)
 			onReady(autoSelectId);
 		};
 
-	api->callMethod(
-		QLatin1String(kSessionListMethod),
-		SessionCommands::sessionList(),
+	api->callMethod(QLatin1String(kSessionListMethod), SessionCommands::sessionList(),
 		[state, applySnapshot](const QJsonObject& value) {
 			const QJsonArray items = value.value(QStringLiteral("items")).toArray();
 			state->sessions = items;
 			state->sessionsOk = true;
-			// 0.1.5：session/list 里没有工作区信息（workspace.list 已删除），
-			// workspacesOk 保持 false 让 catalog 保留 workspace/follow 给的基线分组。
+			// workspacesOk 保持 false，让 catalog 保留 workspace/follow 给的基线分组
 			state->workspacesOk = false;
 			applySnapshot();
 		},
@@ -67,18 +57,14 @@ void SessionService::refreshSessions(
 		});
 }
 
-void SessionService::createSession(
-	DshApiClient* api,
-	const QString& workspaceId,
+void SessionService::createSession(DshApiClient* api, const QString& workspaceId,
 	const std::function<void(const QString& sessionId)>& onCreated,
 	const std::function<void(const DshApiClient::RpcError& error)>& onError)
 {
 	if (!api)
 		return;
 
-	api->callMethod(
-		QLatin1String(kSessionCreateMethod),
-		SessionCommands::sessionCreate(workspaceId),
+	api->callMethod(QLatin1String(kSessionCreateMethod), SessionCommands::sessionCreate(workspaceId),
 		[onCreated](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
 			if (sid.isEmpty())
@@ -92,16 +78,13 @@ void SessionService::createSession(
 		});
 }
 
-void SessionService::refreshTitles(
-	DshApiClient* api,
+void SessionService::refreshTitles(DshApiClient* api,
 	const std::function<void(const QString& sessionId, const QString& title)>& onTitle)
 {
 	if (!api)
 		return;
 
-	api->callMethod(
-		QLatin1String(kSessionListMethod),
-		SessionCommands::sessionList(),
+	api->callMethod(QLatin1String(kSessionListMethod), SessionCommands::sessionList(),
 		[onTitle](const QJsonObject& value) {
 			const QJsonArray items = value.value(QStringLiteral("items")).toArray();
 			for (const auto& item : items) {
@@ -113,7 +96,6 @@ void SessionService::refreshTitles(
 				const QString label = SessionCatalog::projectionTitle(session);
 				if (label.isEmpty())
 					continue;
-
 				if (onTitle)
 					onTitle(sid, label);
 			}
@@ -132,6 +114,6 @@ void SessionService::clearAllSessionData(const QString& dshHome)
 		sessionsDir.mkpath(QStringLiteral("."));
 	}
 
-	// 工作区清单保存在 storage domain 中，不删除的话重启后会重新出现旧工作区
+	// 不删的话重启后会重新出现旧工作区
 	QFile::remove(dshHome + QStringLiteral("/storages/workspace.json"));
 }

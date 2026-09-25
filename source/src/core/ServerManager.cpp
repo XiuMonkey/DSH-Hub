@@ -22,7 +22,6 @@ namespace
 {
 	QUrl storedServerUrl()
 	{
-		// 优先级：环境变量 > 本地持久化设置
 		const QString envUrl = qEnvironmentVariable("DSH_SERVER_URL").trimmed();
 		if (!envUrl.isEmpty()) {
 			const QUrl url(envUrl);
@@ -40,13 +39,8 @@ namespace
 		return QUrl();
 	}
 
-	// ------------------------------------------------------------------
-	// 内置插件台账
-	// ------------------------------------------------------------------
-	// <profile>/.dsh-hub-builtin.json 记录每个内置插件装的是哪一份内容。
-	// revision 是插件源文件的 SHA1 前缀：内容没变就跳过安装，变了（开发时改
-	// 了插件源码）下次启动自动重装 —— 不需要手工删目录，也不用记得改版本号。
-	// 反过来，台账里已记录的插件即使用户手工删掉了也不重装：删除是用户的选择。
+	// 内置插件台账 .dsh-hub-builtin.json：revision 是插件源 SHA1 前缀，内容变了下次启动重装；
+	// 台账里有记录但被手工删掉的插件不重装
 	QString builtinMarkerPath(const QString& profileDir)
 	{
 		return profileDir + QStringLiteral("/.dsh-hub-builtin.json");
@@ -115,9 +109,7 @@ namespace
 		}
 	}
 
-	// 把 qrc 里的插件目录落到目标目录：逐文件读出来再写下去。不用 QFile::copy
-	// 是因为它对资源文件不保证可用。.json 落盘前去掉 UTF-8 BOM —— Node 的
-	// JSON.parse 会被 BOM 噎住，而 package.json 读不了插件就是死包。
+	// qrc 插件目录逐文件写到目标目录；.json 落盘前去掉 UTF-8 BOM（Node 的 JSON.parse 会被噎住）
 	bool materializePluginFiles(const QString& sourceDir, const QString& destDir, QString* error)
 	{
 		const QDir srcDir(sourceDir);
@@ -167,19 +159,10 @@ namespace
 		return true;
 	}
 
-	// cordis.patch.yml 的写入统一走 ExtensionRegistry::ensurePatchEntry（行格式与
-	// 判重规则的唯一所有者，ExtensionLoader 与 session-stats 那一行也调它）。
+	// patch 写入统一走 ensurePatchEntry：行格式与判重的唯一所有者
 
-	// ------------------------------------------------------------------
-	// 出厂 settings.yaml 的内容
-	// ------------------------------------------------------------------
-	// 注释写成 ASCII：这个文件会被服务端的 YAML 解析器和各种工具读，中文注释在
-	// 没有 BOM 的 UTF-8 下容易被当成乱码（与 cordis.patch.yml 同一个理由）。
-	//
-	// models 写成空数组是**刻意的**，不是"没配"：@deepseek-ai/dsh-llm-deepseek 在
-	// 该路由的 models 缺席时会公布自带的 DEFAULT_MODELS（deepseek-flash 等 4 条），
-	// 只有空数组才表达"这条路由什么也不公布"。于是出厂模型列表为空，
-	// 里面每一条都必须是用户自己加的。
+	// 出厂 settings.yaml；注释写成 ASCII，无 BOM 的 UTF-8 中文会被 YAML 解析器当成乱码。
+	// models 写成空数组是**刻意的**：适配器在 models 缺席时会公布自带 DEFAULT_MODELS（4 条）。
 	const char* const kFactorySettingsYaml =
 		"# DSH Hub factory settings.\n"
 		"#\n"
@@ -189,16 +172,10 @@ namespace
 		"llm-deepseek:\n"
 		"  models: []\n";
 
-	// ------------------------------------------------------------------
-	// 进程级"后端已被接管"标记
-	// ------------------------------------------------------------------
-	// 客户端扩展接管 DSH API 时置上（见 DshApiClient::Takenover）。刻意是**文件作用域静态**
-	// 而不是成员：ServerManager 每个主窗口一份，切主题会新建一个，而接管状态跨窗口存活
-	// （插件实例在进程内复用、新窗口会对它再调一次 attachHost）。用成员的话，切主题后新窗口
-	// 的 start() 会把内置 DSH 进程重新拉起来 —— 而那正是接管要避免的事。
-	// 只在 GUI 线程读写。
+	// ⚠️ 文件作用域静态而非成员：ServerManager 每窗口一份、切主题会新建，用成员的话切主题后的
+	// start() 会把内置进程重新拉起（见 DshApiClient::Takenover）
 	bool g_backendTakenover = false;
-} // namespace
+}
 
 ServerManager::ServerManager(QObject* parent)
 	: QObject(parent)
@@ -218,19 +195,16 @@ void ServerManager::start(const QUrl& initialBaseUrl, QProcess* initialServerPro
 	const QString appDir = QCoreApplication::applicationDirPath();
 	m_dshHome = appDir + QStringLiteral("/resources/server/harness");
 
-	// 接管态：不启动内置 DSH 服务端（它是这条路线上唯一的后端，而它已经被扩展取代了）。
-	// ⚠️ 位置刻意在 m_dshHome 赋值**之后**：Settings / PluginsManager 是在 start() 之后
-	//    创建的，它们要用 dshHome；提前 return 会把它们带进"空 dshHome"的坑里。
+	// 接管态：不启动内置 DSH 服务端（已被扩展取代）
+	// ⚠️ 必须在 m_dshHome 赋值之后：Settings / PluginsManager 要用 dshHome，提前 return 会踩空
 	if (g_backendTakenover) {
-		// 接管之后还有进程被移交给本窗口（takeProcess()）：那种情况把那条进程一并停掉，
-		// 否则它就成了一条没人管、还在跑的内置服务端（stopForTakeover 幂等）。
+		// 接管后仍被移交本窗口的进程一并停掉，否则会留下没人管的内置服务端
 		if (initialServerProcess) {
 			m_serverProcess = initialServerProcess;
 			m_serverProcess->setParent(this);
 			stopForTakeover();
 		}
-		qInfo().noquote() << QStringLiteral(
-			"[ServerManager] 后端已被客户端扩展接管：不启动内置 DSH 服务端");
+		qInfo().noquote() << QStringLiteral("[ServerManager] 后端已被客户端扩展接管：不启动内置 DSH 服务端");
 		return;
 	}
 
@@ -239,7 +213,6 @@ void ServerManager::start(const QUrl& initialBaseUrl, QProcess* initialServerPro
 		baseUrl = storedServerUrl();
 
 	if (!baseUrl.isEmpty()) {
-		// 复用已有 DSH server，不创建新 server
 		if (initialServerProcess) {
 			m_serverProcess = initialServerProcess;
 			m_serverProcess->setParent(this);
@@ -253,12 +226,9 @@ void ServerManager::start(const QUrl& initialBaseUrl, QProcess* initialServerPro
 
 void ServerManager::restart()
 {
-	// 接管态：重启内置服务端没有任何意义（它已经被扩展取代，且进程早就停了）。
-	// 触达这条路径的有：设置里保存服务端设置（DSHHub.042）、插件里的"重启服务"——
-	// 市场入口已禁用，但这条线仍可能从别处走到，所以在这里明确变成 no-op 而不是"假装成功"。
+	// 接管态：重启内置服务端没有意义，这里明确变成 no-op
 	if (g_backendTakenover) {
-		qInfo().noquote() << QStringLiteral(
-			"[ServerManager] 后端已被客户端扩展接管：restart() 不重启内置 DSH 服务端");
+		qInfo().noquote() << QStringLiteral("[ServerManager] 后端已被客户端扩展接管：restart() 不重启内置 DSH 服务端");
 		return;
 	}
 
@@ -287,21 +257,14 @@ void ServerManager::publishBaseUrl(const QUrl& url)
 	emit baseUrlReady(m_baseUrl);
 }
 
-// 接管时停掉已经启动的内置 DSH 进程。
-//
-// ⚠️ 不用 takeProcess()：那是"把进程移交给下一个窗口"（会把 parent 置空并交出去），
-//    这里要的是真停掉 —— 所以照 restart() 里那段现成的 kill 写法，只是把"停止"和
-//    "重启"分开。
-// ⚠️ 幂等：切断点有四种，都必须当成功处理 —— ① 进程还没 spawn（nullptr）；
-//    ② 正在启动；③ 已经退出（NotRunning）；④ 已经停过（nullptr）。所以判空 + 判状态，
-//    并且无论哪种都把指针清干净。
+// 接管时停掉内置 DSH 进程（不用 takeProcess()，那是移交下一个窗口）
+// ⚠️ 幂等：未 spawn / 启动中 / 已退出 / 已停过四种切断点都必须当成功并清干净指针
 void ServerManager::stopForTakeover()
 {
 	setTakenover(true);
 
 	if (!m_serverProcess) {
-		qInfo().noquote() << QStringLiteral(
-			"[ServerManager] 接管：当前没有内置 DSH 进程可停（还没启动 / 已移交）");
+		qInfo().noquote() << QStringLiteral("[ServerManager] 接管：当前没有内置 DSH 进程可停（还没启动 / 已移交）");
 		return;
 	}
 
@@ -312,8 +275,7 @@ void ServerManager::stopForTakeover()
 		m_serverProcess->waitForFinished(2000);
 	}
 	else {
-		qInfo().noquote() << QStringLiteral(
-			"[ServerManager] 接管：内置 DSH 进程已退出，只做清理");
+		qInfo().noquote() << QStringLiteral("[ServerManager] 接管：内置 DSH 进程已退出，只做清理");
 	}
 
 	delete m_serverProcess;
@@ -362,26 +324,22 @@ bool ServerManager::ensureFactorySettings(const QString& dshHome)
 
 	const QString path = dshHome + QStringLiteral("/settings.yaml");
 
-	// 已经有一份就一个字都不动：那可能是用户自己改过的（加模型、改默认模型、
-	// 甚至把 models: [] 删回去换用适配器自带目录）。
+	// 已有就一个字都不动：可能是用户自己改过的
 	if (QFile::exists(path))
 		return true;
 
 	QSaveFile file(path);
 	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-		qWarning().noquote() << QStringLiteral(
-			"[ServerManager] 出厂 settings.yaml 写不进去: %1").arg(path);
+		qWarning().noquote() << QStringLiteral("[ServerManager] 出厂 settings.yaml 写不进去: %1").arg(path);
 		return false;
 	}
 	file.write(kFactorySettingsYaml);
 	if (!file.commit()) {
-		qWarning().noquote() << QStringLiteral(
-			"[ServerManager] 出厂 settings.yaml 提交失败: %1").arg(path);
+		qWarning().noquote() << QStringLiteral("[ServerManager] 出厂 settings.yaml 提交失败: %1").arg(path);
 		return false;
 	}
 
-	qInfo().noquote() << QStringLiteral(
-		"[ServerManager] 已写入出厂 settings.yaml（不随附任何模型）: %1").arg(path);
+	qInfo().noquote() << QStringLiteral("[ServerManager] 已写入出厂 settings.yaml（不随附任何模型）: %1").arg(path);
 	return true;
 }
 
@@ -409,12 +367,10 @@ void ServerManager::startBundledServer()
 	QDir().mkpath(cwd);
 	QDir().mkpath(dshHome);
 
-	// 出厂配置必须在服务端起之前就位：DSH 起完就读 settings.yaml，晚了要等下次重启。
-	// 这一步也是"清空 harness 之后不再冒出随附模型"的关键 —— 数据根是这里建的。
+	// 出厂配置必须在服务端起之前就位：DSH 起完就读 settings.yaml，晚了要等下次重启
 	ensureFactorySettings(dshHome);
 
-	// 如果 profile 里引用的插件包不存在（例如插件市场被删除），自动从 bundles 中移除，
-	// 避免 DSH 因为缺少可选插件而无法启动。
+	// profile 引用的插件包不存在时自动从 bundles 移除，避免 DSH 无法启动
 	{
 		const QString profileDir = dshHome + QStringLiteral("/profiles/web");
 		const QString manifestPath = profileDir + QStringLiteral("/package.json");
@@ -459,11 +415,7 @@ void ServerManager::startBundledServer()
 
 			QFile urlIndex(urlPrinterDir + QStringLiteral("/index.js"));
 			if (urlIndex.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-				// dsh 0.1.5: /api sits behind a browser-auth fence. Without the
-				// authority-bound cookie every call answers 401, and that cookie is
-				// minted only by GET /?token=<launch token>. The launch token is
-				// exposed nowhere else, so the printer hands the authenticated URL
-				// to the client on stdout.
+				// /api 需要启动令牌换来的认证 cookie，故打印机把认证 URL 打到 stdout
 				urlIndex.write("import z from \"@deepseek-ai/schemastery\";\n");
 				urlIndex.write("const name = \"dsh-url-printer\";\n");
 				urlIndex.write("const inject = [\"webServer\", \"connection\"];\n");
@@ -495,40 +447,26 @@ void ServerManager::startBundledServer()
 				patch.write("# Minimal API-only profile for the DSH Hub Qt client.\n");
 				patch.write("- id: hmr\n  disabled: true\n\n");
 				patch.write("- insert:\n");
-				// dsh 0.1.5: storage / storage-json / storage-domain /
-				// session-projection-cache are shipped by dsh-base with exactly this
-				// config, so inserting them here aborts the boot with
-				// "duplicate loader entry id: storage".
+				// storage 等由 dsh-base 附带，插入会以 "duplicate loader entry id" 中止启动
 				patch.write("    - id: workspace\n      name: '@deepseek-ai/dsh-workspace'\n\n");
 				patch.write("    - id: plugin-inventory\n      name: '@deepseek-ai/dsh-host-plugin-inventory'\n\n");
-				// dsh 0.1.5: '@deepseek-ai/dsh-host-apiproxy' is gone (last published
-				// version 0.1.1-rc.2). /api dispatch now comes from the
-				// '@deepseek-ai/dsh-api-gateway' row that dsh-base mounts, and the
-				// business methods come from these controller rows.
+				// dsh-host-apiproxy 已消失；/api 分派来自 dsh-base 的 api-gateway 行
 				patch.write("    - id: api-session-controller\n      name: '@deepseek-ai/dsh-api-session-controller'\n\n");
 				patch.write("    - id: api-workspace-controller\n      name: '@deepseek-ai/dsh-api-workspace-controller'\n\n");
 				patch.write("    - id: api-settings-controller\n      name: '@deepseek-ai/dsh-api-settings-controller'\n\n");
 				patch.write("    - id: api-workspace-files\n      name: '@deepseek-ai/dsh-api-workspace-files'\n\n");
 				patch.write("    - id: cordis-host-runner\n      name: '@deepseek-ai/dsh-cordis-host-runner'\n\n");
-				// dsh 0.1.5：shipped preset（standard 等）里 tool-subagent 配了
-				// modelSelectionSettings，它要求 host 侧挂载这一行（官方 web bundle
-				// 的 patch 里就是这么插的）。缺它整份 preset 挂载失败，会话 resume
-				// 会以 api-session/error 结束，一发 prompt 就失败。
+				// shipped preset 里 tool-subagent 配了 modelSelectionSettings，要求 host 侧挂载这一行；
+				// 缺它整份 preset 挂载失败，会话 resume 会以 api-session/error 结束
 				patch.write("    - id: subagent-model-selection-settings\n      name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'\n\n");
 				patch.write("    - id: web-startup\n      name: '@deepseek-ai/dsh-web-app/startup'\n\n");
 				patch.write("    - id: webserver\n      name: '@deepseek-ai/dsh-host-webserver'\n      inject: [webStartup]\n      config:\n        host: !!js ctx.webStartup.host ?? '127.0.0.1'\n        port: !!js ctx.webStartup.port ?? 3080\n\n");
-				// dsh 0.1.5: the browser-auth cookie for /api is minted only by the
-				// index route, which this row owns (frontend-static fallback). Without
-				// it GET /?token=... answers 404 and the client can never authenticate.
-				// openBrowser/surfaceContext are off: the Qt window is the surface.
+				// /api 的认证 cookie 只由本行拥有的 index 路由铸出；没有它 GET /?token=... 会 404
 				patch.write("    - id: web-runtime\n      name: '@deepseek-ai/dsh-web-app'\n      inject: [webStartup]\n      config:\n        openBrowser: false\n        printUrl: true\n        surfaceContext: false\n        trustedHosts: []\n\n");
 				patch.write("    - id: directory-picker-auto\n      name: '@deepseek-ai/dsh-host-directory-picker-auto'\n      inject: [webServer, loader]\n\n");
 				patch.write("    - id: url-printer\n      name: 'dsh-url-printer'\n      inject: [webServer]\n\n");
 				patch.write("    - id: connection\n      name: '@deepseek-ai/dsh-client-connection'\n      inject: []\n      config:\n        trustedHosts: []\n\n");
-				// dsh 0.1.5: dsh-api-session-controller injects the fileUploads
-				// service provided by this package; without the row the whole tree
-				// fails its activation audit ("pending (waiting for service:
-				// fileUploads)").
+				// api-session-controller 注入本包的 fileUploads 服务；缺它整棵树激活审计失败
 				patch.write("    - id: file-upload\n      name: '@deepseek-ai/dsh-client-file-upload'\n\n");
 				patch.write("    - id: api-remotes\n      name: '@deepseek-ai/dsh-api-remotes'\n\n");
 				patch.write("    - id: agent-presets\n      name: '@deepseek-ai/dsh-agent-presets'\n      config:\n        default: standard\n");
@@ -570,8 +508,10 @@ void ServerManager::startBundledServer()
 							continue;
 						}
 
-						const QString profilePkg = profileDir + QStringLiteral("/node_modules/") + name + QStringLiteral("/package.json");
-						const QString serverPkg = appDir + QStringLiteral("/resources/server/node_modules/") + name + QStringLiteral("/package.json");
+						const QString profilePkg = profileDir + QStringLiteral("/node_modules/") + name
+							+ QStringLiteral("/package.json");
+						const QString serverPkg = appDir + QStringLiteral("/resources/server/node_modules/") + name
+							+ QStringLiteral("/package.json");
 						if (QFile::exists(profilePkg) || QFile::exists(serverPkg)) {
 							validBundles.append(value);
 						}
@@ -597,17 +537,8 @@ void ServerManager::startBundledServer()
 			}
 		}
 
-		// ------------------------------------------------------------------
-		// 会话统计投影：'@deepseek-ai/dsh-session-stats'
-		// ------------------------------------------------------------------
-		// 输入卡片下方那行小灰字（轮/步 + LLM/工具/首 token/解码耗时）读的是
-		// `sessionStats` 这块会话投影；而注册它的这一行只挂在官方 web bundle 里，
-		// 本 profile 是"精简 API-only"、整套自己写的，所以必须自己补上，
-		// 否则 sessionStats 这个 key 根本不存在（表现：小灰字只剩 token 那一段，
-		// 或者什么都没有）。
-		//
-		// profile 一旦生成就不再重写，因此这里每次都做一次幂等修补：
-		// 已经装好的老 profile 也会在下次启动时补上这一行。
+		// 统计小灰字读的是 `sessionStats` 会话投影，注册它的行只挂在官方 web bundle 里；
+		// 本 profile 是精简 API-only，必须幂等补上（profile 生成后不再重写）
 		{
 			const QString statsName = QStringLiteral("@deepseek-ai/dsh-session-stats");
 			const bool statsAvailable =
@@ -621,13 +552,9 @@ void ServerManager::startBundledServer()
 					"[ServerManager] 找不到 %1：输入区统计小灰字只会有 token 那一段").arg(statsName);
 			}
 			else {
-				// 注释写成 ASCII：这个 patch 文件会被各种工具读，中文注释在没有
-				// BOM 的 UTF-8 下容易被当成乱码显示
 				QString error;
-				const ExtensionRegistry::PatchEntryResult row = ExtensionRegistry::ensurePatchEntry(
-					profileDir,
-					QStringLiteral("session-stats"),
-					statsName,
+				const ExtensionRegistry::PatchEntryResult row = ExtensionRegistry::ensurePatchEntry(profileDir,
+					QStringLiteral("session-stats"), statsName,
 					QStringLiteral("composer stats line: sessionStats projection "
 						"(turns/steps + LLM/tool/ttft/decode times)"),
 					&error);
@@ -636,16 +563,13 @@ void ServerManager::startBundledServer()
 					qWarning().noquote() << QStringLiteral(
 						"[ServerManager] profile patch 补不上 %1: %2").arg(statsName, error);
 				else if (row == ExtensionRegistry::PatchEntryResult::Added)
-					qInfo().noquote() << QStringLiteral(
-						"[ServerManager] profile patch: 已补上 %1").arg(statsName);
+					qInfo().noquote() << QStringLiteral("[ServerManager] profile patch: 已补上 %1").arg(statsName);
 			}
 		}
 	}
 
-	// 内置插件在服务端启动前装好：profile 首次生成时（以及内置源码变更后）装一次。
-	// 服务端第一次读 cordis.patch.yml 时这些行就已经在了。
-	// 注意：若 3080 已被另一个已在运行的服务端占用（复用外部服务端），本次安装的
-	// 行要等那个进程重启才被读到。
+	// 内置插件在服务端启动前装好（profile 生成或内置源码变更时装一次）；复用外部服务端时，
+	// 新装的行要等它重启才被读到
 	ensureBuiltinPlugins(dshHome + QStringLiteral("/profiles/web"));
 
 	launchBundledServer(nodePath, entryPath, dshEntry, cwd, dshHome, 0);
@@ -656,8 +580,7 @@ void ServerManager::ensureBuiltinPlugins(const QString& profileDir)
 	if (profileDir.isEmpty())
 		return;
 
-	// 内置插件清单：qrc 里的源目录名 == node_modules 下的目录名 == cordis.patch.yml
-	// 里那一行的 id/name。加内置插件只需在这里加一行，并把源放进 qrc。
+	// 内置插件清单：qrc 目录名 == node_modules 目录名 == patch 行的 id/name
 	static const QStringList kBuiltinPlugins{ QStringLiteral("ToolsFilterPlugin") };
 
 	const QString nodeModulesPath = profileDir + QStringLiteral("/node_modules");
@@ -671,15 +594,14 @@ void ServerManager::ensureBuiltinPlugins(const QString& profileDir)
 
 		const QString revision = builtinSourceRevision(sourceDir);
 		if (revision.isEmpty()) {
-			qWarning().noquote() << QStringLiteral(
-				"[ServerManager] 内置插件内容不可读: %1").arg(sourceDir);
+			qWarning().noquote() << QStringLiteral("[ServerManager] 内置插件内容不可读: %1").arg(sourceDir);
 			continue;
 		}
 
 		const QString recorded = recordedBuiltinRevision(profileDir, pluginName);
 		if (recorded == revision) {
-			qDebug().noquote() << QStringLiteral(
-				"[ServerManager] 内置插件已装且未变更: %1 (rev %2)").arg(pluginName, revision);
+			qDebug().noquote() << QStringLiteral("[ServerManager] 内置插件已装且未变更: %1 (rev %2)")
+				.arg(pluginName, revision);
 			continue;
 		}
 
@@ -687,26 +609,21 @@ void ServerManager::ensureBuiltinPlugins(const QString& profileDir)
 
 		QString error;
 		if (!installBuiltinPlugin(profileDir, pluginName, &error)) {
-			// 装不上不阻断启动：插件缺席只是那项功能不可用，服务端本身照常起。
-			qWarning().noquote() << QStringLiteral("[ServerManager] 内置插件安装失败 %1: %2")
-				.arg(pluginName, error);
+			// 装不上不阻断启动：插件缺席只是那项功能不可用
+			qWarning().noquote() << QStringLiteral("[ServerManager] 内置插件安装失败 %1: %2").arg(pluginName, error);
 			continue;
 		}
 
 		recordBuiltinRevision(profileDir, pluginName, revision);
 		qInfo().noquote() << QStringLiteral("[ServerManager] 内置插件%1: %2 (rev %3)")
-			.arg(recorded.isEmpty() ? QStringLiteral("已安装") : QStringLiteral("已更新"))
-			.arg(pluginName, revision);
+			.arg(recorded.isEmpty() ? QStringLiteral("已安装") : QStringLiteral("已更新")).arg(pluginName, revision);
 	}
 }
 
-bool ServerManager::installBuiltinPlugin(const QString& profileDir,
-	const QString& pluginName,
-	QString* error)
+bool ServerManager::installBuiltinPlugin(const QString& profileDir, const QString& pluginName, QString* error)
 {
-	// 就地安装：qrc 里的插件目录进 node_modules，cordis.patch.yml 补上它那一行。
-	// 不走 ExtensionLoader —— 那是用户装 .ext 扩展的通路（解归档 + 必须带
-	// main.dll），内置插件既没有归档也没有 DLL，两者的输入形态根本不同。
+	// 就地安装：qrc 插件目录进 node_modules 并补 patch 行。不走 ExtensionLoader —— 那是用户装
+	// .ext 的通路（解归档 + 必须带 main.dll）
 	const QString sourceDir = QStringLiteral(":/DSHHub/") + pluginName;
 	const QString destDir = profileDir + QStringLiteral("/node_modules/") + pluginName;
 	if (!materializePluginFiles(sourceDir, destDir, error))
@@ -716,12 +633,8 @@ bool ServerManager::installBuiltinPlugin(const QString& profileDir,
 		!= ExtensionRegistry::PatchEntryResult::Failed;
 }
 
-void ServerManager::launchBundledServer(const QString& nodePath,
-	const QString& entryPath,
-	const QString& dshEntry,
-	const QString& cwd,
-	const QString& dshHome,
-	int port)
+void ServerManager::launchBundledServer(const QString& nodePath, const QString& entryPath, const QString& dshEntry,
+	const QString& cwd, const QString& dshHome, int port)
 {
 	const int serverPort = port > 0 ? port : 3080;
 	{
@@ -740,10 +653,8 @@ void ServerManager::launchBundledServer(const QString& nodePath,
 	QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
 	env.insert(QStringLiteral("DSH_HOME"), dshHome);
 
-	// 让 server 进程内也能解析 pnpm（dshmarket 安装/卸载插件时会在进程内
-	// spawn pnpm）。GUI 启动的进程没有 shell PATH，这里与 PluginsManager
-	// 的 bootstrap 一致：用内嵌 node 跑 node_modules/pnpm，建本地 shim 并
-	// 加进 PATH。shim 已存在则不覆盖。
+	// 让 server 进程内也能解析 pnpm：GUI 启动的进程没有 shell PATH —— 用内嵌 node 跑 pnpm，
+	// 建本地 shim 并加进 PATH（已存在则不覆盖）
 	{
 		const QString appDir = QCoreApplication::applicationDirPath();
 		const QString nodePath = QDir::toNativeSeparators(
@@ -775,17 +686,13 @@ void ServerManager::launchBundledServer(const QString& nodePath,
 	m_serverProcess->setProcessEnvironment(env);
 	m_serverProcess->setWorkingDirectory(cwd);
 
-	dshRegister("ServerManager.001",
-		m_serverProcess, &QProcess::readyReadStandardOutput,
+	dshRegister("ServerManager.001", m_serverProcess, &QProcess::readyReadStandardOutput,
 		this, &ServerManager::handleServerOutput);
-	dshRegister("ServerManager.002",
-		m_serverProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+	dshRegister("ServerManager.002", m_serverProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
 		this, &ServerManager::handleServerFinished);
 
-	m_serverProcess->start(nodePath, QStringList{
-		entryPath, dshEntry, QStringLiteral("web"),
-		QStringLiteral("--port"), QStringLiteral("0")
-		});
+	m_serverProcess->start(nodePath, QStringList{ entryPath, dshEntry, QStringLiteral("web"),
+		QStringLiteral("--port"), QStringLiteral("0") });
 	qInfo().noquote() << QStringLiteral("[ServerManager] bundled server process started");
 }
 
@@ -798,10 +705,8 @@ void ServerManager::handleServerOutput()
 		const QString line = QString::fromUtf8(m_serverProcess->readLine()).trimmed();
 		emit outputLine(line);
 
-		// dsh web 打印的是认证 URL：http://127.0.0.1:<port>/?token=<启动令牌>。
-		// 令牌只出现在这一行，客户端必须整段抓下来去换认证 cookie（0.1.5 起
-		// /api 需要它，否则一律 401）；抓不到令牌的裸地址说明服务端不是 0.1.5，
-		// 这里明确报出来而不是当成正常就绪。
+		// dsh web 打印的认证 URL 带启动令牌，客户端必须整段抓下来换认证 cookie（0.1.5 起 /api
+		// 需要它，缺了 401）；裸地址说明服务端不是 0.1.5，明确报错
 		QRegularExpression re(QStringLiteral("dsh web:\\s*(http://127\\.0\\.0\\.1:\\d+)(/\\?token=)?([^\\s]*)"));
 		const QRegularExpressionMatch match = re.match(line);
 
@@ -812,8 +717,8 @@ void ServerManager::handleServerOutput()
 			const bool hasToken = QUrlQuery(parsed).hasQueryItem(QStringLiteral("token"));
 
 			if (!hasToken) {
-				qWarning().noquote() << QStringLiteral("[ServerManager] 服务端未提供认证令牌（不是 dsh 0.1.5？）: %1")
-					.arg(printed);
+				qWarning().noquote() << QStringLiteral(
+					"[ServerManager] 服务端未提供认证令牌（不是 dsh 0.1.5？）: %1").arg(printed);
 				emit errorLine(qtTrId("server_auth_token_missing"));
 				return;
 			}

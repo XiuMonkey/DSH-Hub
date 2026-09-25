@@ -20,7 +20,6 @@ bool CodeHighlighter::loadFromFile(const QString& filePath)
 
 	const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
 	file.close();
-
 	if (!doc.isObject())
 		return false;
 
@@ -30,7 +29,6 @@ bool CodeHighlighter::loadFromFile(const QString& filePath)
 
 	const QJsonObject root = doc.object();
 	const QJsonObject languages = root.value(QStringLiteral("languages")).toObject();
-
 	for (auto it = languages.begin(); it != languages.end(); ++it) {
 		const QString language = it.key();
 		const QJsonArray rulesArray = it.value().toArray();
@@ -78,6 +76,7 @@ QString CodeHighlighter::highlight(const QString& language, const QString& code)
 	int pos = 0;
 	const int codeLength = code.length();
 
+	// 逐位置贪心：每轮在剩余文本里找最早、同位置最长的那条规则；前段原样转义，命中段套 span
 	while (pos < codeLength) {
 		int bestPos = -1;
 		int bestLen = 0;
@@ -102,22 +101,18 @@ QString CodeHighlighter::highlight(const QString& language, const QString& code)
 		}
 
 		if (!bestRule) {
-			// 没有更多匹配，直接转义剩余内容
 			html += code.mid(pos).toHtmlEscaped();
 			break;
 		}
 
-		// 匹配前的普通文本
 		html += code.mid(pos, bestPos - pos).toHtmlEscaped();
 
-		// 匹配到的内容加高亮样式
 		const QString matched = code.mid(bestPos, bestLen).toHtmlEscaped();
 		QString style = QStringLiteral("color:%1;").arg(bestRule->color);
 		if (bestRule->bold)
 			style += QStringLiteral("font-weight:bold;");
 		if (bestRule->italic)
 			style += QStringLiteral("font-style:italic;");
-
 		html += QStringLiteral("<span style=\"") + style + QStringLiteral("\">") + matched + QStringLiteral("</span>");
 
 		pos = bestPos + bestLen;

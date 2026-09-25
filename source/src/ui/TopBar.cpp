@@ -21,27 +21,14 @@
 #include <QScrollArea>
 #include <QUrl>
 #include <QVBoxLayout>
-
 #include <utility>
-
 #include <cmath>
 
 namespace
 {
-	// 顶栏右侧的"工具过滤"按钮：图标是三条递减的胶囊，直接在 paintEvent 里画。
-	//
-	// 为什么不用 QIcon + QPixmap 位图（原来的写法）：
-	//   1) 位图得按 devicePixelRatio 预生成。只给 20×20、DPR=1 的位图，在 125%/150%
-	//      缩放的显示器上会被 Qt 放大 → 整条线发虚（本项目的 Logo 是按 @2x 处理的，
-	//      图标这里漏了）；
-	//   2) 更要紧的是它在**不缩放**时也不锐：QPen 宽 1.8、圆心落在整数 y=6/10/14 上，
-	//      描边覆盖 [5.1, 6.9]，横跨第 5、6 两行各 91% —— 实测整张图标**一个满覆盖
-	//      像素都没有**（最大 alpha 232/255），所以看着发灰、不干净。
-	// 直接矢量画、并把几何对齐到设备像素（实心胶囊、整高、整数坐标）就没有这两个问题：
-	// 实测满覆盖像素 0 → 44，最大 alpha 232 → 255，线正好落在整行像素上。
-	//
-	// 颜色每次绘制现取 ThemeManager::instance().textSecondary()，不缓存 —— 主题是重建窗口切换的，
-	// 这样连"忘了跟着换色"的机会都没有。
+	// 顶栏右侧"工具过滤"按钮：三条递减胶囊，在 paintEvent 里矢量绘制。不用 QIcon+QPixmap：
+	// 位图要按 devicePixelRatio 预生成、几何不落在整像素上会发虚（实测一个满覆盖像素都没有）；
+	// 颜色每次现取 ThemeManager，不缓存 —— 主题靠重建窗口切换，这样不会忘了跟着换色。
 	class ToolsFilterButton : public QPushButton
 	{
 	public:
@@ -59,37 +46,33 @@ namespace
 			// 先让 QSS 画底（透明 / hover / pressed），再把图标叠上去
 			QPushButton::paintEvent(event);
 
+			// 20×20 设计栅格换算到设备像素后取整：线的上下边落在像素边界上，不靠抗锯齿"猜"
 			const qreal dpr = devicePixelRatioF() > 0.0 ? devicePixelRatioF() : 1.0;
-			// 20×20 的设计栅格换算到设备像素后取整：每条线的上下边都落在像素边界上，
-			// 不用靠抗锯齿"猜"，也就不会发灰。
 			const auto dev = [dpr](qreal value) { return std::round(value * dpr); };
 
 			QPainter painter(this);
 			painter.setRenderHint(QPainter::Antialiasing, true); // 只有胶囊两端的圆头需要
 			painter.setPen(Qt::NoPen);
 			painter.setBrush(CardShadow::parseColor(ThemeManager::instance().textSecondary()));
-			// 之后 1 单位 = 1 设备像素
-			painter.scale(1.0 / dpr, 1.0 / dpr);
+			painter.scale(1.0 / dpr, 1.0 / dpr); // 之后 1 单位 = 1 设备像素
 
 			const qreal grid = dev(20.0);
 			const qreal originX = std::round((width() * dpr - grid) / 2.0);
 			const qreal originY = std::round((height() * dpr - grid) / 2.0);
 
 			const auto bar = [&](qreal x1, qreal x2, qreal y) {
-				const QRectF rect(originX + dev(x1), originY + dev(y),
-					dev(x2) - dev(x1), dev(2.0));
+				const QRectF rect(originX + dev(x1), originY + dev(y), dev(x2) - dev(x1), dev(2.0));
 				painter.drawRoundedRect(rect, rect.height() / 2.0, rect.height() / 2.0);
-				};
-			bar(3.0, 17.0, 6.0);   // 最宽：14
-			bar(5.0, 15.0, 10.0);  // 中：10
-			bar(8.0, 12.0, 14.0);  // 最窄：4（三根都以 x=10 居中）
+			};
+			// 三根都以 x=10 居中：宽度 14 / 10 / 4
+			bar(3.0, 17.0, 6.0);
+			bar(5.0, 15.0, 10.0);
+			bar(8.0, 12.0, 14.0);
 		}
 	};
 
-	// 目录底部的整组「折叠/可见」开关：整行可点，左侧状态文案、右侧胶囊滑块。
-	// 刻意不用 QCheckBox：QSS 的 ::indicator 只能换底色，画不出"滑块"，表达不了
-	// 开/合；自绘才像开关。配色每次绘制现取 ThemeManager::instance()（同 ToolsFilterButton 的理由：
-	// 主题靠重建窗口切换，不缓存就永远没有"忘了跟着换色"的机会）。
+	// 目录底部的整组「折叠/可见」开关：整行可点，左状态文案、右胶囊滑块。刻意不用 QCheckBox
+	//（::indicator 只能换底色、画不出滑块）；配色每次现取 ThemeManager，理由同 ToolsFilterButton。
 	class CapsuleSwitchRow : public QAbstractButton
 	{
 	public:
@@ -123,14 +106,14 @@ namespace
 				? CardShadow::parseColor(underMouse()
 					? ThemeManager::instance().textSecondary()
 					: ThemeManager::instance().color(QStringLiteral("textTertiary")))
-				: CardShadow::parseColor(ThemeManager::instance().color(QStringLiteral("textCaption")));
+				: CardShadow::parseColor(ThemeManager::instance().color(
+					QStringLiteral("textCaption")));
 			painter.setPen(textColor);
 			const int textWidth = qMax(width() - int(kTrackWidth) - 14, 0);
-			painter.drawText(QRect(4, 0, textWidth, height()),
-				Qt::AlignVCenter | Qt::AlignLeft, text());
+			painter.drawText(QRect(4, 0, textWidth, height()), Qt::AlignVCenter | Qt::AlignLeft, text());
 
-			// 右侧胶囊：勾选（折叠）填灰（与工具行勾选框选中态同款 textSecondary，
-			// 不用主题色 accent —— 那是蓝色），滑块滑到右端；未勾选浅灰轨，滑块在左端
+			// 右侧胶囊：勾选（折叠）填 textSecondary（与工具行勾选框同款，不用主题色 accent），
+			// 滑块滑到右端；未勾选浅灰轨，滑块在左端
 			const qreal trackX = width() - kTrackWidth - 4.0;
 			const qreal trackY = (height() - kTrackHeight) / 2.0;
 			const QRectF track(trackX, trackY, kTrackWidth, kTrackHeight);
@@ -145,7 +128,8 @@ namespace
 			const qreal knobX = isChecked()
 				? trackX + kTrackWidth - knobSize - 2.0
 				: trackX + 2.0;
-			painter.setBrush(isEnabled() ? QColor(Qt::white) : CardShadow::parseColor(ThemeManager::instance().border()));
+			painter.setBrush(isEnabled() ? QColor(Qt::white)
+				: CardShadow::parseColor(ThemeManager::instance().border()));
 			painter.drawEllipse(QPointF(knobX + knobSize / 2.0, trackY + kTrackHeight / 2.0),
 				knobSize / 2.0, knobSize / 2.0);
 		}
@@ -156,28 +140,17 @@ namespace
 		static constexpr qreal kTrackHeight = 18.0;
 	};
 
-	// 目录表头的箭头，字形与 ModelListEntry 的成员行同一套（U+25BE / U+25B8）。
-	//
-	// 这里刻意用 QChar(码点) 而不是别的写法：
-	//   * QLatin1String("\u25BE")：窄字面量先按执行字符集编码（本项目 /utf-8）
-	//     变成 E2 96 BE 三个字节，QLatin1String 再把这些字节逐字节当成 Latin-1，
-	//     界面上就是三个乱码字形（本次要修的现场）。
-	//   * 直接写字面量：依赖源文件一定被当成 UTF-8 读（本机是 CP936 时整条字符串
-	//     还可能被截断）。
-	// QChar(0x25BE) 源码全 ASCII，与源文件编码、执行字符集都无关。
+	// 目录表头的箭头，字形与 ModelListEntry 成员行同一套（U+25BE / U+25B8）。
+	// 用 QChar(码点) 而非字面量：QLatin1String("\u25BE") 会把三个字节逐字节当成 Latin-1（界面出乱码），
+	// 直接写窄字面量又依赖源文件被当成 UTF-8 读；QChar(0x25BE) 源码全 ASCII，与编码无关。
 	const QString kChevronExpanded(QChar(0x25BE));
 	const QString kChevronCollapsed(QChar(0x25B8));
 
-	// 目录表头的最小高度：两行文字（目录名 + 计数）+ 上下内边距。不显式给下限时
-	// QPushButton 会按"一行文本 + 按钮内边距"算高度，第二行会被压掉
-	// （ModelListEntry 踩过同一个坑）。
+	// 目录表头的最小高度：两行文字（目录名 + 计数）+ 上下内边距。不给下限时 QPushButton 按
+	// "一行文本 + 按钮内边距"算高度，第二行会被压掉（ModelListEntry 踩过同一个坑）。
 	constexpr int kDirectoryHeaderMinHeight = 44;
 	constexpr int kDirectoryHeaderPadding = 6;
 } // namespace
-
-// ------------------------------------------------------------------
-// ToolsFilterDirectoryEntry
-// ------------------------------------------------------------------
 
 ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& directory, QWidget* parent)
 	: QWidget(parent)
@@ -221,7 +194,6 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 
 	layout->addWidget(m_header);
 
-	// ---------------- 工具行 ----------------
 	m_body = new QWidget(this);
 	m_body->setObjectName(QStringLiteral("toolsFilterDirectoryBody"));
 
@@ -230,8 +202,7 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 	bodyLayout->setSpacing(2);
 
 	if (directory.tools.isEmpty()) {
-		// 目录底下什么都没有时也得说一句：否则展开后是一片空白，
-		// 看起来像"点坏了"（Default 目录在配置认领了全部工具之外的工具时才空）
+		// 空目录也要给一句提示：否则展开后一片空白，看起来像"点坏了"
 		auto* empty = new QLabel(qtTrId("toolfilter_dir_empty"), m_body);
 		empty->setObjectName(QStringLiteral("toolsFilterDirectoryEmpty"));
 		empty->setWordWrap(true);
@@ -254,9 +225,8 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 		if (!tip.isEmpty())
 			box->setToolTip(tip);
 
-		dshRegister(
-			QStringLiteral("TopBar.tool.%1.%2").arg(m_name).arg(index),
-			box, qOverload<bool>(&QCheckBox::toggled), this, [this, index](bool checked) {
+		dshRegister(QStringLiteral("TopBar.tool.%1.%2").arg(m_name).arg(index), box,
+			qOverload<bool>(&QCheckBox::toggled), this, [this, index](bool checked) {
 				refreshMeta();
 				emit toolVisibilityChanged(m_name, m_toolNames.at(index), checked);
 			});
@@ -266,19 +236,16 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 		bodyLayout->addWidget(box);
 	}
 
-	// 底部开关：这一目录的整组「折叠/可见」。写的是配置里该目录的 IsExpanded
-	//（筛选语义：折叠 = 插件把整组从模型清单里撤下），与表头那个纯显示的
-	// 展开/收起不同。左文案右胶囊滑块，与工具行的勾选框在样式上区分开。
-	// 先设状态再接线。
+	// 底部开关：这一目录的整组「折叠/可见」，写的是配置里该目录的 IsExpanded（折叠 = 插件把整组
+	// 从模型清单撤下），与表头那个纯显示的展开/收起不同。先设状态再接线。
 	m_groupToggle = new CapsuleSwitchRow(m_body);
 	m_groupToggle->setObjectName(QStringLiteral("toolsFilterGroupToggle"));
 	m_groupToggle->setChecked(m_groupHidden);
-	dshRegister(
-		QStringLiteral("TopBar.group.%1").arg(m_name),
-		m_groupToggle, qOverload<bool>(&QAbstractButton::toggled), this, [this](bool collapsed) {
+	dshRegister(QStringLiteral("TopBar.group.%1").arg(m_name), m_groupToggle,
+		qOverload<bool>(&QAbstractButton::toggled), this, [this](bool collapsed) {
 			m_groupHidden = collapsed;
-			refreshMeta();            // 表头「配置里整组隐藏」后缀跟上
-			applyGroupHiddenVisuals(); // 文案 + 各行勾选框可用性
+			refreshMeta();
+			applyGroupHiddenVisuals();
 			emit groupHiddenChanged(m_name, collapsed);
 		});
 	bodyLayout->addSpacing(4);
@@ -290,9 +257,8 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 	applyGroupHiddenVisuals();
 	setExpanded(true);
 
-	dshRegister(
-		QStringLiteral("TopBar.header.%1").arg(m_name),
-		m_header, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+	dshRegister(QStringLiteral("TopBar.header.%1").arg(m_name), m_header,
+		qOverload<bool>(&QPushButton::clicked), this, [this]() {
 			setExpanded(!isExpanded());
 		});
 }
@@ -329,8 +295,7 @@ void ToolsFilterDirectoryEntry::refreshMeta()
 	QString text = m_boxes.isEmpty()
 		? qtTrId("toolfilter_no_tools")
 		: qtTrId("toolfilter_summary_fmt").arg(m_boxes.size()).arg(hidden);
-	// 配置里写了 IsExpanded:"False"（插件层面整组隐藏）时要说明白：
-	// 那时候下面的勾选状态其实不起作用，不说的话界面在撒谎
+	// 配置里写了 IsExpanded:"False"（整组隐藏）时要说清楚：那时下面的勾选其实不起作用
 	if (m_groupHidden)
 		text += qtTrId("toolfilter_group_hidden_suffix");
 	m_metaLabel->setText(text);
@@ -356,10 +321,6 @@ void ToolsFilterDirectoryEntry::applyGroupHiddenVisuals()
 	for (QCheckBox* box : m_boxes)
 		box->setEnabled(!m_groupHidden);
 }
-
-// ------------------------------------------------------------------
-// ToolsFilterPopup
-// ------------------------------------------------------------------
 
 ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 	: StatusPopupWindow(parent)
@@ -420,12 +381,12 @@ ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 
 	setContent(content);
 
-	dshRegister("TopBar.001",
-		m_showAllButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { setAllVisible(true); });
-	dshRegister("TopBar.002",
-		m_hideAllButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { setAllVisible(false); });
-	dshRegister("TopBar.003",
-		m_refreshButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { emit refreshRequested(); });
+	dshRegister("TopBar.001", m_showAllButton,
+		qOverload<bool>(&QPushButton::clicked), this, [this]() { setAllVisible(true); });
+	dshRegister("TopBar.002", m_hideAllButton,
+		qOverload<bool>(&QPushButton::clicked), this, [this]() { setAllVisible(false); });
+	dshRegister("TopBar.003", m_refreshButton,
+		qOverload<bool>(&QPushButton::clicked), this, [this]() { emit refreshRequested(); });
 
 	retranslateStaticText();
 	updateStatus();
@@ -469,11 +430,9 @@ void ToolsFilterPopup::applyCatalog(const ToolFilterCatalog& catalog)
 		return;
 	}
 
-	// 新会话默认全折叠（观感干净）：把本次的目录名全部记进"收起"集，用户随后
-	// 的展开/收起照常记录，刷新/重开窗口不丢。
-	// 判断"新会话"不能用 m_sessionId —— TopBar::loadTools 的成功路径会先调
-	// setContext() 把 m_sessionId 覆盖成本会话，applyCatalog 再比较永远相等
-	//（这也是原来"换会话清空"从未生效的原因）。所以单独记一个已播种的会话号。
+	// 新会话默认全折叠：把本次目录名记进"收起"集，用户随后的展开/收起照常记录，重开窗口不丢。
+	// ⚠️ 判断"新会话"不能用 m_sessionId —— loadTools 成功路径会先 setContext() 把它覆盖成本会话，
+	// 再比较永远相等（"换会话清空"从未生效的原因），所以单独记一个已播种的会话号。
 	if (m_collapsedSeedSession != catalog.sessionId) {
 		m_collapsed.clear();
 		for (const ToolFilterDirectory& directory : catalog.directories)
@@ -535,8 +494,7 @@ QVector<ToolFilterDirectory> ToolsFilterPopup::collectDirectories() const
 
 void ToolsFilterPopup::onDirectoryExpandedChanged(const QString& directoryName, bool expanded)
 {
-	// 只记"这一次翻看"的显示状态，不写回配置：配置里的 IsExpanded 是筛选语义
-	// （"False" = 整组隐藏），与这里的展开/收起不是一回事。
+	// 只记本次翻看的显示状态，不写回配置：配置里的 IsExpanded 是筛选语义（"False" = 整组隐藏）
 	if (m_updating)
 		return;
 
@@ -579,9 +537,8 @@ void ToolsFilterPopup::onDirectoryGroupHiddenChanged(const QString& directoryNam
 			continue;
 		if (directory.expanded == !collapsed)
 			return; // 状态没变
-		// 这里写的就是配置里该目录的 IsExpanded（"False" = 插件整组隐藏）——与
-		// 表头那个纯显示的展开/收起不同，这次是真的改筛选语义。条目自己已经
-		// 更新了后缀与各行可用性，这里只改模型 + 写回，不必重建。
+		// 这里写的就是配置里该目录的 IsExpanded（"False" = 整组隐藏），与表头那个纯显示的
+		// 展开/收起不同。条目已自行更新后缀与可用性，这里只改模型 + 写回，不必重建。
 		directory.expanded = !collapsed;
 		saveNow();
 		updateStatus();
@@ -639,9 +596,7 @@ void ToolsFilterPopup::updateStatus()
 		return;
 	}
 
-	QString text = qtTrId("toolfilter_summary_full_fmt")
-		.arg(count)
-		.arg(m_directories.size())
+	QString text = qtTrId("toolfilter_summary_full_fmt").arg(count).arg(m_directories.size())
 		.arg(ToolsFilter::hiddenCount(m_directories));
 	if (m_degraded)
 		text += qtTrId("toolfilter_global_layer_only_suffix");
@@ -654,16 +609,11 @@ void ToolsFilterPopup::changeEvent(QEvent* event)
 
 	if (event->type() == QEvent::LanguageChange) {
 		retranslateStaticText();
-		// 目录行里也有可翻译文案（计数、空目录提示、表头提示）：整排重建最省事，
-		// 展开状态与勾选状态都在模型里，重建不丢
+		// 目录行里也有可翻译文案，整排重建最省事；展开/勾选状态都在模型里，重建不丢
 		rebuild();
 		updateStatus();
 	}
 }
-
-// ------------------------------------------------------------------
-// TopBar
-// ------------------------------------------------------------------
 
 TopBar::TopBar(QWidget* parent)
 	: QWidget(parent)
@@ -684,15 +634,12 @@ TopBar::TopBar(QWidget* parent)
 	m_layout->addWidget(m_titleLabel);
 	m_layout->addStretch();
 
-	// 工具栏右侧：工具过滤入口。
-	// 图标在 ToolsFilterButton::paintEvent 里矢量绘制（清晰度与 devicePixelRatio
-	// 的处理见该类的注释），所以这里不设 icon/iconSize —— objectName 与 QSS 规则
-	// 由该类自己在构造里设好。
+	// 工具栏右侧的工具过滤入口：图标由 ToolsFilterButton 自绘（见该类注释），因此这里不设
+	// icon/iconSize —— objectName 与 QSS 规则也由它自己在构造里设好。
 	m_toolsButton = new ToolsFilterButton(this);
 	m_layout->addWidget(m_toolsButton);
 
-	dshRegister("TopBar.004",
-		m_toolsButton, qOverload<bool>(&QPushButton::clicked), this, &TopBar::openToolsFilter);
+	dshRegister("TopBar.004", m_toolsButton, qOverload<bool>(&QPushButton::clicked), this, &TopBar::openToolsFilter);
 
 	setTitle(QString());
 	retranslateUi();
@@ -709,13 +656,9 @@ TopBar::~TopBar()
 
 QHBoxLayout* TopBar::GetLayout()
 {
-	// 把布局原样交出去，不做任何代劳。之前 AddExternalWidget 时代由顶栏替调用方
-	// 决定「插在工具按钮左边 + 顺手 show」；现在这些判断全部下放给调用方，
-	// 顶栏只保证「这个指针在顶栏存活期间有效」。
-	//
-	// 布局顺序提醒（调用方若想插在工具按钮左侧，自行用 indexOf 定位）：
-	//     标题 | stretch | 已挂的外部控件 | 工具按钮
-	// 工具按钮贴最右是系统约定，直接 addWidget 会把它挤离右边缘。
+	// 布局原样交出去：顶栏只保证指针在存活期间有效，插哪里、要不要 show 由调用方决定。
+	// 顺序为「标题 | stretch | 已挂的外部控件 | 工具按钮」；工具按钮贴最右是系统约定，
+	// 想插在它左侧请自行用 indexOf 定位，直接 addWidget 会把它挤离右边缘。
 	return m_layout;
 }
 
@@ -791,13 +734,12 @@ void TopBar::loadTools(bool pushToPopup)
 		});
 }
 
-// 工具过滤入口的开关（后端接管时关掉）。关掉时顺手收起已经打开的窗口 —— 它拉的是
-// DSH 服务端专属的 /api/tools-filter，接管后那个服务端已经不在了，留着只会显示失败。
+// 工具过滤入口的开关。关掉时顺手收起已打开的窗口：它拉的是 DSH 专属的 /api/tools-filter，
+// 接管后那个服务端已经不在了，留着只会显示失败。
 void TopBar::setToolsFilterEnabled(bool enabled)
 {
-	// ⚠️ 不要拿 isVisible() 当"当前是否已隐藏"来判重：窗口还没 show() 时子控件的
-	// isVisible() 一律是 false（切主题重建窗口 + 插件重新接管正好走这条时序），那样会漏掉
-	// 这一次 setVisible(false)。直接设，重复调用本身无副作用。
+	// ⚠️ 别拿 isVisible() 当"当前是否已隐藏"判重：窗口还没 show() 时子控件一律 false（切主题重建
+	// 窗口 + 插件重新接管正好走这条时序），会漏掉这次 setVisible(false)。直接设，重复调用无副作用。
 	if (m_toolsButton)
 		m_toolsButton->setVisible(enabled);
 
@@ -815,29 +757,27 @@ void TopBar::openToolsFilter()
 	if (m_toolsPopup && m_toolsPopup->isVisible())
 		return;
 
-	// 惰性建弹窗要排在铺遮罩**之前**：构造是要花时间的，而遮罩那次同步重绘必须
-	// 紧贴弹窗 show()（见 WindowFrame::showOverlayWithPopup）。
+	// 惰性建弹窗要排在铺遮罩之前：构造要花时间，而遮罩那次同步重绘必须紧贴弹窗 show()
+	//（见 WindowFrame::showOverlayWithPopup）。
 	if (!m_toolsPopup) {
 		m_toolsPopup = new ToolsFilterPopup(host);
-		dshRegister("TopBar.005",
-			m_toolsPopup, &PopupWindow::closed, this, &TopBar::closeToolsFilter);
-		dshRegister("TopBar.006",
-			m_toolsPopup, &ToolsFilterPopup::refreshRequested, this, [this]() { loadTools(true); });
+		dshRegister("TopBar.005", m_toolsPopup, &PopupWindow::closed, this, &TopBar::closeToolsFilter);
+		dshRegister("TopBar.006", m_toolsPopup,
+			&ToolsFilterPopup::refreshRequested, this, [this]() { loadTools(true); });
 	}
 
 	// 铺遮罩 + 居中 + 显示：背靠背完成，两者落在同一帧
 	WindowFrame::showOverlayWithPopup(host, this, m_toolsPopup);
 
-	// 数据随后异步加载。不在这里预置上下文：窗口保留上一次 applyCatalog 注入的
-	// DropGuidance / HideContexts，紧接着的 loadTools(true) 会用服务端的权威值
-	// 覆盖它 —— 预置一个默认值会让"加载还没回来就点了勾选"这种情况把配置写坏。
+	// 数据随后异步加载。不预置上下文：保留上次 applyCatalog 注入的 DropGuidance / HideContexts，
+	// loadTools(true) 随后会用服务端权威值覆盖它 —— 预置默认值会让"加载还没回来就点了勾选"写坏配置。
 	loadTools(true);
 }
 
 void TopBar::closeToolsFilter()
 {
-	// 先收遮罩、再隐藏弹窗：收遮罩那一步会同步重绘一次主窗口，两件事落在
-	// 同一帧上。反过来（或让遮罩等下一帧重绘）观感就是"弹窗没了、遮罩还留一拍"。
+	// 先收遮罩、再隐藏弹窗：收遮罩那步会同步重绘主窗口，两件事落在同一帧。反过来（或让
+	// 遮罩等下一帧重绘）观感就是"弹窗没了、遮罩还留一拍"。
 	if (QWidget* host = window())
 		WindowFrame::hideOverlay(host, this);
 	if (m_toolsPopup)

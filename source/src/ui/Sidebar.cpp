@@ -1,13 +1,12 @@
 #include "ui/Sidebar.h"
+
 #include "ui/LayoutUtils.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/util/CommonRegistry.h"
 #include "core/ConnectionManager.h"
 #include "core/HostExports.h"
-
 #include "network/DshApiClient.h"
 #include "common/session/SessionService.h"
-
 #include <QContextMenuEvent>
 #include <QDialog>
 #include <QEvent>
@@ -27,15 +26,10 @@
 
 namespace
 {
-	// 会话列表滚动区的最小高度：只是让布局在极端情况下不至于把这块压没。
-	// 正常情况下它占满侧栏的剩余空间，装得下就不出滚动条，装不下才滚动 ——
-	// 关键在于它**不随会话数量增长**，所以会话再多也顶不高侧栏和窗口。
+	// 会话列表滚动区的最小高度：只保证极端情况下布局不把这块压没。正常时它占满侧栏剩余空间，
+	// 且不随会话数量增长，所以会话再多也顶不高侧栏和窗口。
 	constexpr int kMinWorkspaceListHeight = 120;
 }
-
-// ------------------------------------------------------------------
-// SidebarLogo
-// ------------------------------------------------------------------
 
 SidebarLogo::SidebarLogo(QWidget* parent)
 	: QLabel(parent)
@@ -59,10 +53,6 @@ SidebarLogo::SidebarLogo(QWidget* parent)
 	}
 }
 
-// ------------------------------------------------------------------
-// NewWorkspaceButton
-// ------------------------------------------------------------------
-
 NewWorkspaceButton::NewWorkspaceButton(QWidget* parent)
 	: QPushButton(qtTrId("sidebar_new_workspace"), parent)
 {
@@ -70,20 +60,12 @@ NewWorkspaceButton::NewWorkspaceButton(QWidget* parent)
 	setCursor(Qt::PointingHandCursor);
 }
 
-// ------------------------------------------------------------------
-// ClearSessionButton
-// ------------------------------------------------------------------
-
 ClearSessionButton::ClearSessionButton(QWidget* parent)
 	: QPushButton(qtTrId("sidebar_clear_sessions"), parent)
 {
 	setObjectName(QStringLiteral("clearSessionButton"));
 	setCursor(Qt::PointingHandCursor);
 }
-
-// ------------------------------------------------------------------
-// SidebarSettingsButton
-// ------------------------------------------------------------------
 
 SidebarSettingsButton::SidebarSettingsButton(QWidget* parent)
 	: QPushButton(parent)
@@ -96,10 +78,6 @@ SidebarSettingsButton::SidebarSettingsButton(QWidget* parent)
 	setIconSize(QSize(20, 20));
 }
 
-// ------------------------------------------------------------------
-// SidebarPluginsButton
-// ------------------------------------------------------------------
-
 SidebarPluginsButton::SidebarPluginsButton(QWidget* parent)
 	: QPushButton(parent)
 {
@@ -110,10 +88,6 @@ SidebarPluginsButton::SidebarPluginsButton(QWidget* parent)
 	setIcon(QIcon(QStringLiteral(":/DSHHub/Plugin-Icon.png")));
 	setIconSize(QSize(20, 20));
 }
-
-// ------------------------------------------------------------------
-// SidebarThemeButton
-// ------------------------------------------------------------------
 
 SidebarThemeButton::SidebarThemeButton(QWidget* parent)
 	: QPushButton(parent)
@@ -126,10 +100,6 @@ SidebarThemeButton::SidebarThemeButton(QWidget* parent)
 	setIconSize(QSize(20, 20));
 }
 
-// ------------------------------------------------------------------
-// SidebarExtensionButton
-// ------------------------------------------------------------------
-
 SidebarExtensionButton::SidebarExtensionButton(QWidget* parent)
 	: QPushButton(parent)
 {
@@ -141,13 +111,7 @@ SidebarExtensionButton::SidebarExtensionButton(QWidget* parent)
 	setIconSize(QSize(20, 20));
 }
 
-// ------------------------------------------------------------------
-// SessionButton
-// ------------------------------------------------------------------
-
-SessionButton::SessionButton(const QString& sessionId,
-	const QString& title,
-	QWidget* parent)
+SessionButton::SessionButton(const QString& sessionId, const QString& title, QWidget* parent)
 	: QPushButton(parent)
 	, m_sessionId(sessionId)
 	, m_fullTitle(title.isEmpty() ? sessionId : title)
@@ -159,8 +123,7 @@ SessionButton::SessionButton(const QString& sessionId,
 	setMinimumHeight(32);
 	setCursor(Qt::PointingHandCursor);
 
-	dshRegister(
-		QStringLiteral("Sidebar.sessionBtn.%1").arg(reinterpret_cast<quintptr>(this)),
+	dshRegister(QStringLiteral("Sidebar.sessionBtn.%1").arg(reinterpret_cast<quintptr>(this)),
 		this, qOverload<bool>(&QPushButton::clicked), this, &SessionButton::handleClicked);
 
 	updateElidedText();
@@ -195,9 +158,8 @@ void SessionButton::handleClicked()
 
 void SessionButton::contextMenuEvent(QContextMenuEvent* event)
 {
-	// 不用 QMenu：Windows 的 QMenu 原生弹窗即使设置 WA_TranslucentBackground，
-	// 在某些环境下仍会在圆角外绘制黑色矩形。这里改用和 PopupWindow 相同的
-	// 无边框透明 QDialog + QPushButton 实现，圆角外可以真正透明。
+	// 不用 QMenu：Windows 上它的原生弹窗即使设了 WA_TranslucentBackground，某些环境下仍会在圆角外绘制
+	// 黑色矩形。这里改用和 PopupWindow 相同的无边框透明 QDialog + QPushButton，圆角外可以真正透明。
 	QDialog menu(nullptr, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
 	menu.setAttribute(Qt::WA_TranslucentBackground);
 	menu.setAttribute(Qt::WA_StyledBackground, true);
@@ -248,10 +210,6 @@ void SessionButton::updateElidedText()
 	const QFontMetrics fm(font());
 	setText(fm.elidedText(m_fullTitle, Qt::ElideRight, availableWidth));
 }
-
-// ------------------------------------------------------------------
-// WorkspaceButton
-// ------------------------------------------------------------------
 
 WorkspaceButton::WorkspaceButton(const QString& title, QWidget* parent)
 	: QPushButton(parent)
@@ -331,10 +289,6 @@ void WorkspaceButton::paintEvent(QPaintEvent* event)
 	painter.drawLine(cx, cy - half, cx, cy + half);
 }
 
-// ------------------------------------------------------------------
-// WorkspaceList
-// ------------------------------------------------------------------
-
 WorkspaceList::WorkspaceList(QWidget* parent)
 	: QWidget(parent)
 {
@@ -377,15 +331,15 @@ WorkspaceList::WorkspaceGroup* WorkspaceList::createWorkspaceGroup(const QString
 	group->header = new WorkspaceButton(title, group->container);
 	group->layout->addWidget(group->header);
 
-	dshRegister("Sidebar.002",
-		group->header, qOverload<bool>(&QPushButton::toggled), this, [this, group](bool checked) {
+	dshRegister("Sidebar.002", group->header, qOverload<bool>(&QPushButton::toggled), this,
+		[this, group](bool checked) {
 			group->expanded = checked;
 			group->header->setExpanded(checked);
 			for (SessionButton* button : group->buttons)
 				button->setVisible(checked);
 		});
-	dshRegister("Sidebar.003",
-		group->header, &WorkspaceButton::addSessionRequested, this, [this, group]() {
+	dshRegister("Sidebar.003", group->header, &WorkspaceButton::addSessionRequested, this,
+		[this, group]() {
 			emit createSessionInWorkspaceRequested(group->workspaceId);
 		});
 
@@ -440,13 +394,13 @@ void WorkspaceList::addSessionButton(const QString& sessionId, const QString& ti
 	WorkspaceGroup* group = groupFor(m_catalog.workspaceFor(sessionId));
 
 	auto* button = new SessionButton(sessionId, title, group->container);
-	dshRegister("Sidebar.004",
-		button, &SessionButton::sessionClicked, this, [this, sessionId]() {
+	dshRegister("Sidebar.004", button, &SessionButton::sessionClicked, this,
+		[this, sessionId]() {
 			setCurrentSession(sessionId);
 			emit sessionSelected(sessionId);
 		});
-	dshRegister("Sidebar.005",
-		button, &SessionButton::deleteRequested, this, [this](const QString& sid) {
+	dshRegister("Sidebar.005", button, &SessionButton::deleteRequested, this,
+		[this](const QString& sid) {
 			emit deleteSessionRequested(sid);
 		});
 
@@ -515,10 +469,6 @@ void WorkspaceList::refreshTitles(DshApiClient* api)
 		});
 }
 
-// ------------------------------------------------------------------
-// Sidebar
-// ------------------------------------------------------------------
-
 Sidebar::Sidebar(QWidget* parent)
 	: QWidget(parent)
 {
@@ -533,9 +483,8 @@ Sidebar::Sidebar(QWidget* parent)
 	m_themeButton = new SidebarThemeButton(this);
 	m_extensionButton = new SidebarExtensionButton(this);
 
-	// 会话列表（工作区分组 + 会话按钮）放进滚动区：会话/工作区多了以后列表内容
-	// 只是变长，滚动条出现，侧栏高度不变。以前它直接挂在侧栏布局里，内容多高
-	// 就把侧栏的最小高度顶多高，进而把整个窗口撑高（底部图标行还会被挤出可视区）。
+	// 会话列表放进滚动区：会话/工作区多了只是列表变长、出现滚动条，侧栏高度不变。以前它直接挂在侧栏
+	// 布局里，内容多高就把侧栏最小高度顶多高，进而把整个窗口撑高（底部图标行还会被挤出可视区）。
 	// 滚动条外观来自 scrollbars.qss 的全局规则，这里不需要写任何滚动条样式。
 	m_workspaceScroll = LayoutUtils::makeThemedScrollArea(this, QStringLiteral("workspaceScrollArea"));
 	m_workspaceScroll->setMinimumHeight(kMinWorkspaceListHeight);
@@ -563,8 +512,8 @@ Sidebar::Sidebar(QWidget* parent)
 
 	m_layout->addLayout(bottomRow);
 
-	dshRegister("Sidebar.006",
-		m_clearButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::clearRequested);
+	dshRegister("Sidebar.006", m_clearButton, qOverload<bool>(&QPushButton::clicked), this,
+		&Sidebar::clearRequested);
 	dshRegister("Sidebar.007",
 		m_newWorkspaceButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::newWorkspaceRequested);
 	dshRegister("Sidebar.008",
@@ -576,26 +525,23 @@ Sidebar::Sidebar(QWidget* parent)
 	dshRegister("Sidebar.011",
 		m_extensionButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::extensionsRequested);
 
-	dshRegister("Sidebar.012",
-		m_workspaceList, &WorkspaceList::sessionSelected, this, &Sidebar::sessionSelected);
-	dshRegister("Sidebar.013",
-		m_workspaceList, &WorkspaceList::createSessionInWorkspaceRequested,
+	dshRegister("Sidebar.012", m_workspaceList, &WorkspaceList::sessionSelected, this,
+		&Sidebar::sessionSelected);
+	dshRegister("Sidebar.013", m_workspaceList, &WorkspaceList::createSessionInWorkspaceRequested,
 		this, &Sidebar::createSessionInWorkspaceRequested);
-	dshRegister("Sidebar.014",
-		m_workspaceList, &WorkspaceList::deleteSessionRequested,
+	dshRegister("Sidebar.014", m_workspaceList, &WorkspaceList::deleteSessionRequested,
 		this, &Sidebar::deleteSessionRequested);
 
-	// 登记到全局注册表：插件可用 C 导出 DshHubHostRegistryFind 按 index 取到本对象。
-	// 放在构造末尾 —— 登记出去的对象必须已经能用，不能是半成品。
-	// 登记是覆盖语义：切主题时新侧栏会直接顶掉旧侧栏（旧侧栏稍后才析构，
+	// 登记到全局注册表：插件可用 C 导出 DshHubHostRegistryFind 按 index 取到本对象，放在构造末尾 ——
+	// 登记出去的对象必须已经能用。登记是覆盖语义：切主题时新侧栏会直接顶掉旧侧栏（旧侧栏稍后才析构，
 	// 它调 Destroy 时会被身份校验拒绝，不会误删这一条）。
 	CommonRegistry::instance().AddToRegistry(DshHostIndex::kSidebar, this);
 }
 
 Sidebar::~Sidebar()
 {
-	// 注销：Destroy 只在"表里登记的正是 this"时才摘除。所以"新侧栏已接管、
-	// 旧侧栏才析构"这种顺序不会误删新记录（靠的就是那个身份校验）。
+	// 注销：Destroy 只在“表里登记的正是 this”时才摘除，所以“新侧栏已接管、旧侧栏才析构”这种顺序
+	// 不会误删新记录（靠的就是那个身份校验）。
 	CommonRegistry::instance().Destroy(DshHostIndex::kSidebar, this);
 }
 
@@ -604,10 +550,10 @@ WorkspaceList* Sidebar::workspaceList() const
 	return m_workspaceList;
 }
 
-// 插件市场入口的开关（后端接管时收掉）。扩展管理那颗按钮不在这里 —— 它是客户端扩展的
-// 装载通道，接管态下必须照旧可用（接管机制本身要靠它把扩展装进来）。
-// ⚠️ 不拿 isVisible() 判重：窗口还没 show() 时它恒为 false（切主题重建窗口 + 插件重新
-// 接管正好走这条时序），那样会漏掉这一次 setVisible(false)。直接设，重复调用无副作用。
+// 插件市场入口的开关（后端接管时收掉）。扩展管理那颗按钮不在这里 —— 它是客户端扩展的装载通道，
+// 接管态下必须照旧可用（接管机制本身要靠它把扩展装进来）。
+// ⚠️ 不拿 isVisible() 判重：窗口还没 show() 时它恒为 false（切主题重建窗口 + 插件重新接管正好走这条
+// 时序），那样会漏掉这一次 setVisible(false)。直接设，重复调用无副作用。
 void Sidebar::setPluginsEntryEnabled(bool enabled)
 {
 	if (m_pluginsButton)
@@ -664,9 +610,7 @@ void Sidebar::createSession(DshApiClient* api, const QString& workspaceId)
 		});
 }
 
-void Sidebar::clearAllSessions(
-	const QString& dshHome,
-	const std::function<void()>& onCleared,
+void Sidebar::clearAllSessions(const QString& dshHome, const std::function<void()>& onCleared,
 	const std::function<void()>& onCreateNew)
 {
 	// 文件/目录清理由 common 层负责

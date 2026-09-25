@@ -1,7 +1,6 @@
 #include "ui/PluginsManager.h"
 #include "ui/LayoutUtils.h"
 #include "core/ConnectionManager.h"
-
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
 #include "common/extension/PluginMarketClient.h"
@@ -43,7 +42,6 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	rootLayout->setContentsMargins(0, 0, 0, 0);
 	rootLayout->setSpacing(10);
 
-	// 顶部工具栏
 	auto* toolbar = new QHBoxLayout;
 	toolbar->setSpacing(8);
 
@@ -71,7 +69,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	m_tabs->setObjectName(QStringLiteral("pluginTabs"));
 	rootLayout->addWidget(m_tabs, 1);
 
-	// ========== 插件市场页 ==========
+	// 插件市场页
 	auto* marketPage = new QWidget(content);
 	auto* marketLayout = new QVBoxLayout(marketPage);
 	marketLayout->setContentsMargins(8, 8, 8, 8);
@@ -112,7 +110,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 
 	m_tabs->addTab(marketPage, qtTrId("plugin_market_title"));
 
-	// ========== 已安装页 ==========
+	// 已安装页
 	auto* installedPage = new QWidget(content);
 	auto* installedLayout = new QVBoxLayout(installedPage);
 	installedLayout->setContentsMargins(8, 8, 8, 8);
@@ -143,8 +141,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	// 如果当前加载到的是快照，定时重新拉取，等后台刷新完成后自动切换到最新数据
 	m_registryRefreshTimer = new QTimer(this);
 	m_registryRefreshTimer->setInterval(3000);
-	dshRegister("PluginsManager.001",
-		m_registryRefreshTimer, &QTimer::timeout, this, [this]() {
+	dshRegister("PluginsManager.001", m_registryRefreshTimer, &QTimer::timeout, this, [this]() {
 			if (m_registryLoaded)
 				refresh();
 		});
@@ -157,24 +154,22 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	rootLayout->addWidget(m_statusLabel);
 
 	setContent(content);
-
 	resize(820, 600);
 
-	dshRegister("PluginsManager.002",
-		refreshButton, qOverload<bool>(&QPushButton::clicked), this, &PluginsManager::refresh);
-	dshRegister("PluginsManager.003",
-		m_restartButton, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+	dshRegister("PluginsManager.002", refreshButton, qOverload<bool>(&QPushButton::clicked),
+		this, &PluginsManager::refresh);
+	dshRegister("PluginsManager.003", m_restartButton, qOverload<bool>(&QPushButton::clicked), this, [this]() {
 			m_market->restartServer();
 		});
-	dshRegister("PluginsManager.004",
-		m_searchEdit, qOverload<const QString&>(&QLineEdit::textChanged), this, [this]() {
+	dshRegister("PluginsManager.004", m_searchEdit, qOverload<const QString&>(&QLineEdit::textChanged),
+		this, [this]() {
 			m_currentPage = 0;
 			populateMarket();
 		});
-	dshRegister("PluginsManager.005",
-		m_prevButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { changePage(-1); });
-	dshRegister("PluginsManager.006",
-		m_nextButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { changePage(1); });
+	dshRegister("PluginsManager.005", m_prevButton, qOverload<bool>(&QPushButton::clicked),
+		this, [this]() { changePage(-1); });
+	dshRegister("PluginsManager.006", m_nextButton, qOverload<bool>(&QPushButton::clicked),
+		this, [this]() { changePage(1); });
 
 	// 市场数据 / 操作结果全部来自 common 层客户端
 	dshRegister("PluginsManager.007",
@@ -204,16 +199,15 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 		m_market, &PluginMarketClient::registryFailed, this, [this](const QString& error, int) {
 			setStatus(qtTrId("plugin_load_failed_fmt").arg(error));
 		});
-	dshRegister("PluginsManager.009",
-		m_market, &PluginMarketClient::installedLoaded, this, &PluginsManager::onInstalledLoaded);
-	dshRegister("PluginsManager.010",
-		m_market, &PluginMarketClient::operationCompleted, this, &PluginsManager::onMarketOperationCompleted);
-	dshRegister("PluginsManager.011",
-		m_market, &PluginMarketClient::operationFailed, this, &PluginsManager::onMarketOperationFailed);
+	dshRegister("PluginsManager.009", m_market, &PluginMarketClient::installedLoaded,
+		this, &PluginsManager::onInstalledLoaded);
+	dshRegister("PluginsManager.010", m_market, &PluginMarketClient::operationCompleted,
+		this, &PluginsManager::onMarketOperationCompleted);
+	dshRegister("PluginsManager.011", m_market, &PluginMarketClient::operationFailed,
+		this, &PluginsManager::onMarketOperationFailed);
 
 	// 市场包自动安装的进度与结果
-	dshRegister("PluginsManager.012",
-		m_installer, &PluginMarketInstaller::installStarted, this, [this]() {
+	dshRegister("PluginsManager.012", m_installer, &PluginMarketInstaller::installStarted, this, [this]() {
 			m_progressBar->show();
 			setStatus(qtTrId("plugin_auto_installing"));
 		});
@@ -235,17 +229,12 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 
 	// 常驻插件系统：窗口关闭（右上角 ✕）后自动清理遮罩并隐藏。
 	// 对象本身不销毁，供下次 openPlugins() 复用。
-	dshRegister("PluginsManager.015",
-		this, &PopupWindow::closed, this, &PluginsManager::closePlugins);
+	dshRegister("PluginsManager.015", this, &PopupWindow::closed, this, &PluginsManager::closePlugins);
 
 	// 联网拉取不放在构造里：常驻对象在服务端可能尚未就绪，
 	// 市场/已安装数据改由 openPlugins() 每次打开时经 refreshOnOpen() 拉取。
 	hide();
 }
-
-// ------------------------------------------------------------------
-// 窗口开关管理（插件系统自管，不再由 DSHHub 代管）
-// ------------------------------------------------------------------
 
 void PluginsManager::openPlugins()
 {
@@ -292,10 +281,6 @@ void PluginsManager::refresh()
 	m_market->fetchInstalled();
 }
 
-// ------------------------------------------------------------------
-// 客户端回调
-// ------------------------------------------------------------------
-
 void PluginsManager::onInstalledLoaded(const QJsonObject& installed)
 {
 	m_installed = installed;
@@ -318,10 +303,6 @@ void PluginsManager::onMarketOperationFailed(const QString& path, const QString&
 
 	setStatus(qtTrId("plugin_action_failed_fmt").arg(error));
 }
-
-// ------------------------------------------------------------------
-// 列表绘制
-// ------------------------------------------------------------------
 
 void PluginsManager::populateMarket()
 {
@@ -408,9 +389,8 @@ QWidget* PluginsManager::createMarketCard(const MarketPlugin& plugin)
 	installButton->setObjectName(QStringLiteral("pluginCardInstallButton"));
 	installButton->setCursor(Qt::PointingHandCursor);
 	const QString url = plugin.url;
-	dshRegister(
-		QStringLiteral("PluginsManager.install.%1").arg(url),
-		installButton, qOverload<bool>(&QPushButton::clicked), this, [this, url]() {
+	dshRegister(QStringLiteral("PluginsManager.install.%1").arg(url), installButton,
+		qOverload<bool>(&QPushButton::clicked), this, [this, url]() {
 			m_market->installPlugin(url);
 		});
 
@@ -428,9 +408,7 @@ QWidget* PluginsManager::createInstalledCard(const QString& name, const QString&
 	layout->setContentsMargins(14, 12, 14, 12);
 	layout->setSpacing(12);
 
-	auto* nameLabel = new QLabel(
-		version.isEmpty() ? name : QStringLiteral("%1  %2").arg(name, version),
-		card);
+	auto* nameLabel = new QLabel(version.isEmpty() ? name : QStringLiteral("%1  %2").arg(name, version), card);
 	nameLabel->setObjectName(QStringLiteral("pluginCardNameLabel"));
 
 	layout->addWidget(nameLabel, 1);
@@ -444,14 +422,12 @@ QWidget* PluginsManager::createInstalledCard(const QString& name, const QString&
 		button->setCursor(Qt::PointingHandCursor);
 	}
 
-	dshRegister(
-		QStringLiteral("PluginsManager.update.%1").arg(name),
-		updateButton, qOverload<bool>(&QPushButton::clicked), this, [this, name]() {
+	dshRegister(QStringLiteral("PluginsManager.update.%1").arg(name), updateButton,
+		qOverload<bool>(&QPushButton::clicked), this, [this, name]() {
 			m_market->updatePlugin(name);
 		});
-	dshRegister(
-		QStringLiteral("PluginsManager.uninstall.%1").arg(name),
-		uninstallButton, qOverload<bool>(&QPushButton::clicked), this, [this, name]() {
+	dshRegister(QStringLiteral("PluginsManager.uninstall.%1").arg(name), uninstallButton,
+		qOverload<bool>(&QPushButton::clicked), this, [this, name]() {
 			m_market->uninstallPlugin(name);
 		});
 

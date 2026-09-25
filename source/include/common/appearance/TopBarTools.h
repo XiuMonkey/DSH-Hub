@@ -1,8 +1,13 @@
 #pragma once
 
-// 顶栏工具的「功能半」（不含任何控件）：ToolsFilter 读写 DSH 里 ToolsFilterPlugin 插件暴露的 /api/tools-filter —— GET ?session=<会话 id> 取该会话可见的工具目录（名字 + 描述 + 参数格式）与过滤状态，POST { sessionId, config: { FilterList, DropGuidance } } 整份写回 ToolsFilterConfig.json。
-// 陷阱：隐藏只能靠 IsVisible="False"（把条目从 ToolsList 里删掉表达不了隐藏）；目录的 IsExpanded 是筛选语义（"False" = 整组隐藏，见插件的 compileFilterList），与界面上的展开/收起无关，平时只做原样带回。
-// 为什么这个头文件里没有 Q_OBJECT：它在 vcxproj 里登记为普通 ClInclude（不跑 moc），所以异步结果一律用 std::function 回调返回（UI 半在 include/TopBar.h）；请求全部走 QNetworkAccessManager 的完成回调，主线程只做收发、从不等待。
+// 顶栏工具的"功能半"（不含任何控件）：ToolsFilter 读写 DSH 里 ToolsFilterPlugin 插件暴露的
+// /api/tools-filter —— GET ?session=<会话 id> 取该会话可见的工具目录（名字 + 描述 + 参数格式）与
+// 过滤状态，POST { sessionId, config: { FilterList, DropGuidance } } 整份写回 ToolsFilterConfig.json。
+// 陷阱：隐藏只能靠 IsVisible="False"（把条目从 ToolsList 里删掉表达不了隐藏）；目录的 IsExpanded 是
+// 筛选语义（"False" = 整组隐藏，见插件的 compileFilterList），与界面上的展开/收起无关，平时只做原样带回。
+// 这里没有 Q_OBJECT：本文件在 vcxproj 里登记为普通 ClInclude（不跑 moc），所以异步结果一律用
+// std::function 回调返回（UI 半在 include/TopBar.h）；请求全走 QNetworkAccessManager 的完成回调，
+// 主线程只做收发、从不等待。
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -10,7 +15,6 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
-
 #include <functional>
 
 class QNetworkAccessManager;
@@ -21,16 +25,16 @@ struct ToolFilterEntry
 {
 	QString name;
 	QString description;
-	QString parameters;   // 参数 JSON Schema 的紧凑文本（可能为空）
+	QString parameters;  // 参数 JSON Schema 的紧凑文本（可能为空）
 	bool visible = true;  // true 只写名字；false 写成 { ToolName, IsVisible: "False" }
 };
 
 // 一个目录（FilterList 里的一项）：界面上一枚按钮 + 它名下的工具行
 struct ToolFilterDirectory
 {
-	QString name;         // DirectoryName（界面上的按钮标题）
+	QString name;  // DirectoryName（界面上的按钮标题）
 	QString description;  // Description（可空；界面只拿它做按钮提示）
-	bool expanded = true; // 配置里的 IsExpanded（"False" = 整组隐藏），写回时原样带回
+	bool expanded = true;  // 配置里的 IsExpanded（"False" = 整组隐藏），写回时原样带回
 	QVector<ToolFilterEntry> tools;
 };
 
@@ -38,13 +42,13 @@ struct ToolFilterDirectory
 struct ToolFilterCatalog
 {
 	bool ok = false;
-	QString error;            // ok=false 时给人看的原因
+	QString error;  // ok=false 时给人看的原因
 	QString sessionId;
-	bool degraded = false;    // 服务端只答出了全局层（目录≈空）
-	bool configFound = false; // 该会话已经有过滤配置文件
-	bool dropGuidance = true; // 顶层 DropGuidance（写回时原样带回）
-	QStringList hideContexts; // 顶层 HideContexts（写回时原样带回，否则会被整份替换冲掉）
-	int visibleCount = 0;     // 服务端算出的可见数（用于对账）
+	bool degraded = false;  // 服务端只答出了全局层（目录≈空）
+	bool configFound = false;  // 该会话已经有过滤配置文件
+	bool dropGuidance = true;  // 顶层 DropGuidance（写回时原样带回）
+	QStringList hideContexts;  // 顶层 HideContexts（写回时原样带回，否则会被整份替换冲掉）
+	int visibleCount = 0;  // 服务端算出的可见数（用于对账）
 	QVector<ToolFilterDirectory> directories;
 };
 

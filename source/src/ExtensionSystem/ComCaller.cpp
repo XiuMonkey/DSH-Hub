@@ -1,6 +1,5 @@
-// ComCaller.cpp：InterfaceType = "com" 的独立执行器 —— 通过 IDispatch 自动化调用
-// 白名单 ProgId 组件的方法/属性。命名不含 "Json"：它与 DllCaller 的 json/native
-// 风格是并列的执行路径。
+// InterfaceType = "com" 的独立执行器：通过 IDispatch 自动化调用白名单 ProgId 组件的方法/属性。
+// 命名不含 "Json" —— 它与 DllCaller 的 json/native 风格是并列的执行路径。
 
 #include "ExtensionSystem/ComCaller.h"
 
@@ -9,19 +8,19 @@
 #include <QJsonValue>
 #include <QStringList>
 #include <QVariant>
-
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
 #include <oaidl.h>
 #include <oleauto.h>
-
 #include <vector>
 
 namespace
 {
-	// COM 必须按线程初始化：每次调用自行 CoInitializeEx(MTA) 并在本调用结束时反初始化；若线程此前已被其它模式初始化（hr == S_FALSE 已初始化 / RPC_E_CHANGED_MODE 已是 STA）则不再反初始化，避免破坏调用方线程的 COM 状态 —— 这样 DLL/COM 工具才能放到 Worker 线程并行执行。
+	// COM 必须按线程初始化：每次调用自行 CoInitializeEx(MTA)，且只有本调用真的做过初始化（hr 成功且
+	// != S_FALSE）才在结束时反初始化 —— 线程若已被其它模式初始化过（S_FALSE 已初始化 / RPC_E_CHANGED_MODE
+	// 已是 STA）就绝不能动它，否则会破坏调用方线程的 COM 状态。这样 DLL/COM 工具才能放到 Worker 线程并行执行。
 	class ComThreadInit
 	{
 	public:
@@ -161,8 +160,7 @@ namespace
 		const wchar_t* names[1] = {
 			reinterpret_cast<const wchar_t*>(name.utf16())
 		};
-		HRESULT hr = obj->GetIDsOfNames(IID_NULL, const_cast<LPOLESTR*>(names), 1,
-			LOCALE_USER_DEFAULT, &dispId);
+		HRESULT hr = obj->GetIDsOfNames(IID_NULL, const_cast<LPOLESTR*>(names), 1, LOCALE_USER_DEFAULT, &dispId);
 		if (FAILED(hr) || dispId == DISPID_UNKNOWN) {
 			if (error)
 				*error = qtTrId("com_member_not_found_fmt").arg(name, hrText(hr));
@@ -198,8 +196,7 @@ namespace
 	}
 
 	// 调用方法（METHOD），结果放入 out（可为空）。
-	bool callMethod(IDispatch* obj, const QString& name,
-		std::vector<VARIANT>& args, VARIANT* out, QString* error)
+	bool callMethod(IDispatch* obj, const QString& name, std::vector<VARIANT>& args, VARIANT* out, QString* error)
 	{
 		DISPID dispId = resolveMember(obj, name, error);
 		if (dispId == DISPID_UNKNOWN)
@@ -288,7 +285,8 @@ namespace
 		return ok;
 	}
 
-	// 结果里若出现对象（VT_DISPATCH）：MVP 不支持句柄保活，只做最小"对象摘要"（尝试 Count），避免魔法探测过多。
+	// 结果里若出现对象（VT_DISPATCH）：MVP 不支持句柄保活，只做最小"对象摘要"（尝试 Count），
+	// 避免魔法探测过多
 	QJsonValue summarizeObject(IDispatch* p)
 	{
 		long count = 0;
@@ -300,10 +298,7 @@ namespace
 
 namespace comcall
 {
-	bool invoke(const QJsonObject& comConfig,
-		const QJsonObject& args,
-		QJsonObject& result,
-		QString& error)
+	bool invoke(const QJsonObject& comConfig, const QJsonObject& args, QJsonObject& result, QString& error)
 	{
 		ComThreadInit comInit;
 

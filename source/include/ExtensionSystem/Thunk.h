@@ -1,10 +1,10 @@
 #pragma once
 
-// Windows x64 运行时 thunk 生成器：在运行时根据参数/返回值描述生成一段可执行机器码，将统一参数数组转换为目标 DLL 函数的真实调用约定；由 DllCaller 的 native 调用风格（invokeNativeFunction）使用。
+// Windows x64 运行时 thunk 生成器：运行时按参数/返回值描述生成一段可执行机器码，把统一参数数组
+// 转换成目标 DLL 函数的真实调用约定；由 DllCaller 的 native 调用风格（invokeNativeFunction）使用。
 
 #include <QVector>
 #include <QString>
-
 #include <cstddef>
 #include <cstdint>
 
@@ -67,9 +67,9 @@ namespace Thunk
 
 		QString errorString() const;
 
-		// 仅用于测试/诊断：已生成机器码的首字节与长度（未成功 build 时为 nullptr / 0）。
-		// 用例靠它校验栈帧调整用的是 imm32 形式 —— 这是"参数一多就写穿调用者栈帧"那个
-		// 边界唯一可确定性断言的地方（见 Thunk.cpp 里 subRspImm32 的说明）。
+		// 仅用于测试/诊断：已生成机器码的首字节与长度（未成功 build 时为 nullptr / 0）。用例靠它校验
+		// 栈帧调整用的是 imm32 形式 —— 这是"参数一多就写穿调用者栈帧"那个边界唯一可确定性断言的地方
+		// （见 Thunk.cpp 里 subRspImm32 的说明）。
 		const std::uint8_t* codeBytes() const
 		{
 			return static_cast<const std::uint8_t*>(m_code);

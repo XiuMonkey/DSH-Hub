@@ -1,6 +1,4 @@
-// DshNamedPipeBridge.cpp：命名管道桥接服务。协议为单行 JSON + '\n'：
-//   请求 {"id":1,"tool":"dll_power_func","args":{...}}
-//   响应 {"id":1,"ok":true,"result":{...}} 或 {"id":1,"ok":false,"error":"..."}
+// 命名管道桥接：单行 JSON + '\n'；请求 {id,tool,args}，响应 {id,ok,result|error}
 
 #include "ExtensionSystem/DshNamedPipeBridge.h"
 #include "core/ConnectionManager.h"
@@ -13,10 +11,8 @@ DshNamedPipeBridge::DshNamedPipeBridge(QObject* parent)
 	: QObject(parent)
 	, m_server(new QLocalServer(this))
 {
-	dshRegister(
-		QStringLiteral("DshNamedPipeBridge.%1").arg(reinterpret_cast<quintptr>(this)),
-		m_server, &QLocalServer::newConnection,
-		this, &DshNamedPipeBridge::onNewConnection);
+	dshRegister(QStringLiteral("DshNamedPipeBridge.%1").arg(reinterpret_cast<quintptr>(this)), m_server,
+		&QLocalServer::newConnection, this, &DshNamedPipeBridge::onNewConnection);
 }
 
 bool DshNamedPipeBridge::start(const QString& pipeName)
@@ -25,7 +21,7 @@ bool DshNamedPipeBridge::start(const QString& pipeName)
 
 	m_pipeName = pipeName;
 
-	// 移除可能残留的旧管道（上次异常退出可能没清干净）
+	// 清掉上次异常退出残留的旧管道
 	QLocalServer::removeServer(m_pipeName);
 
 	if (!m_server->listen(m_pipeName)) {
@@ -56,16 +52,12 @@ QString DshNamedPipeBridge::errorString() const
 	return m_errorString;
 }
 
-void DshNamedPipeBridge::sendResponse(QLocalSocket* socket,
-	int id,
-	bool ok,
-	const QJsonObject& result,
+void DshNamedPipeBridge::sendResponse(QLocalSocket* socket, int id, bool ok, const QJsonObject& result,
 	const QString& error)
 {
 	if (!socket) {
 		return;
 	}
-
 	QJsonObject response;
 	response.insert(QStringLiteral("id"), id);
 	response.insert(QStringLiteral("ok"), ok);
@@ -76,7 +68,6 @@ void DshNamedPipeBridge::sendResponse(QLocalSocket* socket,
 
 	QByteArray bytes = QJsonDocument(response).toJson(QJsonDocument::Compact);
 	bytes.append('\n');
-
 	socket->write(bytes);
 	socket->flush();
 	qInfo().noquote() << "[DSH Pipe] response id=" << id << " ok=" << ok;
@@ -85,11 +76,8 @@ void DshNamedPipeBridge::sendResponse(QLocalSocket* socket,
 void DshNamedPipeBridge::onNewConnection()
 {
 	while (QLocalSocket* socket = m_server->nextPendingConnection()) {
-		// socket 每连接新建、断开即销毁，不进登记表
-		connect(socket, &QLocalSocket::readyRead,
-			this, &DshNamedPipeBridge::onReadyRead);
-		connect(socket, &QLocalSocket::disconnected,
-			this, &DshNamedPipeBridge::onDisconnected);
+		connect(socket, &QLocalSocket::readyRead, this, &DshNamedPipeBridge::onReadyRead);
+		connect(socket, &QLocalSocket::disconnected, this, &DshNamedPipeBridge::onDisconnected);
 		m_buffers.insert(socket, QByteArray());
 		qInfo().noquote() << QStringLiteral("[DSH Pipe] client connected");
 	}
@@ -101,11 +89,10 @@ void DshNamedPipeBridge::onReadyRead()
 	if (!socket) {
 		return;
 	}
-
 	QByteArray& buffer = m_buffers[socket];
 	buffer.append(socket->readAll());
 
-	// 按 '\n' 切出完整请求；不完整的尾部留在 buffer 里等下次读
+	// 按 '\n' 切出完整请求，尾部留到下次读
 	int newlineIndex;
 	while ((newlineIndex = buffer.indexOf('\n')) != -1) {
 		QByteArray line = buffer.left(newlineIndex).trimmed();
@@ -122,7 +109,6 @@ void DshNamedPipeBridge::onDisconnected()
 	if (!socket) {
 		return;
 	}
-
 	m_buffers.remove(socket);
 	socket->deleteLater();
 	qInfo().noquote() << QStringLiteral("[DSH Pipe] client disconnected");
@@ -134,8 +120,7 @@ void DshNamedPipeBridge::handleLine(QLocalSocket* socket, const QByteArray& line
 	QJsonDocument doc = QJsonDocument::fromJson(line, &parseError);
 	if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
 		qWarning() << QStringLiteral("[DSH Pipe] invalid JSON request");
-		sendResponse(socket, -1, false, QJsonObject(),
-			QStringLiteral("invalid JSON request"));
+		sendResponse(socket, -1, false, QJsonObject(), QStringLiteral("invalid JSON request"));
 		return;
 	}
 
@@ -145,8 +130,7 @@ void DshNamedPipeBridge::handleLine(QLocalSocket* socket, const QByteArray& line
 	const QJsonObject args = request.value(QStringLiteral("args")).toObject();
 
 	if (tool.isEmpty()) {
-		sendResponse(socket, id, false, QJsonObject(),
-			QStringLiteral("missing 'tool' field"));
+		sendResponse(socket, id, false, QJsonObject(), QStringLiteral("missing 'tool' field"));
 		return;
 	}
 

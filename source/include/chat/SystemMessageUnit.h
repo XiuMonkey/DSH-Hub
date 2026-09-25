@@ -13,7 +13,6 @@ public:
 
 	explicit SystemMessageUnit(QWidget* parent = nullptr);
 	void setMessage(const QString& text);
-
 	void updateHeightToContent();
 
 protected:

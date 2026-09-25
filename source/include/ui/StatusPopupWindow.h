@@ -1,6 +1,7 @@
 #pragma once
 
-// PopupWindow 的 UI 扩展：带一条“按真实宽度两行省略”的状态栏（插件市场与扩展管理弹窗共用，排版逻辑是纯绘制辅助 QFontMetrics，因此留在 ui 层）。
+// PopupWindow 的 UI 扩展：带一条“按真实宽度两行省略”的状态栏（插件市场与扩展管理弹窗共用，
+// 排版逻辑是纯绘制辅助 QFontMetrics，因此留在 ui 层）。
 
 #include "ui/PopupWindow.h"
 

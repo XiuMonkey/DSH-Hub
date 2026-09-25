@@ -1,11 +1,10 @@
 #include "ui/ModelListPanel.h"
+
 #include "ui/LayoutUtils.h"
 #include "core/ConnectionManager.h"
-
 #include "network/DshApiClient.h"
 #include "common/appearance/ThemeManager.h"
 #include "ui/Tooltip.h"
-
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -28,39 +27,27 @@
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QVBoxLayout>
-
 #include <memory>
 
 namespace
 {
-	// 详情区“名称：值”两列
 	constexpr int kDetailNameWidth = 96;
 
-	// 成员表头：上下内边距与最小高度。
-	// 高度下限要能装下「14px 名称 + 12px 说明 + 上下内边距」，见 ModelListEntry 构造里的说明。
 	constexpr int kEntryHeaderPadding = 3;
 	constexpr int kEntryHeaderMinHeight = 48;
 
-	// 清单区的最小高度：只是让布局在极端情况下不至于把这块压没；
-	// 正常情况下它占满面板剩余空间，装得下就不出滚动条，装不下才滚动。
+	// 清单区最小高：只保证极端情况下不被压没
 	constexpr int kMinListHeight = 120;
 
-	// ---------------- 获取模型的下拉 ----------------
-	// 与模型选择器的上拉菜单同一套尺寸规矩：输入框下方留 8px 间距、与屏幕边缘
-	// 至少留 12px，清单再矮也有 120px、再高也不超过 280px（超出就滚动）。
 	constexpr int kMenuGap = 8;
 	constexpr int kMenuScreenMargin = 12;
 	constexpr int kMenuMinListHeight = 120;
 	constexpr int kMenuMaxListHeight = 280;
-	// 下拉主体自身的上下内边距（4+4）与上下描边（1+1）：算可用高度时要扣掉
 	constexpr int kMenuBodyChrome = 10;
-	// 一行候选的高度下限，与成员表头同一量级（一行文字 + 内边距）
 	constexpr int kMenuOptionMinHeight = 26;
-	// 输入框宽度取不到时（还没布局完）下拉的兜底宽度
 	constexpr int kMenuFallbackWidth = 220;
 
-	// pi-ai 适配器接受的思考档位名（THINKING_LEVELS）；表单据此校验用户输入，
-	// 免得写出一个适配器解析不了的档位、整份分节被 settings 拒绝。
+	// pi-ai 适配器接受的思考档位名
 	const char* const kThinkingLevels[] = {
 		"off", "minimal", "low", "medium", "high", "xhigh", "max",
 	};
@@ -74,7 +61,6 @@ namespace
 		return false;
 	}
 
-	// “off/minimal/low/medium/high/xhigh/max”，供校验失败时提示可用取值
 	QString thinkingLevelList()
 	{
 		QStringList levels;
@@ -85,12 +71,10 @@ namespace
 
 	QString formatCount(int value)
 	{
-		// 容量动辄上百万，加千位分隔可读性差别很大
 		return QLocale::system().toString(value);
 	}
 
-	// 候选行的悬停提示：下拉只有输入框那么宽，长 id 会被截断，
-	// 展示名与端点公布的容量也只在这儿露个面（选项本身只列 id）。
+	// 长 id 在下拉里被截断，展示名与容量只在这儿露面
 	QString discoveredTooltip(const DiscoveredModel& model)
 	{
 		QStringList lines;
@@ -107,14 +91,9 @@ namespace
 			lines.append(QStringLiteral("%1: %2")
 				.arg(qtTrId("model_max_output"), formatCount(model.maxTokens)));
 		}
-
 		return lines.join(QLatin1Char('\n'));
 	}
 }
-
-// ------------------------------------------------------------------
-// ModelListEntry
-// ------------------------------------------------------------------
 
 ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 	: QWidget(parent)
@@ -129,15 +108,12 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
 
-	// 表头就是一枚按钮：整行可点，语义与列表项一致
 	m_header = new QPushButton(this);
 	m_header->setObjectName(QStringLiteral("modelListEntryHeader"));
 	m_header->setFlat(true);
 	m_header->setCursor(Qt::PointingHandCursor);
 	m_header->setFocusPolicy(Qt::NoFocus);
-	// QPushButton 的高度由样式按“按钮文本/图标”算出来，不会因为里面塞了一个布局就变高
-	// ——不显式给下限时，这一行会被压到十几像素，名称与说明各只剩一条线，
-	// 看起来就是“文字上下被遮住”。下限取「两行字 + 上下内边距」，不留多余留白。
+	// QPushButton 不给下限会被压到十几像素
 	m_header->setMinimumHeight(kEntryHeaderMinHeight);
 
 	auto* headerLayout = new QHBoxLayout(m_header);
@@ -150,19 +126,16 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 
 	auto* nameLabel = new QLabel(info.name, m_header);
 	nameLabel->setObjectName(QStringLiteral("modelListEntryName"));
-	// 纵向 Minimum：sizeHint 是硬下限，布局不能把标签压得比一行字还矮
 	nameLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 	titleColumn->addWidget(nameLabel);
 
-	auto* metaLabel = new QLabel(
-		QStringLiteral("%1 · %2").arg(info.providerName, info.id), m_header);
+	auto* metaLabel = new QLabel(QStringLiteral("%1 · %2").arg(info.providerName, info.id), m_header);
 	metaLabel->setObjectName(QStringLiteral("modelListEntryMeta"));
 	metaLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 	titleColumn->addWidget(metaLabel);
 
 	headerLayout->addLayout(titleColumn, 1);
 
-	// 只在“不是随附默认”时打标：用户自己加/改的，或只在 settings 里声明的
 	QString badge;
 	if (info.userDeclared)
 		badge = qtTrId("model_source_custom");
@@ -180,7 +153,6 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 
 	layout->addWidget(m_header);
 
-	// ---------------- 详情 ----------------
 	m_detail = new QWidget(this);
 	m_detail->setObjectName(QStringLiteral("modelListEntryDetail"));
 	m_detail->setAttribute(Qt::WA_StyledBackground, true);
@@ -215,14 +187,12 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 		addDetailRow(detailLayout, m_detail, qtTrId("model_think_level"), value);
 	}
 	else {
-		// 与输入框底的选择器保持一致：未公布时那里给的是通用四档，这里也写明
 		QStringList fallback;
 		for (const ReasoningLevel& level : fallbackReasoningLevels())
 			fallback.append(level.name);
 
 		addDetailRow(detailLayout, m_detail, qtTrId("model_think_level"),
-			qtTrId("model_think_undeclared_fmt")
-			.arg(fallback.join(QStringLiteral(" / "))));
+			qtTrId("model_think_undeclared_fmt").arg(fallback.join(QStringLiteral(" / "))));
 	}
 
 	addDetailRow(detailLayout, m_detail, qtTrId("model_config_source"),
@@ -245,8 +215,7 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 	layout->addWidget(m_detail);
 	m_detail->hide();
 
-	dshRegister(
-		QStringLiteral("ModelListPanel.header.%1").arg(m_key),
+	dshRegister(QStringLiteral("ModelListPanel.header.%1").arg(m_key),
 		m_header, qOverload<bool>(&QPushButton::clicked), this, [this]() {
 			setExpanded(!isExpanded());
 		});
@@ -276,15 +245,12 @@ void ModelListEntry::setExpanded(bool expanded)
 
 void ModelListEntry::contextMenuEvent(QContextMenuEvent* event)
 {
-	// 表头与详情区都算这个成员：子控件不处理该事件时会冒泡到这里
 	emit contextMenuRequested(m_provider, m_modelId, event->globalPos());
 	event->accept();
 }
 
-void ModelListEntry::addDetailRow(
-	QVBoxLayout* layout, QWidget* parent, const QString& name, const QString& value)
+void ModelListEntry::addDetailRow(QVBoxLayout* layout, QWidget* parent, const QString& name, const QString& value)
 {
-	// 值缺失就整行不建：详情里出现一堆“—”没有信息量
 	if (value.isEmpty())
 		return;
 
@@ -309,15 +275,7 @@ void ModelListEntry::addDetailRow(
 	layout->addWidget(row);
 }
 
-// ------------------------------------------------------------------
-// ModelListPanel::ContextMenu
-// ------------------------------------------------------------------
-// 成员行的右键菜单。目前只有「删除」一项。
-//
-// 不用 QMenu：Windows 上原生 QMenu 弹窗即使开了 WA_TranslucentBackground，
-// 圆角外仍会留一块直角背景（Sidebar 里踩过同样的坑）。这里与模型选择器的
-// 上拉菜单同做法：无边框 Popup + 内层圆角主体 + 真正透明的外圈。
-// ------------------------------------------------------------------
+// 成员行右键菜单。⚠️ 不用 QMenu：Windows 上圆角外会留直角背景
 
 class ModelListPanel::ContextMenu : public QDialog
 {
@@ -326,7 +284,7 @@ public:
 		: QDialog(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
 	{
 		setAttribute(Qt::WA_TranslucentBackground);
-		// 只做短暂浮层：不抢激活，避免被系统在激活变化时立即关闭
+		// 不抢激活，否则会被系统立即关闭
 		setAttribute(Qt::WA_ShowWithoutActivating, true);
 
 		auto* outer = new QVBoxLayout(this);
@@ -343,7 +301,6 @@ public:
 		m_rows->setSpacing(2);
 	}
 
-	// 每次弹出前重建：动作行（不可用时置灰）+ 一句原因
 	void build(bool canRemove, const QString& blockedReason)
 	{
 		clear();
@@ -353,11 +310,10 @@ public:
 		remove->setObjectName(QStringLiteral("modelListContextAction"));
 		remove->setFlat(true);
 		remove->setCursor(Qt::PointingHandCursor);
-		// 菜单行不参与焦点链：弹出层一旦出现可聚焦子控件，Windows 上会因激活变化被关掉
+		// ⚠️ 行不参与焦点链，否则 Windows 会关掉弹层
 		remove->setFocusPolicy(Qt::NoFocus);
 		remove->setMinimumHeight(30);
 		remove->setEnabled(canRemove);
-		// 菜单行每次 build 重建，不进登记表
 		connect(remove, &QPushButton::clicked, this, [this]() {
 			m_chosen = true;
 			accept();
@@ -373,13 +329,12 @@ public:
 		}
 	}
 
-	// 用户是否点了「删除」
 	bool removeChosen() const { return m_chosen; }
 
 private:
 	void clear()
 	{
-		// 重建后马上 show()，所以要立刻摘离 —— 否则旧行会被一并显示出来。
+		// 要立刻摘离，否则旧行会被一并显示
 		LayoutUtils::clearLayout(m_rows);
 	}
 
@@ -388,15 +343,7 @@ private:
 	bool m_chosen = false;
 };
 
-// ------------------------------------------------------------------
-// ModelListPanel::FetchedModelsMenu
-// ------------------------------------------------------------------
-// 「获取模型」取回候选后的下拉：一列以模型 id 命名的选项，点一条即回填到输入框。
-//
-// 与上面的右键菜单同一个做法（无边框 Popup + 内层圆角主体，不用 QMenu，理由见上）。
-// 宽度由调用方给定 —— 与模型 ID 输入框等宽，看起来就是它自己的下拉，
-// 也不会比输入框宽出一截、把表单布局撑歪。
-// ------------------------------------------------------------------
+// 取回候选的下拉，点一条回填模型 ID
 
 class ModelListPanel::FetchedModelsMenu : public QDialog
 {
@@ -405,7 +352,7 @@ public:
 		: QDialog(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
 	{
 		setAttribute(Qt::WA_TranslucentBackground);
-		// 只做短暂浮层：不抢激活，避免被系统在激活变化时立即关闭
+		// 不抢激活，否则会被系统立即关闭
 		setAttribute(Qt::WA_ShowWithoutActivating, true);
 
 		auto* outer = new QVBoxLayout(this);
@@ -421,7 +368,6 @@ public:
 		bodyLayout->setContentsMargins(4, 4, 4, 4);
 		bodyLayout->setSpacing(0);
 
-		// 候选可能有几百条（聚合网关就是这样）：装不下就滚动
 		m_scroll = LayoutUtils::makeThemedScrollArea(m_body, QStringLiteral("modelListFetchScroll"));
 		m_scroll->setFocusPolicy(Qt::NoFocus);
 
@@ -436,8 +382,6 @@ public:
 		bodyLayout->addWidget(m_scroll);
 	}
 
-	// 重建选项并按内容定尺寸：width 与输入框等宽，maxHeight 是输入框上下
-	// 能腾出的最大高度（由调用方按屏幕可用区算）。
 	void build(const QVector<DiscoveredModel>& models, int width, int maxHeight)
 	{
 		clear();
@@ -451,12 +395,11 @@ public:
 			row->setObjectName(QStringLiteral("modelListFetchOption"));
 			row->setFlat(true);
 			row->setCursor(Qt::PointingHandCursor);
-			// 行不参与焦点链：弹出层一旦出现可聚焦子控件，Windows 上会因激活变化被关掉
+			// ⚠️ 行不参与焦点链，否则 Windows 会关掉弹层
 			row->setFocusPolicy(Qt::NoFocus);
 			row->setMinimumHeight(kMenuOptionMinHeight);
 			row->setToolTip(discoveredTooltip(model));
 
-			// 选项行每次 build 重建，不进登记表
 			connect(row, &QPushButton::clicked, this, [this, id = model.id]() {
 				m_chosen = id;
 				accept();
@@ -464,21 +407,18 @@ public:
 			m_rows->addWidget(row);
 		}
 
-		// 按内容算滚动区高度：够高就整段展开（不出滚动条），真的超高才滚动。
-		// 不能拿布局的 sizeHint：弹窗还没 show()，量出来的高度不作数。
+		// ⚠️ 不能拿布局 sizeHint：show() 前量出的高度不作数
 		const int ceiling = qMax(kMenuMinListHeight, maxHeight);
 		m_listHeight = qBound(kMenuMinListHeight, contentHeight(), ceiling);
 		m_scroll->setFixedHeight(m_listHeight);
 
-		// 尺寸直接按算出来的值给定：滚动区高度刚改过，adjustSize() 可能还拿着旧值
+		// 直接给定尺寸，adjustSize() 可能还是旧值
 		setFixedSize(popupWidth, m_listHeight + kMenuBodyChrome);
 	}
 
-	// 用户点中的模型 id；没点（点外面关掉）时为空
 	QString chosenId() const { return m_chosen; }
 
 private:
-	// 选项总高：逐个控件自己加（理由见上：show() 之前的布局尺寸不可信）
 	int contentHeight() const
 	{
 		int total = 0;
@@ -499,10 +439,9 @@ private:
 
 	void clear()
 	{
-		// 重建后马上 show()，所以要立刻摘离 —— 否则旧行会被一并显示出来。
+		// 要立刻摘离，否则旧行会被一并显示
 		LayoutUtils::clearLayout(m_rows);
 
-		// 清空后把高度约束放开，避免上一次的固定尺寸残留到这一份内容上
 		m_scroll->setMinimumHeight(0);
 		m_scroll->setMaximumHeight(QWIDGETSIZE_MAX);
 	}
@@ -515,10 +454,6 @@ private:
 	QString m_chosen;
 };
 
-// ------------------------------------------------------------------
-// ModelListPanel
-// ------------------------------------------------------------------
-
 ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	: QWidget(parent)
 	, m_api(api)
@@ -527,44 +462,35 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 
 	auto* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
-	// 顶部三行说明文字之间贴紧些（原来 6px 偏松）
 	layout->setSpacing(3);
 
 	auto* title = new QLabel(qtTrId("model_list_title"), this);
 	title->setObjectName(QStringLiteral("modelListTitle"));
-	// 纵向 Fixed：这些说明文字只占自己一行的高度，不被布局拉长
 	title->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-	auto* hint = new QLabel(
-		qtTrId("model_list_desc"),
-		this);
+	auto* hint = new QLabel(qtTrId("model_list_desc"), this);
 	hint->setWordWrap(true);
 	hint->setObjectName(QStringLiteral("modelListHint"));
 
 	m_status = new QLabel(this);
 	m_status->setWordWrap(true);
 	m_status->setObjectName(QStringLiteral("modelListStatus"));
-	// 状态行只有一行字：别让它被拉成一大块（看起来“上下很松”）
 	m_status->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-	// 列表级操作的瞬时提示（右键删除那类不在表单里的操作）：默认隐藏，几秒后自己消失
 	m_notice = new QLabel(this);
 	m_notice->setWordWrap(true);
 	m_notice->setObjectName(QStringLiteral("modelListNotice"));
 	m_notice->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 	m_notice->hide();
 
-	// ---------------- 列表 ----------------
 	m_scroll = LayoutUtils::makeThemedScrollArea(this, QStringLiteral("modelListScroll"));
-	// 清单区占满面板剩余空间：装得下就不出滚动条，装不下才滚动。
-	// 不按内容设固定高度——那会把窗口的最小高度一起顶大。
+	// ⚠️ 不按内容设固定高度，否则会把窗口最小高度顶大
 	m_scroll->setMinimumHeight(kMinListHeight);
 
 	m_listContent = new QWidget(m_scroll);
 	m_listContent->setObjectName(QStringLiteral("modelListContent"));
 
-	// 外层：模型行容器 + 新增表单。表单放在滚动区里，所以它撑高的是滚动内容，
-	// 不是窗口——窗口高度不变，“添加模型”按钮也就不会跟着表单上下移动。
+	// 表单放进滚动区，撑高的是滚动内容而非窗口
 	auto* contentLayout = new QVBoxLayout(m_listContent);
 	contentLayout->setContentsMargins(0, 0, 0, 0);
 	contentLayout->setSpacing(4);
@@ -573,7 +499,6 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	m_rowsHost->setObjectName(QStringLiteral("modelListRows"));
 	m_listLayout = new QVBoxLayout(m_rowsHost);
 	m_listLayout->setContentsMargins(0, 0, 0, 0);
-	// 成员之间贴紧些：每行自身已经有两行文字，行距再大就散
 	m_listLayout->setSpacing(2);
 	m_listLayout->addStretch(1);
 	contentLayout->addWidget(m_rowsHost);
@@ -581,18 +506,11 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	buildForm(m_listContent);
 	contentLayout->addWidget(m_form);
 
-	// 末尾留一段弹性空白：滚动区的富余高度全归它。
-	//
-	// 不留的话，富余高度会在「模型行容器」和「表单」之间分摊 —— 于是表单只要长一行
-	// 或短一行（反馈文案换行、凭据状态那几行字、随手改的占位文本都会），分摊比例就变，
-	// 整张表单连同里面的字段一起上下挪一下。点「获取模型」时最容易被看见：失败文案
-	// 比进度文案长一行，一来一回就是"抖一下"。
-	// 有了它，表单的顶边只由上面的模型行决定，自己长高只往下长，字段不动。
+	// ⚠️ 末尾弹性空白必须留，否则表单多一行少一行就会整张上下挪
 	contentLayout->addStretch(1);
 
 	m_scroll->setWidget(m_listContent);
 
-	// ---------------- 添加模型 ----------------
 	m_addButton = new QPushButton(qtTrId("model_add"), this);
 	m_addButton->setObjectName(QStringLiteral("modelListAddButton"));
 	m_addButton->setCursor(Qt::PointingHandCursor);
@@ -604,18 +522,14 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	layout->addWidget(m_scroll, 1);
 	layout->addWidget(m_addButton);
 
-	dshRegister("ModelListPanel.001",
-		m_addButton, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+	dshRegister("ModelListPanel.001", m_addButton, qOverload<bool>(&QPushButton::clicked), this,
+		[this]() {
 			if (m_form && m_form->isVisible())
 				closeForm();
 			else
 				openForm();
 		});
 }
-
-// ------------------------------------------------------------------
-// 拉取与重建
-// ------------------------------------------------------------------
 
 void ModelListPanel::refresh()
 {
@@ -628,7 +542,7 @@ void ModelListPanel::refresh()
 	if (m_status)
 		m_status->setText(qtTrId("model_loading_catalog"));
 
-	// 面板是常驻对象，请求可能在关闭设置后才回来
+	// 面板常驻，请求可能晚于关闭设置
 	QPointer<ModelListPanel> self(this);
 
 	ModelSelectionService::fetchView(m_api,
@@ -656,7 +570,7 @@ void ModelListPanel::applyView(const ServerModelView& view)
 	populateRows();
 	updateStatus();
 
-	// 表单里的提供方下拉跟随最新目录重建；正在提交时不动，免得把用户选择清掉
+	// 提交中不重建下拉，免得清掉用户选择
 	if (!m_submitting)
 		syncFormToRoute();
 }
@@ -666,7 +580,6 @@ void ModelListPanel::clearRows()
 	if (!m_listLayout)
 		return;
 
-	// 重建后马上 show()，所以要立刻摘离 —— 否则列表里会出现重复成员。
 	LayoutUtils::clearLayout(m_listLayout);
 }
 
@@ -679,7 +592,6 @@ void ModelListPanel::populateRows()
 
 	QString lastProvider;
 	for (const ModelInfo& info : m_rows) {
-		// 提供方之间插一条分隔标题，多提供方时列表才读得下去
 		if (info.provider != lastProvider) {
 			lastProvider = info.provider;
 
@@ -689,33 +601,24 @@ void ModelListPanel::populateRows()
 		}
 
 		auto* entry = new ModelListEntry(info, m_listContent);
-		// 刷新前展开着的成员，重建后保持展开
 		if (m_expanded.contains(entry->key()))
 			entry->setExpanded(true);
 
-		dshRegister(
-			QStringLiteral("ModelListPanel.expand.%1").arg(entry->key()),
-			entry, &ModelListEntry::expandedChanged, this,
-			[this](const QString& key, bool expanded) {
+		dshRegister(QStringLiteral("ModelListPanel.expand.%1").arg(entry->key()), entry,
+			&ModelListEntry::expandedChanged, this, [this](const QString& key, bool expanded) {
 				if (expanded)
 					m_expanded.insert(key);
 				else
 					m_expanded.remove(key);
 			});
-
-		// 右键出菜单（目前只有删除）
-		dshRegister(
-			QStringLiteral("ModelListPanel.menu.%1").arg(entry->key()),
-			entry, &ModelListEntry::contextMenuRequested,
-			this, &ModelListPanel::showRowMenu);
+		dshRegister(QStringLiteral("ModelListPanel.menu.%1").arg(entry->key()), entry,
+			&ModelListEntry::contextMenuRequested, this, &ModelListPanel::showRowMenu);
 
 		m_listLayout->addWidget(entry);
 	}
 
 	if (m_rows.isEmpty()) {
-		auto* empty = new QLabel(
-			qtTrId("model_catalog_empty"),
-			m_listContent);
+		auto* empty = new QLabel(qtTrId("model_catalog_empty"), m_listContent);
 		empty->setWordWrap(true);
 		empty->setObjectName(QStringLiteral("modelListEmpty"));
 		m_listLayout->addWidget(empty);
@@ -730,11 +633,8 @@ void ModelListPanel::updateStatus()
 		return;
 
 	QStringList notes;
-	notes.append(qtTrId("model_catalog_summary_fmt")
-		.arg(m_rows.size())
-		.arg(m_view.groups.size()));
+	notes.append(qtTrId("model_catalog_summary_fmt").arg(m_rows.size()).arg(m_view.groups.size()));
 
-	// 写不了就直说，别让用户填完表单才被拒
 	if (!m_view.settingsWritable)
 		notes.append(qtTrId("model_add_readonly"));
 
@@ -748,15 +648,9 @@ void ModelListPanel::updateStatus()
 	if (m_addButton) {
 		const bool canWrite = m_view.settingsWritable && !m_view.providers.isEmpty();
 		m_addButton->setEnabled(canWrite);
-		m_addButton->setToolTip(canWrite
-			? QString()
-			: qtTrId("model_add_requires_api"));
+		m_addButton->setToolTip(canWrite ? QString() : qtTrId("model_add_requires_api"));
 	}
 }
-
-// ------------------------------------------------------------------
-// 添加模型的表单
-// ------------------------------------------------------------------
 
 void ModelListPanel::buildForm(QWidget* parent)
 {
@@ -795,8 +689,6 @@ void ModelListPanel::buildForm(QWidget* parent)
 	m_idEdit->setObjectName(QStringLiteral("modelListField"));
 	m_idEdit->setPlaceholderText(qtTrId("model_id_hint"));
 
-	// 模型 ID 一行：右侧留给「获取模型」按钮，输入框因此短一截
-	// （下拉按输入框宽度展开，所以这里不额外留白）
 	auto* idRow = new QWidget(m_form);
 	auto* idRowLayout = new QHBoxLayout(idRow);
 	idRowLayout->setContentsMargins(0, 0, 0, 0);
@@ -827,16 +719,13 @@ void ModelListPanel::buildForm(QWidget* parent)
 	m_maxTokensEdit->setValidator(new QIntValidator(1, 100000000, m_maxTokensEdit));
 	addField(qtTrId("model_max_output"), m_maxTokensEdit);
 
-	// 下面是按适配器族二选一的字段，切路由时整对显隐
-	// （QGridLayout 的行只含隐藏控件时高度归零，所以直接隐藏标签与控件即可）
 	m_effortsLabel = new QLabel(qtTrId("model_think_level"), m_form);
 	m_effortsLabel->setObjectName(QStringLiteral("modelListFieldLabel"));
 	grid->addWidget(m_effortsLabel, row, 0, Qt::AlignRight | Qt::AlignVCenter);
 
 	m_effortsEdit = new QLineEdit(m_form);
 	m_effortsEdit->setObjectName(QStringLiteral("modelListField"));
-	m_effortsEdit->setPlaceholderText(
-		qtTrId("model_think_level_hint"));
+	m_effortsEdit->setPlaceholderText(qtTrId("model_think_level_hint"));
 	grid->addWidget(m_effortsEdit, row, 1);
 	++row;
 
@@ -849,8 +738,7 @@ void ModelListPanel::buildForm(QWidget* parent)
 	grid->addWidget(m_imageInputBox, row, 1);
 	++row;
 
-	// API Key：凭据也写在服务端，按该路由 profile 的 apiKeyEnv 引用存取。
-	// 填了才会写，留空表示不动现有凭据（例如用环境变量或已配好的 key）。
+	// 凭据写在服务端；填了才写，留空不动现有凭据
 	m_apiKeyLabel = new QLabel(QStringLiteral("API Key"), m_form);
 	m_apiKeyLabel->setObjectName(QStringLiteral("modelListFieldLabel"));
 	grid->addWidget(m_apiKeyLabel, row, 0, Qt::AlignRight | Qt::AlignVCenter);
@@ -864,7 +752,6 @@ void ModelListPanel::buildForm(QWidget* parent)
 
 	layout->addLayout(grid);
 
-	// 引用名与状态提示（放在字段下方，跟随所选路由刷新）
 	m_apiKeyRefLabel = new QLabel(m_form);
 	m_apiKeyRefLabel->setWordWrap(true);
 	m_apiKeyRefLabel->setObjectName(QStringLiteral("modelListApiKeyRef"));
@@ -875,16 +762,11 @@ void ModelListPanel::buildForm(QWidget* parent)
 	m_routeHint->setObjectName(QStringLiteral("modelListRouteHint"));
 	layout->addWidget(m_routeHint);
 
-	// 反馈行：一直占着（没话说时是空的一行）。
-	//
-	// 表单是滚动区里的最后一块，它的高度一变，布局就要在「模型行容器」和它之间
-	// 重新分配余量，于是整张表单连同字段一起上下挪一下。「获取模型」的进度文案
-	// 一闪即过（本地目录那条路几乎不过网络），最容易被看见成"点一下抖一下"。
-	// 把这一行的高度固定住，一行以内的提示就完全不改变表单高度。
+	// ⚠️ 反馈行高度固定，变高会让整张表单连字段一起挪
 	m_feedback = new QLabel(m_form);
 	m_feedback->setWordWrap(true);
 	m_feedback->setObjectName(QStringLiteral("modelListFeedback"));
-	// 先让样式生效再量高度：量到 QSS 之前的字体，占位就不够一行，照样会抖
+	// 先让样式生效再量高度，否则占位不够一行
 	m_feedback->ensurePolished();
 	m_feedback->setMinimumHeight(m_feedback->fontMetrics().height());
 	layout->addWidget(m_feedback);
@@ -913,7 +795,6 @@ void ModelListPanel::buildForm(QWidget* parent)
 	dshRegister("ModelListPanel.004",
 		m_fetchButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { fetchModels(); });
 
-	// 路由换了，提示文案与按族显示的字段都要跟着换
 	dshRegister("ModelListPanel.005",
 		m_providerCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
 			if (m_submitting)
@@ -927,8 +808,7 @@ void ModelListPanel::setFeedback(const QString& text)
 	if (!m_feedback)
 		return;
 
-	// 只换文字，不显隐：这一行的高度是留好的（见 buildForm），
-	// 一行以内的提示因此不会让表单重新排版
+	// 只换文字不显隐，免得表单重排版
 	m_feedback->setText(text);
 }
 
@@ -938,7 +818,7 @@ void ModelListPanel::clearFeedback()
 		return;
 
 	m_feedback->clear();
-	// 上一条提示挂在悬停里的详情别留着，免得指过来看到的是旧错误
+	// 清掉悬停详情，免得看到旧错误
 	m_feedback->setToolTip(QString());
 }
 
@@ -947,15 +827,13 @@ void ModelListPanel::setNotice(const QString& text)
 	m_notice->setText(text);
 	m_notice->show();
 
-	// 几秒后自己消失，免得旧提示一直挂着
 	QTimer::singleShot(4000, this, [this]() {
 		if (m_notice)
 			m_notice->hide();
 		});
 }
 
-void ModelListPanel::showRowMenu(
-	const QString& provider, const QString& modelId, const QPoint& globalPos)
+void ModelListPanel::showRowMenu(const QString& provider, const QString& modelId, const QPoint& globalPos)
 {
 	if (provider.isEmpty() || modelId.isEmpty())
 		return;
@@ -963,14 +841,13 @@ void ModelListPanel::showRowMenu(
 	if (!m_rowMenu)
 		m_rowMenu = new ContextMenu(this);
 
-	// 写不了服务端就没法删，直接把原因写在菜单里
 	const QString blocked = m_view.settingsWritable
 		? QString()
 		: qtTrId("model_delete_readonly");
 	m_rowMenu->build(m_view.settingsWritable, blocked);
 	m_rowMenu->adjustSize();
 
-	// 夹到屏幕内，避免贴着边缘弹出时被切掉
+	// 夹到屏幕内，避免贴边缘被切掉
 	QPoint pos = globalPos;
 	if (const QScreen* screen = QGuiApplication::screenAt(globalPos)) {
 		const QRect available = screen->availableGeometry();
@@ -998,7 +875,7 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 		return;
 	}
 
-	// 复制一份供异步回调用（provider/ns 指向 m_view 内部，刷新后就失效了）
+	// ⚠️ 复制一份供异步回调：原值指向 m_view 内部，刷新后失效
 	const ConfigurableProvider providerCopy = *entry;
 	const SettingsNamespace nsCopy = *ns;
 	const QString settingsNs = providerCopy.settingsNs;
@@ -1010,7 +887,6 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 			if (!self)
 				return;
 
-			// 用回包的新视图就地更新，省一次 describe 往返
 			bool replaced = false;
 			for (SettingsNamespace& existing : self->m_view.namespaces) {
 				if (existing.ns == updated.ns) {
@@ -1026,8 +902,7 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 			self->populateRows();
 			self->updateStatus();
 
-			// 目录是适配器侧的：删掉的条目要等 settings 热生效后才会从 session/modelCatalog 消失，
-			// 所以再拉一次以服务端事实为准。
+			// 目录在适配器侧，删除要等 settings 热生效
 			self->refresh();
 
 			qInfo().noquote() << QStringLiteral("[ModelList] removed %1 -> %2/%3")
@@ -1051,16 +926,13 @@ void ModelListPanel::openForm()
 		return;
 
 	syncFormToRoute();
-
 	clearFeedback();
 
 	m_form->show();
 	if (m_idEdit)
 		m_idEdit->setFocus();
 
-	// 表单在滚动区底部：拉出来之后要滚到它那儿，否则用户只看到列表变短了
 	if (m_scroll && m_form) {
-		// 等布局把新高度算完再滚，否则滚到的是旧的底部
 		QPointer<ModelListPanel> self(this);
 		QTimer::singleShot(0, this, [self]() {
 			if (self && self->m_scroll && self->m_form)
@@ -1096,22 +968,19 @@ QString ModelListPanel::routeHint(const ConfigurableProvider& provider) const
 
 	const SettingsNamespace* ns = m_view.findNamespace(provider.settingsNs);
 	if (!ns) {
-		parts.append(qtTrId("model_namespace_missing_fmt")
-			.arg(provider.settingsNs));
+		parts.append(qtTrId("model_namespace_missing_fmt").arg(provider.settingsNs));
 		return parts.join(QLatin1Char(' '));
 	}
 
 	const QJsonArray models = ModelSelectionService::configuredModels(*ns, provider.settingsPath);
 	const bool userDeclared = ModelSelectionService::userDeclaresModels(*ns, provider.settingsPath);
 
-	parts.append(qtTrId("model_write_progress_fmt")
-		.arg(provider.settingsNs,
-			ModelSelectionService::modelsPath(provider).join(QLatin1Char('.')),
-			QString::number(models.size())));
+	parts.append(qtTrId("model_write_progress_fmt").arg(provider.settingsNs,
+		ModelSelectionService::modelsPath(provider).join(QLatin1Char('.')),
+		QString::number(models.size())));
 
 	if (provider.settingsNs.contains(QStringLiteral("pi-ai"))) {
-		// pi-ai 的 models 是整体替换：路由自带适配器随附目录时，
-		// 第一次写成显式列表会收窄公布范围（随附的其余模型不再出现）。
+		// pi-ai 的 models 是整体替换，会收窄公布范围
 		if (!userDeclared)
 			parts.append(qtTrId("model_write_warning_desc"));
 	}
@@ -1130,7 +999,6 @@ void ModelListPanel::syncFormToRoute()
 	if (!m_providerCombo)
 		return;
 
-	// 保留下拉里已经选中的路由，重建条目时不丢用户选择
 	const QString previous = m_providerCombo->currentData().toString();
 
 	QSignalBlocker blocker(m_providerCombo);
@@ -1167,9 +1035,7 @@ void ModelListPanel::syncFormToRoute()
 		m_imageInputBox->setVisible(deepseek);
 
 	if (m_routeHint) {
-		m_routeHint->setText(provider
-			? routeHint(*provider)
-			: qtTrId("model_no_configurable_provider"));
+		m_routeHint->setText(provider ? routeHint(*provider) : qtTrId("model_no_configurable_provider"));
 	}
 
 	refreshCredentialRow();
@@ -1177,7 +1043,6 @@ void ModelListPanel::syncFormToRoute()
 	if (m_submitButton)
 		m_submitButton->setEnabled(provider != nullptr && m_view.settingsWritable);
 
-	// 「获取模型」跟着路由走：换路由后候选属于旧路由，按钮状态也要重算
 	updateFetchButton();
 }
 
@@ -1208,7 +1073,7 @@ void ModelListPanel::refreshCredentialRow()
 	if (m_apiKeyEdit)
 		m_apiKeyEdit->setVisible(true);
 
-	// 引用名：profile 点名的优先，没有就按 harness 约定派生
+	// 引用名：profile 点名的优先，否则按约定派生
 	const SettingsNamespace* ns = m_view.findNamespace(provider->settingsNs);
 	const QString declared = ns
 		? ModelSelectionService::profileApiKeyEnv(*ns, provider->settingsPath)
@@ -1222,7 +1087,6 @@ void ModelListPanel::refreshCredentialRow()
 		: qtTrId("model_credential_from_profile_fmt").arg(m_keyRef);
 	refreshCredentialRowText();
 
-	// 服务端才是凭据状态的权威：问一次该引用是否已配置、是否可写
 	if (!m_api) {
 		m_credential.ref = m_keyRef;
 		m_credential.writable = true;
@@ -1240,7 +1104,7 @@ void ModelListPanel::refreshCredentialRow()
 	ModelSelectionService::describeCredential(m_api, ref,
 		[self, ref](const CredentialStatus& status) {
 			if (!self || self->m_keyRef != ref)
-				return; // 已经切到别的路由，丢弃过期结果
+				return;
 
 			self->m_credential = status;
 			if (self->m_apiKeyEdit)
@@ -1253,7 +1117,7 @@ void ModelListPanel::refreshCredentialRow()
 
 			qWarning().noquote() << QStringLiteral("[ModelList] credentials/describe failed:")
 				<< error.code << error.message;
-			// 问不到状态不阻塞填写：按“可写、未知是否已配置”处理
+			// 问不到状态不阻塞填写
 			self->m_credential = CredentialStatus();
 			self->m_credential.ref = ref;
 			self->m_credential.writable = true;
@@ -1268,9 +1132,7 @@ void ModelListPanel::refreshCredentialRowText()
 	if (!m_apiKeyRefLabel)
 		return;
 
-	// 只有服务端确实回报了该引用，才敢下“只读/已配置”的结论。
-	// 之前这里用 writable 判断，而 CredentialStatus 的默认值就是 false，
-	// 于是“还没查回来”被当成“只读”，占位符写进去后再没还原过。
+	// ⚠️ 只有 known 才能下只读结论：writable 默认 false
 	const bool readOnly = m_credential.known && !m_credential.writable;
 
 	QString state;
@@ -1278,7 +1140,6 @@ void ModelListPanel::refreshCredentialRowText()
 		state = qtTrId("model_credential_unknown_suffix");
 	}
 	else if (!m_credential.writable) {
-		// 部署把该引用交给环境变量管理：表单不该假装能改它
 		state = qtTrId("model_credential_readonly_suffix");
 	}
 	else if (m_credential.configured) {
@@ -1322,11 +1183,7 @@ bool ModelListPanel::parseOptionalInt(const QLineEdit* edit, bool* hasValue, int
 	return true;
 }
 
-// ------------------------------------------------------------------
-// 获取模型（llm/discoverModels）
-// ------------------------------------------------------------------
-// 只读的一次往返：按表单此刻的路由问服务端"它能服务哪些模型"，取回的候选铺进
-// 输入框下方的下拉，点一条回填模型 ID。什么都不写——要写仍是「添加」那一步。
+// 只读往返：候选铺进下拉，点一条回填 ID
 
 void ModelListPanel::updateFetchButton()
 {
@@ -1336,20 +1193,16 @@ void ModelListPanel::updateFetchButton()
 	const bool hasProvider = selectedProvider() != nullptr;
 
 	m_fetchButton->setEnabled(m_api != nullptr && hasProvider && !m_fetching);
-	m_fetchButton->setToolTip(m_fetching
-		? qtTrId("model_fetch_running")
-		: qtTrId("model_fetch_hint"));
+	m_fetchButton->setToolTip(m_fetching ? qtTrId("model_fetch_running") : qtTrId("model_fetch_hint"));
 }
 
 void ModelListPanel::fetchModels()
 {
-	// 临时诊断：点下去起 0.5 秒采样几何（含弹窗 exec 期间的嵌套事件循环）。
-	// 放在最前面，好分辨"没点"与"点了但被挡住"。
+	// 临时诊断：采样几何
 	{
 		auto ticks = std::make_shared<int>(0);
 		auto* sampler = new QTimer(this);
 		sampler->setInterval(10);
-		// 一次性采样器，用完自毁，不进登记表
 		connect(sampler, &QTimer::timeout, this, [this, sampler, ticks]() {
 			if (++(*ticks) >= 50) {
 				sampler->stop();
@@ -1371,17 +1224,15 @@ void ModelListPanel::fetchModels()
 
 	const SettingsNamespace* ns = m_view.findNamespace(provider->settingsNs);
 	if (!ns) {
-		setFeedback(qtTrId("model_write_namespace_missing_fmt")
-			.arg(provider->settingsNs));
+		setFeedback(qtTrId("model_write_namespace_missing_fmt").arg(provider->settingsNs));
 		return;
 	}
 
-	// 请求描述的是"表单此刻的样子"：路由 + profile 里的端点/协议，
-	// 外加表单里刚填的 key（没填就不带，服务端自己去取该路由存好的凭据）。
-	const QJsonObject request = ModelSelectionService::buildDiscoveryRequest(
-		*provider, ns, m_apiKeyEdit ? m_apiKeyEdit->text().trimmed() : QString());
+	// 请求 = 路由 + profile 端点/协议 + 刚填的 key
+	const QJsonObject request = ModelSelectionService::buildDiscoveryRequest(*provider, ns,
+		m_apiKeyEdit ? m_apiKeyEdit->text().trimmed() : QString());
 
-	// 回包可能晚于用户换路由：按路由 id 判断这份结果还作不作数
+	// 回包可能晚于换路由，按路由 id 判断
 	const QString providerId = provider->provider;
 	const QString settingsNs = provider->settingsNs;
 
@@ -1399,21 +1250,18 @@ void ModelListPanel::fetchModels()
 			self->m_fetching = false;
 			self->updateFetchButton();
 
-			// 回来时已经换到别的路由：这份候选属于上一个路由，直接丢掉
 			const ConfigurableProvider* current = self->selectedProvider();
 			if (!current || current->provider != providerId)
 				return;
 
 			qInfo().noquote() << QStringLiteral("[ModelList] llm/discoverModels %1 -> %2 models")
-				.arg(providerId)
-				.arg(models.size());
+				.arg(providerId).arg(models.size());
 
 			if (models.isEmpty()) {
 				self->setFeedback(qtTrId("model_fetch_empty"));
 				return;
 			}
 
-			// 下拉本身就是结果，反馈行不用再重复一句
 			self->clearFeedback();
 			self->showFetchedMenu(models);
 		},
@@ -1427,11 +1275,7 @@ void ModelListPanel::fetchModels()
 			qWarning().noquote() << QStringLiteral("[ModelList] llm/discoverModels failed:")
 				<< providerId << error.code << error.message;
 
-			// 服务端明说"这个命名空间没注册模型发现"时回一句本地化的短话：
-			// deepseek 系就是这样（它的模型清单只能由 settings 声明），而原始报错
-			// 是机器味的英文、还会折成两行——折行就会把表单顶高一行（见 buildForm
-			// 与构造函数末尾那段 stretch 的说明）。原文挂到这一行的悬停提示里，
-			// 排查时照样看得到。
+			// ⚠️ 只回本地化短句，英文原文挂到该行悬停提示里
 			const QString raw = qtTrId("model_fetch_failed_fmt").arg(error.code, error.message);
 			const bool unsupported =
 				error.message.contains(QStringLiteral("no model discovery is registered"));
@@ -1450,8 +1294,7 @@ void ModelListPanel::showFetchedMenu(const QVector<DiscoveredModel>& models)
 	if (!m_fetchedMenu)
 		m_fetchedMenu = new FetchedModelsMenu(this);
 
-	// 下拉按内容展开，但不超过输入框上下能腾出的高度（同模型选择器的算法：
-	// 取更宽敞的一侧，再扣掉表单外的余量）
+	// 下拉不超过输入框上下能腾出的高度
 	QScreen* screen = QGuiApplication::screenAt(m_idEdit->mapToGlobal(m_idEdit->rect().center()));
 	if (!screen)
 		screen = QGuiApplication::primaryScreen();
@@ -1466,12 +1309,9 @@ void ModelListPanel::showFetchedMenu(const QVector<DiscoveredModel>& models)
 		maxListHeight = qMin(kMenuMaxListHeight, qMax(above, below) - kMenuBodyChrome);
 	}
 
-	// 宽度 = 输入框宽度：下拉看起来就是输入框自己的那一份
 	m_fetchedMenu->build(models, m_idEdit->width(), maxListHeight);
 
-	// 贴在输入框下方；下面放不下就翻到上方，纵横都夹进屏幕。
-	// 必须夹干净：弹出层只要有一角在屏幕外，系统就会在显示时自己把它挪回来，
-	// 于是"弹出来"变成"弹出来又跳一下"。
+	// ⚠️ 纵横都夹进屏幕，否则系统会把弹层挪回来、看起来跳一下
 	const QPoint inputTopLeft = m_idEdit->mapToGlobal(QPoint(0, 0));
 	const int menuHeight = m_fetchedMenu->height();
 
@@ -1498,7 +1338,6 @@ void ModelListPanel::showFetchedMenu(const QVector<DiscoveredModel>& models)
 	if (chosen.isEmpty())
 		return;
 
-	// 只回填 id：容量、档位这些仍由用户自己决定（服务端未必都公布）
 	m_idEdit->setText(chosen);
 	m_idEdit->setFocus();
 	clearFeedback();
@@ -1517,8 +1356,7 @@ void ModelListPanel::submitForm()
 
 	const SettingsNamespace* ns = m_view.findNamespace(provider->settingsNs);
 	if (!ns) {
-		setFeedback(qtTrId("model_write_namespace_missing_fmt")
-			.arg(provider->settingsNs));
+		setFeedback(qtTrId("model_write_namespace_missing_fmt").arg(provider->settingsNs));
 		return;
 	}
 
@@ -1538,7 +1376,7 @@ void ModelListPanel::submitForm()
 		return;
 	}
 
-	// pi-ai：把逗号分隔的档位名解析并校验；空串 = 不声明（沿用同 id 已安装条目）
+	// pi-ai：逗号分隔的档位名；空串 = 不声明
 	if (provider->settingsNs.contains(QStringLiteral("pi-ai")) && m_effortsEdit) {
 		const QString raw = m_effortsEdit->text().trimmed();
 		if (!raw.isEmpty()) {
@@ -1567,7 +1405,7 @@ void ModelListPanel::submitForm()
 	if (m_imageInputBox)
 		request.imageInput = m_imageInputBox->isChecked();
 
-	// 凭据随这次新增一起处理：profile 点名的引用优先，没有就按约定派生并记入配置
+	// 凭据随本次新增一起处理，profile 点名的引用优先
 	request.apiKeyRef = m_keyRef;
 	request.recordApiKeyEnv = !m_keyRef.isEmpty()
 		&& ModelSelectionService::profileApiKeyEnv(*ns, provider->settingsPath).isEmpty();
@@ -1577,11 +1415,9 @@ void ModelListPanel::submitForm()
 	m_submitting = true;
 	if (m_submitButton)
 		m_submitButton->setEnabled(false);
-	setFeedback(apiKey.isEmpty()
-		? qtTrId("model_writing")
-		: qtTrId("model_writing_credential"));
+	setFeedback(apiKey.isEmpty() ? qtTrId("model_writing") : qtTrId("model_writing_credential"));
 
-	// 按提供方路由复制一份，供异步回调使用（provider/ns 指向 m_view 内部，刷新会失效）
+	// ⚠️ 复制一份供异步回调：原值指向 m_view 内部，刷新会失效
 	const ConfigurableProvider providerCopy = *provider;
 	const SettingsNamespace nsCopy = *ns;
 
@@ -1590,8 +1426,7 @@ void ModelListPanel::submitForm()
 		return;
 	}
 
-	// 先写凭据再写模型：key 写失败就不要把模型落下去，
-	// 否则会得到一条指向未配置凭据的模型（能选中、一发请求就报缺凭据）。
+	// ⚠️ 先凭据后模型：key 写失败就不能落模型
 	QPointer<ModelListPanel> self(this);
 	const QString ref = request.apiKeyRef;
 
@@ -1623,8 +1458,7 @@ void ModelListPanel::writeModel(const ConfigurableProvider& provider, const Sett
 	const QString modelId = request.id;
 	const QString settingsNs = provider.settingsNs;
 
-	// 同 id 已在这份列表里 -> 这次是“原地覆盖”而不是新增，
-	// 反馈文案与日志都按这个区分（覆盖时条目字段以表单为准）。
+	// 同 id 已在列表里 = 原地覆盖而非新增
 	bool replacing = false;
 	for (const auto& item : ModelSelectionService::configuredModels(ns, provider.settingsPath)) {
 		if (item.toObject().value(QStringLiteral("id")).toString() == request.id) {
@@ -1641,9 +1475,8 @@ void ModelListPanel::writeModel(const ConfigurableProvider& provider, const Sett
 				return;
 
 			self->m_submitting = false;
-			self->m_credential = CredentialStatus();   // key 变了，状态待重查
+			self->m_credential = CredentialStatus(); // key 变了，状态待重查
 
-			// 用回包的新视图就地更新，省一次 describe 往返
 			bool replaced = false;
 			for (SettingsNamespace& existing : self->m_view.namespaces) {
 				if (existing.ns == updated.ns) {
@@ -1659,8 +1492,7 @@ void ModelListPanel::writeModel(const ConfigurableProvider& provider, const Sett
 			self->populateRows();
 			self->updateStatus();
 
-			// 目录是适配器侧的：刚写下的条目要等 settings 热生效后才会出现在
-			// session/modelCatalog 里，所以再拉一次以服务端事实为准。
+			// 目录在适配器侧，新条目要等 settings 热生效
 			self->refresh();
 
 			qInfo().noquote() << QStringLiteral("[ModelList] %1 %2 -> %3/%4")

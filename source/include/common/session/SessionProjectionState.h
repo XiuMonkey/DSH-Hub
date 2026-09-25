@@ -1,15 +1,14 @@
 #pragma once
 
-// 小灰字（会话统计）的本地投影合并态（纯 header + inline，无链接改动）：两块投影分开记 ——
-// 哪个来源带了哪块就更新哪块，没带的那块保持原样。（早先整包覆盖时，只带 tokenUsage 的
-// 列表行会把快照带来的"轮/步 + 耗时"那段擦掉。）
+// 小灰字（会话统计）的本地投影合并态（纯 header + inline，无链接改动）：两块投影分开记 —— 哪个来源
+// 带了哪块就更新哪块，没带的那块保持原样（早先整包覆盖时，只带 tokenUsage 的列表行会把快照带来的
+// "轮/步 + 耗时"那段擦掉）。两个来源都走这里：session/follow 快照里的全量折叠、session/control 的
+// baseline 与实时帧。
 //
-// 两个来源都走这里：session/follow 快照里的全量折叠、session/control 的 baseline 与实时帧。
-// 合并规则只有一条「服务端 higher-seq-wins」——比已经并进来的旧就整帧丢弃
-// （列表行带的是很旧的检查点，所以这个判断是必需的），最容易写错，所以封在单点。
-//
+// 合并规则只有一条「服务端 higher-seq-wins」—— 比已经并进来的旧就整帧丢弃（列表行带的是很旧的检查点，
+// 所以这个判断是必需的），最容易写错，所以封在单点。
 // ⚠️ 这里只负责合并 JSON，不负责拼行文本。SessionUsageStats / parseSessionUsage 定义在
-//    ui/ChatInputWidget.h，本类在 common/session/ 下不能反向依赖 UI 层，所以对外只吐 QJsonObject。
+//   ui/ChatInputWidget.h，本类在 common/session/ 下不能反向依赖 UI 层，所以对外只吐 QJsonObject。
 
 #include <QJsonObject>
 #include <QJsonValue>
@@ -18,9 +17,8 @@
 class SessionProjectionState
 {
 public:
-	// 小灰字只显示这两块投影键（@deepseek-ai/dsh-session-stats / dsh-token-meter）。
-	// 判断必须留在合并之前：别的 key 的帧如果放进来，会把 asOfSeq 顶高，
-	// 接着真正要用的那块就被下面的 higher-seq-wins 丢掉了。
+	// 小灰字只显示这两块投影键（@deepseek-ai/dsh-session-stats / dsh-token-meter）。判断必须留在合并
+	// 之前：别的 key 的帧如果放进来，会把 asOfSeq 顶高，接着真正要用的那块就被 higher-seq-wins 丢掉。
 	static bool handlesKey(const QString& key)
 	{
 		return key == QStringLiteral("sessionStats") || key == QStringLiteral("tokenUsage");
@@ -68,7 +66,7 @@ public:
 	int asOfSeq() const { return m_asOfSeq; }
 
 private:
-	QJsonObject m_sessionStatsBlock; // values.sessionStats
-	QJsonObject m_tokenUsageBlock;   // values.tokenUsage
+	QJsonObject m_sessionStatsBlock;  // values.sessionStats
+	QJsonObject m_tokenUsageBlock;  // values.tokenUsage
 	int m_asOfSeq = -1;
 };

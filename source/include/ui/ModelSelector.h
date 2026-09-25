@@ -30,14 +30,8 @@ public:
 		LevelKind, // provider 为空，id 是一个思考档位
 	};
 
-	ModelSelectorRow(
-		Kind kind,
-		const QString& provider,
-		const QString& id,
-		const QString& title,
-		const QString& subtitle,
-		bool selected,
-		QWidget* parent = nullptr);
+	ModelSelectorRow(Kind kind, const QString& provider, const QString& id, const QString& title,
+		const QString& subtitle, bool selected, QWidget* parent = nullptr);
 
 	QSize sizeHint() const override;
 	QSize minimumSizeHint() const override;
@@ -55,7 +49,8 @@ private:
 	QLabel* m_check = nullptr;
 };
 
-// chip 本体：点击展开/收起上拉菜单；用 QPushButton 而非裸 QWidget，与原生 composer 的 <button> 语义一致，并天然获得键盘焦点与无障碍可调用性。
+// chip 本体：点击展开/收起上拉菜单；用 QPushButton 而非裸 QWidget，与原生 composer 的 <button>
+// 语义一致，并天然获得键盘焦点与无障碍可调用性
 class ModelSelector : public QPushButton
 {
 	Q_OBJECT
@@ -74,8 +69,7 @@ public:
 	void refresh();
 
 	// 用该会话记录过的选择覆盖 chip；provider/model 为空表示服务端还没记录，保持目录给的部署默认值
-	void overrideCurrentSelection(const QString& provider, const QString& model,
-		const QString& reasoningEffort);
+	void overrideCurrentSelection(const QString& provider, const QString& model, const QString& reasoningEffort);
 
 signals:
 	// 用户换了模型（服务端已接受）
@@ -94,10 +88,12 @@ private:
 	void openMenu();
 	void chooseModel(const QString& provider, const QString& modelId);
 	void chooseLevel(const QString& levelId);
-	// 提交一次选择（乐观更新 chip -> 发 RPC -> 以服务端回显为准，失败回到服务端事实）；reloadDirectory = 成功后是否重拉目录（换模型后档位集合可能变）
+	// 提交一次选择（乐观更新 chip -> 发 RPC -> 以服务端回显为准，失败回到服务端事实）；
+	// reloadDirectory = 成功后是否重拉目录（换模型后档位集合可能变）
 	void submitSelection(const ModelSelection& selection, bool reloadDirectory,
 		const std::function<void(const ModelSelection& selected)>& onAccepted);
-	// 依据当前目录重建菜单内容；maxListHeight 按 chip 上下能腾出的空间算出，装得下就整段显示，装不下才滚动
+	// 依据当前目录重建菜单内容；maxListHeight 按 chip 上下能腾出的空间算出，
+	// 装得下就整段显示，装不下才滚动
 	void buildMenu(int maxListHeight);
 	void updateChip();
 
@@ -111,8 +107,8 @@ private:
 	bool m_hasSessionSelection = false;
 	bool m_hasDirectory = false;
 
-	QLabel* m_label = nullptr;   // 当前模型名
-	QLabel* m_value = nullptr;   // 当前思考档位名（该模型没公布档位时为空）
+	QLabel* m_label = nullptr; // 当前模型名
+	QLabel* m_value = nullptr; // 当前思考档位名（该模型没公布档位时为空）
 	QLabel* m_chevron = nullptr;
 	MenuDialog* m_menu = nullptr;
 };

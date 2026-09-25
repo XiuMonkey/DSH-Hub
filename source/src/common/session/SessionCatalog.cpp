@@ -2,12 +2,7 @@
 
 #include <QCoreApplication>
 
-// ------------------------------------------------------------------
-// SessionCatalog.cpp
-// ------------------------------------------------------------------
-// 会话/工作区列表的解析与派生逻辑。所有函数都不触碰控件，
-// 因此可以脱离 UI 单独做单元测试。
-// ------------------------------------------------------------------
+// 会话/工作区列表的解析与派生逻辑。所有函数都不触碰控件，因此可以脱离 UI 单独做单元测试。
 
 namespace
 {
@@ -23,15 +18,10 @@ void SessionCatalog::clear()
 	m_archivedSessionIds.clear();
 }
 
-// ------------------------------------------------------------------
-// 写入
-// ------------------------------------------------------------------
-
 void SessionCatalog::applySnapshot(const SessionListSnapshot& snapshot)
 {
-	// 0.1.5：工作区清单与归档集合来自 mux 上的 workspace/follow，不再随会话列表回来。
-	// 因此 workspacesOk=false 表示"本次没有任何工作区信息"，这时必须**保留**现有分组，
-	// 而不是清空——清空会把 workspace/follow 的基线抹掉。
+	// 0.1.5：工作区清单与归档集合来自 mux 上的 workspace/follow，不再随会话列表回来。所以 workspacesOk=false 表示
+	// "本次没有任何工作区信息"，必须**保留**现有分组而不是清空 —— 清空会把 workspace/follow 的基线抹掉。
 	if (snapshot.workspacesOk) {
 		setArchivedSessionIds(snapshot.archivedSessionIds);
 		setWorkspaces(snapshot.workspaces);
@@ -44,7 +34,6 @@ void SessionCatalog::applySnapshot(const SessionListSnapshot& snapshot)
 void SessionCatalog::setWorkspaces(const QJsonArray& items)
 {
 	m_workspaces.clear();
-
 	for (const auto& item : items) {
 		const QJsonObject obj = item.toObject();
 		const QString workspaceId = obj.value(QLatin1String(kWorkspaceIdKey)).toString();
@@ -70,7 +59,6 @@ void SessionCatalog::setWorkspaces(const QJsonArray& items)
 void SessionCatalog::setSessions(const QJsonArray& items)
 {
 	m_sessions.clear();
-
 	for (const auto& item : items) {
 		const QJsonObject session = item.toObject();
 		if (isSubagent(session))
@@ -111,14 +99,11 @@ void SessionCatalog::setSessions(const QJsonArray& items)
 void SessionCatalog::setArchivedSessionIds(const QSet<QString>& ids)
 {
 	m_archivedSessionIds = ids;
-
 	for (SessionRecord& record : m_sessions)
 		record.archived = m_archivedSessionIds.contains(record.sessionId);
 }
 
-bool SessionCatalog::addSession(const QString& sessionId,
-	const QString& title,
-	const QString& workspaceId)
+bool SessionCatalog::addSession(const QString& sessionId, const QString& title, const QString& workspaceId)
 {
 	if (sessionId.isEmpty() || m_archivedSessionIds.contains(sessionId))
 		return false;
@@ -148,10 +133,6 @@ bool SessionCatalog::updateTitle(const QString& sessionId, const QString& title)
 	return true;
 }
 
-// ------------------------------------------------------------------
-// 查询
-// ------------------------------------------------------------------
-
 QString SessionCatalog::titleFor(const QString& sessionId) const
 {
 	for (const SessionRecord& record : m_sessions) {
@@ -168,8 +149,8 @@ int SessionCatalog::asOfSeqFor(const QString& sessionId) const
 	return 0;
 }
 
-bool SessionCatalog::modelSelectionFor(const QString& sessionId,
-	QString* provider, QString* model, QString* reasoningEffort) const
+bool SessionCatalog::modelSelectionFor(const QString& sessionId, QString* provider, QString* model,
+	QString* reasoningEffort) const
 {
 	const SessionRecord* record = find(sessionId);
 	if (!record || !record->hasModelSelection)
@@ -186,8 +167,8 @@ bool SessionCatalog::modelSelectionFor(const QString& sessionId,
 
 QString SessionCatalog::workspaceFor(const QString& sessionId) const
 {
-	// 会话自身记录的归属优先：addSession / addSessionToWorkspace 会显式写入，
-	// 否则界面在“在工作区里新建会话”之后会把按钮挂到未分组下面。
+	// 会话自身记录的归属优先：addSession / addSessionToWorkspace 会显式写入，否则界面在"在工作区里新建会话"之后
+	// 会把按钮挂到未分组下面。
 	if (const SessionRecord* record = find(sessionId)) {
 		if (!record->workspaceId.isEmpty())
 			return record->workspaceId;
@@ -226,15 +207,10 @@ QString SessionCatalog::autoSelectSessionId() const
 	return QString();
 }
 
-// ------------------------------------------------------------------
-// JSON 解析辅助
-// ------------------------------------------------------------------
-
 bool SessionCatalog::isSubagent(const QJsonObject& session)
 {
 	const QString origin = session.value(QStringLiteral("origin")).toString();
-	return origin == QStringLiteral("subagent")
-		|| session.contains(QStringLiteral("parentSessionId"));
+	return origin == QStringLiteral("subagent") || session.contains(QStringLiteral("parentSessionId"));
 }
 
 QString SessionCatalog::projectionTitle(const QJsonObject& session)

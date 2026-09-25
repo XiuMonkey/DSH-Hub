@@ -86,7 +86,6 @@ QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClie
 	panelLayout->addWidget(hint);
 
 	QList<UiQuestion> uiQuestions;
-
 	for (const auto& questionValue : questions) {
 		const QJsonObject question = questionValue.toObject();
 
@@ -99,14 +98,12 @@ QWidget* InteractionHandler::handleQuestion(const QJsonObject& frame, DshApiClie
 
 		const QString header = question.value(QStringLiteral("header")).toString();
 		if (!header.isEmpty()) {
-			auto* headerLabel = new QLabel(
-				QStringLiteral("<b>%1</b>").arg(header.toHtmlEscaped()), card);
+			auto* headerLabel = new QLabel(QStringLiteral("<b>%1</b>").arg(header.toHtmlEscaped()), card);
 			headerLabel->setWordWrap(true);
 			cardLayout->addWidget(headerLabel);
 		}
 
-		auto* questionLabel = new QLabel(
-			question.value(QStringLiteral("question")).toString(), card);
+		auto* questionLabel = new QLabel(question.value(QStringLiteral("question")).toString(), card);
 		questionLabel->setWordWrap(true);
 		cardLayout->addWidget(questionLabel);
 
@@ -213,14 +210,12 @@ QWidget* InteractionHandler::handleApproval(const QJsonObject& frame, DshApiClie
 	title->setStyleSheet(QStringLiteral("font-size: 14px; font-weight: 600;"));
 	panelLayout->addWidget(title);
 
-	auto* toolLabel = new QLabel(
-		qtTrId("ask_tool_fmt").arg(toolName.toHtmlEscaped()), panel);
+	auto* toolLabel = new QLabel(qtTrId("ask_tool_fmt").arg(toolName.toHtmlEscaped()), panel);
 	toolLabel->setWordWrap(true);
 	panelLayout->addWidget(toolLabel);
 
 	if (!reason.isEmpty()) {
-		auto* reasonLabel = new QLabel(
-			qtTrId("ask_reason_fmt").arg(reason.toHtmlEscaped()), panel);
+		auto* reasonLabel = new QLabel(qtTrId("ask_reason_fmt").arg(reason.toHtmlEscaped()), panel);
 		reasonLabel->setWordWrap(true);
 		panelLayout->addWidget(reasonLabel);
 	}

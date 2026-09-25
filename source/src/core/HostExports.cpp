@@ -14,8 +14,8 @@
 
 namespace
 {
-	// 没有 QCoreApplication 时（启动极早期 / 已析构）也一律拒绝 —— 那时"主线程"
-	// 没有可信含义，Qt 自身状态也不可靠。
+	// 没有 QCoreApplication 时（启动极早期 / 已析构）也一律拒绝 —— 那时"主线程"没有可信含义，
+	// Qt 自身状态也不可靠。
 	bool onGuiThread()
 	{
 		const QCoreApplication* app = QCoreApplication::instance();
@@ -45,8 +45,7 @@ DSHHUB_HOST_EXPORT unsigned int DshHubHostAbiVersion(void)
 	return DSHHUB_HOST_ABI_VERSION;
 }
 
-// 按 index 查宿主对象（void* 实际是 QObject*）。
-// index 为空 / 未登记 / 对象已销毁 / 非主线程 → nullptr。
+// 按 index 查宿主对象（void* 实际是 QObject*）；index 为空 / 未登记 / 对象已销毁 / 非主线程 → nullptr。
 DSHHUB_HOST_EXPORT void* DshHubHostRegistryFind(const char* index)
 {
 	if (!index || !*index)
@@ -57,15 +56,15 @@ DSHHUB_HOST_EXPORT void* DshHubHostRegistryFind(const char* index)
 		return nullptr;
 	}
 
-	// 返回裸指针是刻意的（C ABI 不传 QPointer）。QPointer 在对象销毁后自动为空，
-	// data() 本就是 nullptr，无需额外判活 —— 插件侧应立刻用 QPointer 接住。
+	// 返回裸指针是刻意的（C ABI 不传 QPointer）。QPointer 在对象销毁后自动为空，data() 本就是
+	// nullptr，无需额外判活 —— 插件侧应立刻用 QPointer 接住。
 	return CommonRegistry::instance().FindFromRegistry(QString::fromUtf8(index)).data();
 }
 
 #undef DSHHUB_HOST_EXPORT
 
-// 编译期签名校验：定义必须与头文件里的 typedef 一致，否则插件会按错误签名去调
-// （栈上直接出事）。只是取地址做类型绑定，不产生代码。
+// 编译期签名校验：定义必须与头文件里的 typedef 一致，否则插件会按错误签名去调（栈上直接出事）。
+// 只是取地址做类型绑定，不产生代码。
 namespace
 {
 	[[maybe_unused]] const DshHostAbiVersionFn kAbiVersionCheck = &DshHubHostAbiVersion;

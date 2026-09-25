@@ -1,6 +1,4 @@
-// DllCaller.cpp：JSON5 DLL 描述解析 + DLL 调用（json / native 两种风格；com 走 ComCaller）。
-// 描述示例：{ "Name":"Example", "Function":[ { "Func":"dll_echo", "InterfaceType":"default",
-//   "Calling Convention":{ "Style":"json", "ReturnType":"int", "ResultIsJson":true }, "Tool":"dll_echo" } ] }
+// JSON5 DLL 描述解析 + DLL 调用（json / native 两种风格；com 走 ComCaller）。
 
 #include "ExtensionSystem/DllCaller.h"
 #include "ExtensionSystem/Thunk.h"
@@ -20,7 +18,6 @@
 
 namespace
 {
-	// Windows 文件系统大小写不敏感：统一规范化绝对路径（存在时用 canonical），用于扩展描述去重与 DLL 库缓存的 key。
 	QString normalizedDllPath(const QString& path)
 	{
 		const QFileInfo info(path);
@@ -28,7 +25,7 @@ namespace
 		const QString absolute = canonical.isEmpty() ? info.absoluteFilePath() : canonical;
 		return QDir::cleanPath(absolute);
 	}
-} // namespace
+}
 
 DllCaller::DllCaller() = default;
 
@@ -57,13 +54,13 @@ bool DllCaller::loadDescriptor(const QString& json5Path)
 		return false;
 	}
 
-	// 扩展名 = 描述文件所在目录的 basename（安装布局 extensions/<name>/regulation.json5），与扩展管理/移除流程的扩展名同源。
+	// 扩展名 = 描述文件所在目录的 basename
 	const QString dir = QFileInfo(json5Path).absolutePath();
 	QString name = QFileInfo(dir).fileName();
 	if (name.isEmpty())
 		name = QFileInfo(json5Path).baseName();
 
-	// 同名扩展已加载则拒绝添加（先移除再重装；重复扫描时靠此去重）
+	// 同名扩展已加载则拒绝添加
 	for (const LoadedExtension& ext : m_extensions) {
 		if (ext.name.compare(name, Qt::CaseInsensitive) == 0) {
 			m_errorString = QStringLiteral("extension already loaded: %1 (remove it first)").arg(name);
@@ -71,11 +68,11 @@ bool DllCaller::loadDescriptor(const QString& json5Path)
 		}
 	}
 
-	// 每个 Function 的 LoadingSource 相对本描述文件目录解析成规范化绝对路径，调用期一律按绝对路径加载 DLL（多扩展同名 main.dll 互不冲突）
+	// LoadingSource 解析成绝对路径，多扩展同名 main.dll 互不冲突
 	for (FunctionSpec& fn : parsed.functions)
 		fn.resolvedDllPath = normalizedDllPath(QDir(dir).filePath(fn.loadingSource));
 
-	// 同名工具直接拒绝（与“重复注册即失败”的服务端语义一致）
+	// 同名工具直接拒绝
 	QSet<QString> occupied;
 	for (const LoadedExtension& ext : m_extensions) {
 		for (const FunctionSpec& fn : ext.descriptor.functions) {
@@ -104,8 +101,7 @@ bool DllCaller::loadDescriptor(const QString& json5Path)
 	m_extensions.append(std::move(entry));
 
 	qInfo().noquote() << QStringLiteral("[DllCaller] descriptor loaded: %1 name=%2 functions=%3")
-		.arg(json5Path, name)
-		.arg(m_extensions.last().descriptor.functions.size());
+		.arg(json5Path, name).arg(m_extensions.last().descriptor.functions.size());
 	return true;
 }
 
@@ -118,18 +114,15 @@ void DllCaller::unloadLibrary()
 {
 	QMutexLocker stateLock(&m_mutex);
 
-	// 先清描述符再等：这样卸载期间不会有新的调用认领到工具（callTool 只从 m_extensions 里找
-	// 工具名），否则可能在"等 inFlight 归零"之后、delete 之前又冒出一个新调用。
+	// 先清描述符再等：否则 delete 前可能又冒出新的调用
 	m_extensions.clear();
 
-	// 先收集路径再逐个等 —— 不要拿着迭代器 wait：等待会放开 m_mutex，期间别的线程若加载了
-	// 别的 DLL，QHash 可能重哈希，迭代器就悬了。
+	// 先收集路径再逐个等：wait 会放开 m_mutex
 	const QStringList paths = m_librariesByPath.keys();
 	for (const QString& key : paths) {
 		LoadedLibrary* entry = m_librariesByPath.value(key);
 		if (!entry)
 			continue;
-		// 等待该 DLL 上的在途调用结束，避免卸载中的 QLibrary 被使用
 		while (entry->inFlight > 0)
 			entry->drained.wait(&m_mutex);
 		if (m_librariesByPath.value(key) != entry)
@@ -141,8 +134,7 @@ void DllCaller::unloadLibrary()
 		}
 		delete entry;
 	}
-	// 这里刻意不再 clear()：循环已逐个 remove + delete，条目归本函数所有；
-	// 若还留着 clear()，万一有条目被上面的 continue 跳过，就成了"不删除就丢指针"。
+	// 不在这里 clear()：被 continue 跳过的条目会丢指针
 	m_errorString.clear();
 }
 
@@ -163,10 +155,8 @@ bool DllCaller::removeExtension(const QString& name)
 		return false;
 	}
 
-	// 先移除条目，让之后到达的调用查不到该扩展的工具
 	m_extensions.removeAt(index);
 
-	// 其余扩展仍在使用的 DLL 需要保留
 	QSet<QString> keep;
 	for (const LoadedExtension& ext : m_extensions) {
 		for (const FunctionSpec& fn : ext.descriptor.functions) {
@@ -175,17 +165,15 @@ bool DllCaller::removeExtension(const QString& name)
 		}
 	}
 
-	// 卸载仅属于被移除扩展的 DLL：等待其上的在途调用结束，释放文件占用（Windows 下删除/覆盖才能成功）
+	// 卸载仅属于该扩展的 DLL：等调用结束以释放文件占用
 	QStringList drop;
 	for (auto it = m_librariesByPath.constBegin(); it != m_librariesByPath.constEnd(); ++it) {
 		if (!keep.contains(it.key()))
 			drop.append(it.key());
 	}
 	for (const QString& key : drop) {
-		// ⚠️ 顺序：先等在途调用归零，**再**把条目从表里摘掉。反过来的顺序（先 take）会让在途
-		// 调用内部的 libraryForPath() 查不到条目，于是**重新加载同一个 DLL** 并拿到一把全新的
-		// runMutex —— 同一 DLL 的串行保证在窗口内失效，而且旧条目的 unload() 会与新映射并发。
-		// 等到归零是安全的：该扩展的工具已从 m_extensions 移除，不会再有新调用查到这条 DLL。
+		// ⚠️ 顺序：先等在途调用归零、再摘掉条目；反过来在途调用的 libraryForPath() 查不到条目，
+		// 重新加载同一 DLL 拿到新 runMutex，串行保证失效
 		LoadedLibrary* entry = m_librariesByPath.value(key);
 		if (!entry)
 			continue;
@@ -193,13 +181,11 @@ bool DllCaller::removeExtension(const QString& name)
 		while (entry->inFlight > 0)
 			entry->drained.wait(&m_mutex);
 
-		// 等待期间别的线程可能加载过别的 DLL（QHash 可能重哈希），所以不复用等待前拿到的
-		// 迭代器，这里重新确认一次条目没被换掉。
+		// 等待期间 QHash 可能重哈希，重新确认条目没被换掉
 		if (m_librariesByPath.value(key) != entry)
 			continue;
 
-		// 此刻 inFlight 已归零、且 last caller 已释放 runMutex（见 callTool 里的作用域顺序），
-		// 摘除并销毁不会再有人碰它。
+		// inFlight 已归零且 runMutex 已释放，摘除安全
 		m_librariesByPath.remove(key);
 		if (entry->library) {
 			entry->library->unload();
@@ -219,7 +205,7 @@ QLibrary* DllCaller::libraryForPath(const QString& absoluteDllPath)
 	return entry ? entry->library : nullptr;
 }
 
-// 假定调用方已持有 m_mutex：按规范化绝对路径查找，不存在则加载并登记
+// 调用方须已持有 m_mutex
 DllCaller::LoadedLibrary* DllCaller::ensureRuntimeLocked(const QString& absoluteDllPath)
 {
 	const QString key = normalizedDllPath(absoluteDllPath);
@@ -241,14 +227,13 @@ DllCaller::LoadedLibrary* DllCaller::ensureRuntimeLocked(const QString& absolute
 	entry->library = new QLibrary(key);
 	entry->library->setLoadHints(QLibrary::ResolveAllSymbolsHint);
 	if (!entry->library->load()) {
-		m_errorString = QStringLiteral("cannot load DLL: %1 (%2)")
-			.arg(key, entry->library->errorString());
+		m_errorString = QStringLiteral("cannot load DLL: %1 (%2)").arg(key, entry->library->errorString());
 		delete entry->library;
 		delete entry;
 		return nullptr;
 	}
 
-	// 新约定：扩展 DLL 若导出 ClearMem，说明它的 json 风格工具返回的是 malloc 堆内存，调用方必须在该函数返回后调用 ClearMem 归还；老扩展（无 ClearMem 导出）保持旧行为（static 缓冲、不释放）。
+	// 导出 ClearMem 的 DLL 返回 malloc 堆内存须归还；老扩展保持 static 缓冲
 	entry->clearMem = reinterpret_cast<ClearMemFn>(entry->library->resolve("ClearMem"));
 
 	m_librariesByPath.insert(key, entry);
@@ -271,7 +256,7 @@ void DllCaller::releaseResult(const FunctionSpec& fn, const char* raw)
 	QMutexLocker stateLock(&m_mutex);
 	auto it = m_librariesByPath.constFind(normalizedDllPath(fn.resolvedDllPath));
 	if (it == m_librariesByPath.constEnd() || !it.value() || !it.value()->clearMem)
-		return; // 该 DLL 未导出 ClearMem（旧约定），不释放
+		return; // 未导出 ClearMem（旧约定），不释放
 	it.value()->clearMem(raw);
 }
 
@@ -295,16 +280,12 @@ QString DllCaller::errorString() const
 	return m_errorString;
 }
 
-bool DllCaller::callTool(const QString& tool,
-	const QJsonObject& args,
-	QJsonObject& result,
-	QString* errorMessage)
+bool DllCaller::callTool(const QString& tool, const QJsonObject& args, QJsonObject& result, QString* errorMessage)
 {
-	// 内部一律走 out 参数传递错误（并发安全）；m_errorString 仅在需要时由 recordError 维护
+	// 走 out 参数传错误
 	QString fallbackError;
 	QString* errOut = errorMessage ? errorMessage : &fallbackError;
 
-	// 快照工具描述：只拷贝值，不在锁内持有指向容器内部元素的指针
 	FunctionSpec spec;
 	bool found = false;
 	{
@@ -328,13 +309,12 @@ bool DllCaller::callTool(const QString& tool,
 		return false;
 	}
 
-	// 按接口类型分派执行：以后新增接口类型时，在下面加一个对应的 "else if (interfaceType == ...)" 分支即可（每个分支自带完整执行逻辑，无需改动其它分支）；未声明的类型落到末尾 else 统一报错。
 	const QString interfaceType = spec.interfaceType.isEmpty()
 		? QStringLiteral("default")
 		: spec.interfaceType;
 
 	if (interfaceType == QStringLiteral("default")) {
-		// 线程模型：本函数可在 Worker 线程调用；同一 DLL 经 runMutex 串行（旧扩展可能带 static 缓冲 / 非重入代码），不同 DLL 并行执行；卸载/移除扩展会等待 inFlight 归零，不会卸载使用中的 QLibrary。
+		// 同一 DLL 经 runMutex 串行，不同 DLL 并行；卸载等 inFlight 归零
 		LoadedLibrary* runtime = nullptr;
 		{
 			QMutexLocker stateLock(&m_mutex);
@@ -365,11 +345,8 @@ bool DllCaller::callTool(const QString& tool,
 			}
 		}
 
-		// ⚠️ runMutex 必须在这个作用域结束时（也就是这里之前）就释放掉，**然后**才递减 inFlight。
-		// 卸载方等到 inFlight 归零就会 delete 那个 LoadedLibrary —— 连同它的 runMutex 一起。
-		// 若递减与 wakeAll 发生在仍持有 runMutex 的时候，被唤醒的卸载方会在这个线程退出
-		// ~QMutexLocker（去 unlock 一块已 delete 的 QMutex）之前就把它释放掉：用后释放。
-		// 注意此后不能再碰 runtime。
+		// ⚠️ 必须先释放 runMutex、再递减 inFlight：卸载方等到归零会连 runMutex 一起 delete 该
+		// LoadedLibrary，否则 ~QMutexLocker 会 unlock 已 delete 的 QMutex
 		{
 			QMutexLocker stateLock(&m_mutex);
 			if (--runtime->inFlight == 0)
@@ -396,7 +373,7 @@ bool DllCaller::callTool(const QString& tool,
 		return false;
 	}
 	else if (interfaceType == QStringLiteral("com")) {
-		// COM 接口由 ComCaller 执行（组件白名单在 "Com" 段声明）；每次调用新建组件实例、无共享状态，可跨线程并行（ComCaller 内部按线程初始化 COM）。
+		// COM 由 ComCaller 执行（组件白名单在 "Com" 段声明）：每次新建实例、可跨线程并行
 		if (!spec.comConfig.isEmpty()) {
 			QString comError;
 			if (!comcall::invoke(spec.comConfig, args, result, comError)) {
@@ -414,22 +391,18 @@ bool DllCaller::callTool(const QString& tool,
 
 	qWarning().noquote() << "[DllCaller] unsupported interfaceType, tool=" << tool
 		<< " interfaceType=" << interfaceType;
-	recordError(errOut, QStringLiteral("unsupported interfaceType: %1 (supported: \"default\")")
-		.arg(interfaceType));
+	recordError(errOut, QStringLiteral("unsupported interfaceType: %1 (supported: \"default\")").arg(interfaceType));
 	return false;
 }
 
-bool DllCaller::parseDescriptor(const QByteArray& json5,
-	Descriptor* out,
-	QString* error)
+bool DllCaller::parseDescriptor(const QByteArray& json5, Descriptor* out, QString* error)
 {
 	const QByteArray cleaned = removeTrailingCommas(stripJson5Comments(json5));
 
 	QJsonParseError parseError;
 	const QJsonDocument doc = QJsonDocument::fromJson(cleaned, &parseError);
 	if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-		*error = QStringLiteral("JSON5 parse error: %1 at offset %2")
-			.arg(parseError.errorString())
+		*error = QStringLiteral("JSON5 parse error: %1 at offset %2").arg(parseError.errorString())
 			.arg(parseError.offset);
 		return false;
 	}
@@ -448,13 +421,10 @@ bool DllCaller::parseDescriptor(const QByteArray& json5,
 		FunctionSpec fn;
 		fn.function = obj.value(QStringLiteral("Func")).toString();
 		fn.tool = obj.value(QStringLiteral("Tool")).toString();
-		fn.loadingSource = obj.value(QStringLiteral("LoadingSource"))
-			.toString(QStringLiteral("main.dll"));
-		// InterfaceType 缺省 "default"（现有 DLL json/native 方式）；"com" 由 ComCaller 接入；http / websocket 等为未来预留。
-		fn.interfaceType = obj.value(QStringLiteral("InterfaceType"))
-			.toString(QStringLiteral("default"));
+		fn.loadingSource = obj.value(QStringLiteral("LoadingSource")).toString(QStringLiteral("main.dll"));
+		fn.interfaceType = obj.value(QStringLiteral("InterfaceType")).toString(QStringLiteral("default"));
 
-		// com 等非 default 接口的可选配置段，例如 "Com": { "ProgId": "WScript.Shell" }；ProgId 在此固定（白名单式），运行时 args 不能任意指定组件。
+		// 非 default 接口的配置段；ProgId 固定（白名单式）
 		if (fn.interfaceType != QStringLiteral("default"))
 			fn.comConfig = obj.value(QStringLiteral("Com")).toObject();
 
@@ -478,7 +448,7 @@ bool DllCaller::parseDescriptor(const QByteArray& json5,
 			fn.parameters.append(param);
 		}
 
-		// Tool 是所有接口类型都必需的；Func 仅 default（DLL）接口需要，com 等接口没有 DLL 导出函数名。
+		// Tool 对所有接口必需；Func 仅 default（DLL）接口需要
 		if (fn.tool.isEmpty()
 			|| (fn.interfaceType == QStringLiteral("default") && fn.function.isEmpty())) {
 			*error = qtTrId("com_function_requires_tool");
@@ -491,28 +461,25 @@ bool DllCaller::parseDescriptor(const QByteArray& json5,
 	return true;
 }
 
-bool DllCaller::invokeJsonFunction(const FunctionSpec& fn,
-	const QJsonObject& args,
-	QJsonObject& result,
-	QString* error)
+bool DllCaller::invokeJsonFunction(const FunctionSpec& fn, const QJsonObject& args,
+	QJsonObject& result, QString* error)
 {
 	if (fn.style != QStringLiteral("json")) {
-		recordError(error, QStringLiteral("unsupported calling style: %1 (only \"json\" is implemented)").arg(fn.style));
+		recordError(error, QStringLiteral("unsupported calling style: %1 (only \"json\" is implemented)")
+			.arg(fn.style));
 		return false;
 	}
 
 	const QByteArray argsJson = QJsonDocument(args).toJson(QJsonDocument::Compact);
 
-	// 取一次库句柄、一处判空。原先每个分支都裸解引用 libraryForPath() 的返回值，
-	// 而它在 DLL 文件缺失 / 加载失败时返回 nullptr —— 纯空指针解引用（且是所有失败路径里最普通的一条）。
+	// libraryForPath() 在 DLL 缺失/加载失败时返回 nullptr
 	QLibrary* library = libraryForPath(fn.resolvedDllPath);
 	if (!library) {
-		recordError(error, QStringLiteral("DLL not loaded for function %1: %2")
-			.arg(fn.function, errorString()));
+		recordError(error, QStringLiteral("DLL not loaded for function %1: %2").arg(fn.function, errorString()));
 		return false;
 	}
 
-	// 方式一：const char* Func(const char* argsJson)
+	// 方式一：const char* Func(const char*)
 	if (fn.returnType == QStringLiteral("string")) {
 		using StringFn = const char* (*)(const char*);
 		auto* symbol = reinterpret_cast<StringFn>(library->resolve(fn.function.toUtf8().constData()));
@@ -528,7 +495,7 @@ bool DllCaller::invokeJsonFunction(const FunctionSpec& fn,
 			return false;
 		}
 
-		// 内存契约（新约定）：若该 DLL 导出了 ClearMem，则 rawResult 指向 DLL 分配的堆内存 —— 先把内容拷进 Qt 自己的 QByteArray（后续解析只用副本，不再碰 rawResult），然后立刻调用 ClearMem 归还 DLL 内存；老扩展 DLL 未导出 ClearMem 时 releaseResult 为空操作，保持其"static 缓冲、调用方无需释放"的旧行为。
+		// 内存契约：导出 ClearMem 时 rawResult 是堆内存，须先拷出再立刻归还
 		const QByteArray resultBytes(rawResult);
 		releaseResult(fn, rawResult);
 
@@ -547,7 +514,7 @@ bool DllCaller::invokeJsonFunction(const FunctionSpec& fn,
 		return true;
 	}
 
-	// 方式二：int/void Func(const char* argsJson, char** resultJson)
+	// 方式二：int/void Func(const char*, char**)
 	using IntFn = int (*)(const char*, char**);
 	using VoidFn = void (*)(const char*, char**);
 
@@ -583,7 +550,7 @@ bool DllCaller::invokeJsonFunction(const FunctionSpec& fn,
 	}
 
 	const QByteArray resultBytes(resultPtr);
-	releaseResult(fn, resultPtr);   // 拷走后立即归还 DLL 堆内存（若有 ClearMem 约定）
+	releaseResult(fn, resultPtr); // 拷走后立即归还堆内存
 
 	if (fn.resultIsJson) {
 		QJsonParseError parseError;
@@ -600,10 +567,9 @@ bool DllCaller::invokeJsonFunction(const FunctionSpec& fn,
 
 	return true;
 }
-bool DllCaller::invokeNativeFunction(const FunctionSpec& fn,
-	const QJsonObject& args,
-	QJsonObject& result,
-	QString* error)
+
+bool DllCaller::invokeNativeFunction(const FunctionSpec& fn, const QJsonObject& args,
+	QJsonObject& result, QString* error)
 {
 	Thunk::Signature signature;
 
@@ -644,7 +610,8 @@ bool DllCaller::invokeNativeFunction(const FunctionSpec& fn,
 		else if (type == QStringLiteral("double")) {
 			argType = Thunk::ArgType::Double;
 		}
-		else if (type == QStringLiteral("string") || type == QStringLiteral("const char*") || type == QStringLiteral("char*")) {
+		else if (type == QStringLiteral("string") || type == QStringLiteral("const char*") ||
+			type == QStringLiteral("char*")) {
 			argType = Thunk::ArgType::String;
 		}
 		else if (type == QStringLiteral("pointer32") || type == QStringLiteral("ptr32")) {
@@ -685,11 +652,10 @@ bool DllCaller::invokeNativeFunction(const FunctionSpec& fn,
 		}
 	}
 
-	// 同 invokeJsonFunction：取一次句柄并判空（DLL 缺失/加载失败时 libraryForPath 返回 nullptr）。
+	// 同 invokeJsonFunction：取一次句柄并判空
 	QLibrary* library = libraryForPath(fn.resolvedDllPath);
 	if (!library) {
-		recordError(error, QStringLiteral("DLL not loaded for function %1: %2")
-			.arg(fn.function, errorString()));
+		recordError(error, QStringLiteral("DLL not loaded for function %1: %2").arg(fn.function, errorString()));
 		return false;
 	}
 
@@ -741,6 +707,7 @@ bool DllCaller::invokeNativeFunction(const FunctionSpec& fn,
 
 	return true;
 }
+
 QByteArray DllCaller::stripJson5Comments(const QByteArray& input)
 {
 	QByteArray output;

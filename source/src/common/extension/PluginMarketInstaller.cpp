@@ -46,8 +46,7 @@ bool PluginMarketInstaller::ensureInstalled(const QString& appDir)
 	const QString dshHome = appDir + QLatin1String(kHarnessRelativePath);
 
 	// 确保 pnpm 可用：如果 PATH 里没有 pnpm，就创建一个本地 shim
-	const QString pnpmEntry = QDir::toNativeSeparators(
-		appDir + QLatin1String(kPnpmEntryRelativePath));
+	const QString pnpmEntry = QDir::toNativeSeparators(appDir + QLatin1String(kPnpmEntryRelativePath));
 	const QString binDir = QDir::toNativeSeparators(dshHome + QStringLiteral("/.desktop-bin"));
 	QDir().mkpath(binDir);
 	const QString pnpmCmdPath = binDir + QStringLiteral("/pnpm.cmd");
@@ -87,14 +86,14 @@ bool PluginMarketInstaller::ensureInstalled(const QString& appDir)
 			qInfo().noquote() << QStringLiteral("[market-installer]") << line;
 			emit installOutput(line);
 		}
-		});
+	});
 
 	const QString profileDir = QDir::toNativeSeparators(dshHome + QStringLiteral("/profiles/web"));
 
 	connect(m_installer, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
 		this, [this, profileDir](int exitCode, QProcess::ExitStatus exitStatus) {
 			Q_UNUSED(exitStatus)
-				m_installer->deleteLater();
+			m_installer->deleteLater();
 			m_installer = nullptr;
 
 			qInfo().noquote() << QStringLiteral("[market-installer] finished, exitCode=") << exitCode;
@@ -116,12 +115,8 @@ bool PluginMarketInstaller::ensureInstalled(const QString& appDir)
 	emit installStarted();
 
 	// 直接使用 node 运行 pnpm，避免依赖系统 PATH 里的 pnpm
-	m_installer->start(nodePath, QStringList{
-		pnpmEntry,
-		QStringLiteral("add"),
-		QStringLiteral("--save-exact"),
-		QStringLiteral("%1@%2").arg(QLatin1String(kMarketPackage), QLatin1String(kMarketVersion))
-		});
+	m_installer->start(nodePath, QStringList{ pnpmEntry, QStringLiteral("add"), QStringLiteral("--save-exact"),
+		QStringLiteral("%1@%2").arg(QLatin1String(kMarketPackage), QLatin1String(kMarketVersion)) });
 
 	return true;
 }

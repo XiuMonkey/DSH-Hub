@@ -18,11 +18,10 @@ void CacheManager::cacheSessionMessages(const QString& sessionId, MessageQuery* 
 
 	// 缓存被新内容整体替换：旧的分页快照不再适用
 	m_cacheMeta.remove(sessionId);
-
 	if (m_messageCache.contains(sessionId))
 		delete m_messageCache.take(sessionId);
-
 	m_messageCache.insert(sessionId, messages);
+
 	qInfo().noquote() << "[CacheManager] cached messages sessionId=" << sessionId
 		<< " count=" << messages->messages.size();
 }
@@ -69,9 +68,7 @@ bool CacheManager::takeCacheMeta(const QString& sessionId, int* rawEventCount, b
 	return true;
 }
 
-void CacheManager::cacheOrDiscardCurrentSession(const QString& sessionId,
-	MessageQuery* messages,
-	QVBoxLayout* layout)
+void CacheManager::cacheOrDiscardCurrentSession(const QString& sessionId, MessageQuery* messages, QVBoxLayout* layout)
 {
 	if (!messages)
 		return;

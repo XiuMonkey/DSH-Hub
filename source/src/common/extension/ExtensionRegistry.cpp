@@ -50,10 +50,6 @@ QString ExtensionRegistry::extensionDllPath(const QString& name) const
 	return extensionsDir() + QStringLiteral("/") + name + QStringLiteral("/main.dll");
 }
 
-// ------------------------------------------------------------------
-// extensions.json
-// ------------------------------------------------------------------
-
 QStringList ExtensionRegistry::installedExtensions() const
 {
 	QStringList names;
@@ -122,10 +118,6 @@ bool ExtensionRegistry::unregisterInstalled(const QString& name) const
 	return true;
 }
 
-// ------------------------------------------------------------------
-// 目录
-// ------------------------------------------------------------------
-
 bool ExtensionRegistry::removeExtensionDirectory(const QString& name, QString* error) const
 {
 	QDir dir(nodeModulesPath() + QStringLiteral("/") + name);
@@ -145,10 +137,6 @@ bool ExtensionRegistry::removeExtensionDirectory(const QString& name, QString* e
 	return true;
 }
 
-// ------------------------------------------------------------------
-// cordis.patch.yml
-// ------------------------------------------------------------------
-
 QString ExtensionRegistry::patchIdLine(const QString& name)
 {
 	return QStringLiteral("    - id: %1").arg(name);
@@ -160,10 +148,7 @@ QString ExtensionRegistry::patchNameLine(const QString& name)
 }
 
 ExtensionRegistry::PatchEntryResult ExtensionRegistry::ensurePatchEntry(const QString& profilePath,
-	const QString& id,
-	const QString& name,
-	const QString& comment,
-	QString* error)
+	const QString& id, const QString& name, const QString& comment, QString* error)
 {
 	if (id.isEmpty() || name.isEmpty()) {
 		if (error)
@@ -185,12 +170,11 @@ ExtensionRegistry::PatchEntryResult ExtensionRegistry::ensurePatchEntry(const QS
 	if (text.contains(patchNameLine(name)))
 		return PatchEntryResult::AlreadyPresent;
 
-	// 结构必须与 removePatchEntry 解析的两行完全一致，否则那个函数删不掉它。
+	// 结构必须与 removePatchEntry 解析的两行完全一致，否则那个函数删不掉它
 	text += QLatin1Char('\n');
 	if (!comment.isEmpty())
 		text += QStringLiteral("# %1\n").arg(comment);
-	text += QStringLiteral("%1\n%2\n%3\n").arg(
-		QLatin1String(kInsertHeader), patchIdLine(id), patchNameLine(name));
+	text += QStringLiteral("%1\n%2\n%3\n").arg(QLatin1String(kInsertHeader), patchIdLine(id), patchNameLine(name));
 
 	if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
 		if (error)
@@ -220,9 +204,7 @@ bool ExtensionRegistry::removePatchEntry(const QString& profilePath, const QStri
 		const QString line = lines.at(i);
 		const QString trimmed = line.trimmed();
 
-		// Remove the standard two-line entry added by ExtensionLoader:
-		//     - id: <name>
-		//       name: '<name>'
+		// 删掉 ExtensionLoader 写进来的标准两行条目（- id: <name> / name: '<name>'）
 		if (trimmed == patchIdLine(name).trimmed() && i + 1 < lines.size()
 			&& lines.at(i + 1).trimmed() == patchNameLine(name).trimmed()) {
 			++i; // skip the next line too
@@ -230,7 +212,7 @@ bool ExtensionRegistry::removePatchEntry(const QString& profilePath, const QStri
 			continue;
 		}
 
-		// Also remove a standalone name line if it somehow exists without the id pair.
+		// 也删掉孤立出现的 name 行（万一它没跟 id 成对）
 		if (trimmed == patchNameLine(name).trimmed()) {
 			removed = true;
 			continue;
@@ -242,9 +224,8 @@ bool ExtensionRegistry::removePatchEntry(const QString& profilePath, const QStri
 	if (!removed)
 		return true;
 
-	// Remove empty "- insert:" headers left behind after deleting the entry lines.
-	// 注释行不算"内容"：这个 patch 文件里会混进注释（ServerManager 追加 session-stats
-	// 那行时就带了一句），只跳空行的话会把"后面还有内容"误判成真，空头就删不掉了。
+	// 收掉删空了的 "- insert:" 头。注释行不算"内容"：这个 patch 文件里会混进注释（ServerManager
+	// 追加 session-stats 那行时就带了一句），只跳空行会把"后面还有内容"误判成真，空头就删不掉了
 	QStringList cleaned;
 	for (int i = 0; i < kept.size(); ++i) {
 		if (kept.at(i).trimmed() == QLatin1String(kInsertHeader)) {

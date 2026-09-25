@@ -1,13 +1,11 @@
 #include "ui/ModelSelector.h"
+
 #include "ui/LayoutUtils.h"
 #include "core/ConnectionManager.h"
-
 #include <algorithm>
-
 #include "network/DshApiClient.h"
 #include "ui/ShadowPanel.h"
 #include "common/appearance/ThemeManager.h"
-
 #include <QDebug>
 #include <QDialog>
 #include <QFrame>
@@ -21,19 +19,15 @@
 
 namespace
 {
-	// 上拉菜单：chip 上方留 8px 间距（与原生 composer 的 bottom: calc(100% + 8px) 一致）
+	// kMenuBodyChrome 算可用高度时要扣掉；kMenuRadius 要跟 QSS 圆角一致
 	constexpr int kMenuGap = 8;
 	constexpr int kMenuWidth = 300;
-	// 菜单主体（圆角面板）自身的上下内边距：算可用高度时要扣掉
 	constexpr int kMenuBodyChrome = 12;
-	// 菜单与屏幕边缘之间至少留的余量
 	constexpr int kMenuScreenMargin = 12;
-	// 清单再矮也得有这么高（否则一两项时菜单会缩成一条）
 	constexpr int kMenuMinListHeight = 120;
 	constexpr int kChipHeight = 28;
-	// 菜单本体的圆角（= #modelSelectorMenu 的 QSS 圆角），阴影形状要跟着它
 	constexpr int kMenuRadius = 12;
-	// 菜单的阴影档位：浮层用最高一档
+
 	inline CardShadow::Spec menuShadowSpec()
 	{
 		CardShadow::Spec spec = CardShadow::level3();
@@ -42,18 +36,8 @@ namespace
 	}
 }
 
-// ------------------------------------------------------------------
-// ModelSelectorRow
-// ------------------------------------------------------------------
-
-ModelSelectorRow::ModelSelectorRow(
-	Kind kind,
-	const QString& provider,
-	const QString& id,
-	const QString& title,
-	const QString& subtitle,
-	bool selected,
-	QWidget* parent)
+ModelSelectorRow::ModelSelectorRow(Kind kind, const QString& provider, const QString& id,
+	const QString& title, const QString& subtitle, bool selected, QWidget* parent)
 	: QPushButton(parent)
 	, m_kind(kind)
 	, m_provider(provider)
@@ -61,15 +45,13 @@ ModelSelectorRow::ModelSelectorRow(
 {
 	setObjectName(QStringLiteral("modelSelectorOption"));
 	setFlat(true);
-	// 单选组：同一父控件下 autoExclusive 保证“同时只能选中一个”，
-	// 也不会像普通 checkable 按钮那样把已选中项再点一次就取消勾选
+	// autoExclusive：同父控件下只能选一个，也不会再点一次就取消勾选
 	setCheckable(true);
 	setAutoExclusive(true);
 	setChecked(selected);
 	setCursor(Qt::PointingHandCursor);
 	setMinimumHeight(38);
-	// 菜单行不参与焦点链：弹出层一旦出现可聚焦子控件，Windows 上会因激活
-	// 变化被系统立刻关掉；键盘导航由弹窗自己负责（当前只做点击选择）
+	// 不参与焦点链：出现可聚焦子控件时 Windows 会因激活变化立刻关掉弹出层
 	setFocusPolicy(Qt::NoFocus);
 	setAccessibleName(subtitle.isEmpty()
 		? title
@@ -85,7 +67,6 @@ ModelSelectorRow::ModelSelectorRow(
 
 	auto* nameLabel = new QLabel(title, this);
 	nameLabel->setObjectName(QStringLiteral("modelSelectorOptionName"));
-
 	copy->addWidget(nameLabel);
 
 	if (!subtitle.isEmpty()) {
@@ -94,7 +75,6 @@ ModelSelectorRow::ModelSelectorRow(
 		descLabel->setWordWrap(true);
 		copy->addWidget(descLabel);
 	}
-
 	layout->addLayout(copy, 1);
 
 	m_check = new QLabel(QStringLiteral("✓"), this);
@@ -103,17 +83,13 @@ ModelSelectorRow::ModelSelectorRow(
 	m_check->setAlignment(Qt::AlignCenter);
 	layout->addWidget(m_check, 0, Qt::AlignVCenter);
 
-	// 勾选标记跟随按钮状态：单选组把别的行取消勾选时，这里也要同步
 	updateCheckVisibility();
-	// 行有多实例，index 带上自身地址
+	// 行有多实例，index 带自身地址
 	const QString rowIndex = QStringLiteral("ModelSelector.row.%1").arg(reinterpret_cast<quintptr>(this));
-	dshRegister(
-		rowIndex + QStringLiteral(".check"),
-		this, qOverload<bool>(&QPushButton::toggled), this, [this]() { updateCheckVisibility(); });
-
-	dshRegister(
-		rowIndex + QStringLiteral(".click"),
-		this, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+	dshRegister(rowIndex + QStringLiteral(".check"), this, qOverload<bool>(&QPushButton::toggled), this,
+		[this]() { updateCheckVisibility(); });
+	dshRegister(rowIndex + QStringLiteral(".click"), this, qOverload<bool>(&QPushButton::clicked), this,
+		[this]() {
 			if (m_kind == LevelKind)
 				emit levelChosen(m_id);
 			else
@@ -138,13 +114,7 @@ QSize ModelSelectorRow::minimumSizeHint() const
 	return sizeHint();
 }
 
-// ------------------------------------------------------------------
-// ModelSelector::MenuDialog
-// ------------------------------------------------------------------
-// 无边框透明弹窗 + 内层圆角主体（与 PopupWindow 同样的做法，
-// 保证圆角外真正透明），内容为若干小节（每节一个标题 + 若干行）。
-// ------------------------------------------------------------------
-
+// 无边框透明弹窗 + 内层圆角主体（同 PopupWindow）
 class ModelSelector::MenuDialog : public QDialog
 {
 public:
@@ -152,7 +122,7 @@ public:
 		: QDialog(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
 	{
 		setAttribute(Qt::WA_TranslucentBackground);
-		// 上拉菜单只做短暂浮层：不抢激活，避免被系统在激活变化时立即关闭
+		// 不抢激活，避免被系统在激活变化时立即关闭
 		setAttribute(Qt::WA_ShowWithoutActivating, true);
 
 		auto* outer = new QVBoxLayout(this);
@@ -164,11 +134,9 @@ public:
 		body->setAttribute(Qt::WA_StyledBackground, true);
 		body->setFixedWidth(kMenuWidth);
 
-		// 上拉菜单是浮层：套一层阴影外壳（lv3）。留白会让整个弹窗比菜单本体大一圈，
-		// 菜单本体的宽度不变（body 仍是 setFixedWidth(kMenuWidth)）。
-		auto* bodyPanel = new ShadowPanel(QStringLiteral("shadowFloat"),
-			menuShadowSpec(), this);
-		bodyPanel->setRadius(kMenuRadius); // 与 #modelSelectorMenu 的 QSS 圆角一致
+		// 套阴影外壳（lv3），留白让整窗比本体大一圈
+		auto* bodyPanel = new ShadowPanel(QStringLiteral("shadowFloat"), menuShadowSpec(), this);
+		bodyPanel->setRadius(kMenuRadius);
 		bodyPanel->setCard(body);
 		outer->addWidget(bodyPanel);
 
@@ -176,7 +144,6 @@ public:
 		layout->setContentsMargins(6, 6, 6, 6);
 		layout->setSpacing(2);
 
-		// 行多时滚动。滚动区不参与焦点链，理由同行本身。
 		m_scroll = LayoutUtils::makeThemedScrollArea(body, QStringLiteral("modelSelectorScroll"));
 		m_scroll->setFocusPolicy(Qt::NoFocus);
 
@@ -188,22 +155,18 @@ public:
 		m_options->setSpacing(2);
 		m_scroll->setWidget(m_content);
 
-		// 两节各自包一层容器。行的 autoExclusive 是按「同一父控件」分组的，
-		// 如果把模型行与档位行都挂在 m_content 下，两部分会互相取消勾选——
-		// 那样菜单里只能剩一个 ✓。分容器后，每节内部各自单选。
+		// autoExclusive 按「同一父控件」分组：不分容器两节会互相取消勾选
 		m_modelSection = makeSection(qtTrId("model_label"));
 		m_levelSection = makeSection(qtTrId("model_think_depth"));
 
 		layout->addWidget(m_scroll);
 	}
 
-	// 模型行/档位行的父控件与所属布局
 	QWidget* modelSection() const { return m_modelSection; }
 	QWidget* levelSection() const { return m_levelSection; }
 	QVBoxLayout* modelRowsLayout() const { return m_modelRows; }
 	QVBoxLayout* levelRowsLayout() const { return m_levelRows; }
 
-	// 模型节里的提供方分组标签
 	void addGroupLabel(const QString& text)
 	{
 		auto* label = new QLabel(text, m_modelSection);
@@ -212,7 +175,6 @@ public:
 		m_modelRows->addWidget(label);
 	}
 
-	// 只有说明、没有可点项的占位行（放进档位节）
 	void addLevelHint(const QString& text)
 	{
 		auto* hint = new QLabel(text, m_levelSection);
@@ -222,12 +184,7 @@ public:
 		m_levelRows->addWidget(hint);
 	}
 
-	// 菜单内容真正需要的高度：把各小节与标题的 sizeHint 直接累加。
-	//
-	// 不能用布局的 sizeHint()：弹窗还没 show()，QWidgetItem 会把子控件当成空项跳过，
-	// 量出来只有标题那几十像素（菜单被压成一条、平白多出滚动条）。
-	// totalSizeHint() 虽然算了 minimumSize，仍比真实内容矮一行，一样会多出滚动条。
-	// 所以这里逐个控件自己加。
+	// 不能用布局 sizeHint()：弹窗未 show() 时子控件会被当空项跳过，菜单被压成一条
 	int contentHeight() const
 	{
 		int total = 0;
@@ -237,7 +194,6 @@ public:
 			QWidget* widget = item ? item->widget() : nullptr;
 			if (!widget)
 				continue;
-
 			if (counted > 0)
 				total += m_options->spacing();
 			total += widget->sizeHint().height();
@@ -246,9 +202,7 @@ public:
 		return total;
 	}
 
-	// 按内容算滚动区高度：够高就把内容整段展开（不出滚动条），
-	// 只有内容真的超过可用高度时才滚动。
-	// maxHeight 由调用方按“chip 上下能腾出多少地方”算出来。
+	// maxHeight 由调用方按 chip 上下能腾出的空间算出
 	void fitContent(int maxHeight)
 	{
 		const int content = contentHeight();
@@ -257,28 +211,22 @@ public:
 		m_scroll->setFixedHeight(m_listHeight);
 	}
 
-	// 菜单应有的整高/整宽。滚动区高度刚用 setFixedHeight 改过，
-	// 这时 adjustSize()/height() 可能还拿着旧的 sizeHint，
-	// 所以要按我们算出来的值直接给定尺寸，否则定位会用错高度
-	// （表现为菜单压住 chip、甚至跑出屏幕）。
+	// 必须按算出的值直接给尺寸：滚动区刚被 setFixedHeight 改过，adjustSize() 可能还拿旧 sizeHint
 	int menuHeight() const { return m_listHeight + kMenuBodyChrome; }
 	int menuWidth() const { return kMenuWidth; }
 
 	void clearOptions()
 	{
-		// 只 deleteLater() 的话旧行在被真正销毁前仍是子控件，弹窗再次 show() 时会被
-		// 一并显示出来（同一份菜单里出现多行勾选），所以这里立刻摘离。
+		// 只 deleteLater() 的话旧行仍是子控件，弹窗再 show() 会一并显示
 		for (QVBoxLayout* rows : { m_modelRows, m_levelRows })
 			LayoutUtils::clearLayout(rows);
 
-		// 清空后把高度约束放开，避免上一次的固定高度残留到这一份内容上
-		// （buildMenu 结束前会再按新内容 fitContent() 一次）
+		// 放开高度约束，免得上一份内容的固定高度残留
 		m_scroll->setMinimumHeight(0);
 		m_scroll->setMaximumHeight(QWIDGETSIZE_MAX);
 	}
 
 private:
-	// 建一节：标题 + 装行的容器，返回容器给调用方作行的父控件
 	QWidget* makeSection(const QString& title)
 	{
 		auto* titleLabel = new QLabel(title, m_content);
@@ -306,7 +254,7 @@ private:
 	QScrollArea* m_scroll = nullptr;
 	QWidget* m_content = nullptr;
 	QVBoxLayout* m_options = nullptr;
-	// 清单区当前高度（fitContent 设定），menuHeight() 用它算整高
+	// 由 fitContent 设定
 	int m_listHeight = kMenuMinListHeight;
 	QWidget* m_modelSection = nullptr;
 	QWidget* m_levelSection = nullptr;
@@ -314,23 +262,15 @@ private:
 	QVBoxLayout* m_levelRows = nullptr;
 };
 
-// ------------------------------------------------------------------
-// ModelSelector
-// ------------------------------------------------------------------
-
 ModelSelector::ModelSelector(QWidget* parent)
 	: QPushButton(parent)
 {
 	setObjectName(QStringLiteral("modelSelectorChip"));
-	// 样式表按 #inputCapsule QPushButton#modelSelectorChip 给出，压过 defaults.qss 的通用按钮规则
 	setCursor(Qt::PointingHandCursor);
 	setFixedHeight(kChipHeight);
 	setToolTip(qtTrId("model_select_title"));
 	setFlat(true);
-	// 不参与焦点链：这是个鼠标/无障碍驱动的 chip，按钮一旦拿到焦点就会一直显示
-	// 焦点态样式，而点击消息区、侧边栏等“不接收焦点”的地方并不会把焦点带走，
-	// 于是灰色会一直挂着（用户反馈的“失去焦点后不会取消变灰”）。
-	// 键盘用户仍可通过无障碍接口（UIA/MSAA 的 Invoke）操作它。
+	// 不参与焦点链：chip 拿到焦点就一直显示焦点态；键盘用户走 UIA/MSAA Invoke
 	setFocusPolicy(Qt::NoFocus);
 
 	auto* layout = new QHBoxLayout(this);
@@ -339,28 +279,23 @@ ModelSelector::ModelSelector(QWidget* parent)
 
 	m_label = new QLabel(this);
 	m_label->setObjectName(QStringLiteral("modelSelectorChipLabel"));
-
 	m_value = new QLabel(this);
 	m_value->setObjectName(QStringLiteral("modelSelectorChipValue"));
-
 	m_chevron = new QLabel(QStringLiteral("▾"), this);
 	m_chevron->setObjectName(QStringLiteral("modelSelectorChipChevron"));
-
 	layout->addWidget(m_label);
 	layout->addWidget(m_value);
 	layout->addWidget(m_chevron);
 
 	m_menu = new MenuDialog(this);
-
-	dshRegister("ModelSelector.003",
-		this, qOverload<bool>(&QPushButton::clicked), this, &ModelSelector::openMenu);
+	dshRegister("ModelSelector.003", this, qOverload<bool>(&QPushButton::clicked), this,
+		&ModelSelector::openMenu);
 
 	hide();
 }
 
 QSize ModelSelector::sizeHint() const
 {
-	// 内容由子标签布局决定，QPushButton 自身没有文本
 	const QLayout* own = layout();
 	return own ? own->sizeHint() : QPushButton::sizeHint();
 }
@@ -395,14 +330,13 @@ QString ModelSelector::currentLevelId() const
 
 void ModelSelector::setSession(DshApiClient* api, const QString& sessionId)
 {
-	// 同一会话且已有数据时不重复拉取（会话切换、连接建立都会调到）
 	if (api == m_api && sessionId == m_sessionId && m_hasDirectory)
 		return;
 
 	m_api = api;
 	m_sessionId = sessionId;
 
-	// 会话换了：上一个会话的"会话级选择"作废，新会话的选择随后由 DSHHub 推入
+	// 会话换了：上一个会话的选择作废
 	m_hasSessionSelection = false;
 	m_sessionSelection = ModelSelection();
 
@@ -419,7 +353,7 @@ void ModelSelector::refresh()
 	if (!m_api || m_sessionId.isEmpty())
 		return;
 
-	// 会话可能在请求返回前被销毁（例如切主题会重建主窗口），用 QPointer 兜住
+	// 会话可能在请求返回前被销毁（切主题重建主窗口），用 QPointer 兜住
 	QPointer<ModelSelector> self(this);
 	const QString sessionId = m_sessionId;
 
@@ -442,8 +376,7 @@ void ModelSelector::applyDirectory(const SessionModelDirectory& directory)
 {
 	m_directory = directory;
 
-	// 0.1.5：目录只给部署默认值，会话自己的选择优先（session/list 投影里的那条）。
-	// 只要该模型仍在目录里，就用它覆盖 current；刷新后仍然如此。
+	// 目录只给部署默认值；会话自己的选择优先，只要模型仍在目录里就覆盖 current
 	if (m_hasSessionSelection && !m_sessionSelection.provider.isEmpty()) {
 		const bool known = std::any_of(m_directory.groups.cbegin(), m_directory.groups.cend(),
 			[this](const ModelProviderGroup& group) {
@@ -467,7 +400,7 @@ void ModelSelector::overrideCurrentSelection(const QString& provider, const QStr
 	const QString& reasoningEffort)
 {
 	if (provider.isEmpty() || model.isEmpty()) {
-		// 服务端还没记录过该会话的选择：保持目录给的默认值
+		// 服务端没记录过：保持目录默认值
 		m_hasSessionSelection = false;
 		return;
 	}
@@ -497,8 +430,7 @@ void ModelSelector::updateChip()
 {
 	const bool available = hasModels();
 
-	// chip 左侧显示当前模型：换模型是这个控件的主要用途，
-	// 档位作为次要信息跟在后面（该模型没公布档位时整段省略）。
+	// chip 显示当前模型，档位跟在后面（没公布档位时整段省略）
 	const QString model = m_directory.currentModelName();
 	const QString level = m_directory.currentLevelName();
 
@@ -524,27 +456,22 @@ void ModelSelector::buildMenu(int maxListHeight)
 	const QString currentProvider = m_directory.current.provider;
 	const QString currentModel = m_directory.current.model;
 
-	// ---------------- 模型 ----------------
 	for (const ModelProviderGroup& group : m_directory.groups) {
-		// 只有一个提供方时分组标题是噪音，直接省略（多数部署就是这么回事）
 		if (m_directory.groups.size() > 1)
 			m_menu->addGroupLabel(group.name);
 
 		for (const ModelOption& option : group.models) {
 			const bool selected = group.id == currentProvider && option.id == currentModel;
 
-			// 第二行给出“模型 id”，同名模型跨提供方时能分清是哪一个
 			QString subtitle = option.description;
 			if (subtitle.isEmpty())
 				subtitle = option.id;
 
-			// 父控件用「模型」那一节的容器：autoExclusive 的单选组因此限定在这一节内
-			auto* row = new ModelSelectorRow(
-				ModelSelectorRow::ModelKind, group.id, option.id,
+			// 父控件用「模型」节的容器，单选组因此限定在这节内
+			auto* row = new ModelSelectorRow(ModelSelectorRow::ModelKind, group.id, option.id,
 				option.name, subtitle, selected, m_menu->modelSection());
 
-			dshRegister(
-				QStringLiteral("ModelSelector.model.%1.%2").arg(group.id, option.id),
+			dshRegister(QStringLiteral("ModelSelector.model.%1.%2").arg(group.id, option.id),
 				row, &ModelSelectorRow::modelChosen, m_menu,
 				[this](const QString& provider, const QString& model) {
 					m_menu->accept();
@@ -554,27 +481,21 @@ void ModelSelector::buildMenu(int maxListHeight)
 		}
 	}
 
-	// 目录里没有任何分组时也要给一句说明，否则弹出来是空框
 	if (m_directory.groups.isEmpty())
 		m_menu->addGroupLabel(qtTrId("model_none_published"));
 
-	// ---------------- 思考深度 ----------------
-	// 适配器没公布档位时也用通用四档兜底，所以这里总能给出可选项；
-	// 只是要注明它是通用档位，别让用户以为那是适配器公布的能力。
+	// 没公布档位时用通用四档兜底，必须注明不是适配器公布的
 	const QVector<ReasoningLevel> levels = m_directory.selectableLevels();
 	if (m_directory.usesFallbackLevels())
 		m_menu->addLevelHint(qtTrId("model_think_generic_note"));
 
-	// 当前档位：显式选择的，否则回退到适配器默认档位
 	const QString selectedId = currentLevelId();
 
 	for (const ReasoningLevel& level : levels) {
-		auto* row = new ModelSelectorRow(
-			ModelSelectorRow::LevelKind, QString(), level.id,
+		auto* row = new ModelSelectorRow(ModelSelectorRow::LevelKind, QString(), level.id,
 			level.name, level.description, level.id == selectedId, m_menu->levelSection());
 
-		dshRegister(
-			QStringLiteral("ModelSelector.level.%1").arg(level.id),
+		dshRegister(QStringLiteral("ModelSelector.level.%1").arg(level.id),
 			row, &ModelSelectorRow::levelChosen, m_menu,
 			[this](const QString& levelId) {
 				m_menu->accept();
@@ -590,12 +511,10 @@ void ModelSelector::openMenu()
 {
 	if (!hasModels())
 		return;
-	// 防重入：菜单已经开着时不再重建（重复重建会让旧行残留成“多行勾选”）
+	// 防重入：菜单开着时不再重建（旧行会残留）
 	if (m_menu->isVisible())
 		return;
 
-	// 先问清楚 chip 上下各能腾出多少地方：菜单按内容展开，但不超过能放下的高度
-	// ——内容装得下就整段显示（不出滚动条），装不下才滚动。
 	const QScreen* screen = QGuiApplication::screenAt(mapToGlobal(rect().center()));
 	if (!screen)
 		screen = QGuiApplication::primaryScreen();
@@ -607,34 +526,27 @@ void ModelSelector::openMenu()
 			- kMenuGap - kMenuScreenMargin;
 		const int below = available.bottom() - mapToGlobal(QPoint(0, height())).y()
 			- kMenuGap - kMenuScreenMargin;
-		// 取更宽敞的一侧：菜单最终会落到那一侧
 		maxListHeight = qMax(above, below) - kMenuBodyChrome;
 	}
-	// 阴影外壳也占地方，可用高度里先扣掉它，否则菜单本体虽放得下、整窗却顶到屏幕外
+	// 阴影外壳也占地方，先扣掉
 	const QMargins menuShadowPad = CardShadow::padding(menuShadowSpec());
 	maxListHeight -= menuShadowPad.top() + menuShadowPad.bottom();
 
 	buildMenu(maxListHeight);
-	// 弹窗尺寸按算出来的高度直接设定：滚动区高度刚改过，
-	// 靠 adjustSize() 可能还拿着旧的 sizeHint，那样下面定位会用错高度。
-	// 注意 = 菜单本体尺寸 + 阴影留白（menuWidth()/menuHeight() 给的是本体）。
+	// 按算出的高度直接设定；= 本体尺寸 + 阴影留白
 	m_menu->setFixedSize(m_menu->menuWidth() + menuShadowPad.left() + menuShadowPad.right(),
 		m_menu->menuHeight() + menuShadowPad.top() + menuShadowPad.bottom());
 
-	// 上拉：菜单**本体**的底边贴在 chip 上方 kMenuGap 处。
-	// 整窗比本体大一圈（那圈是阴影留白），所以定位时要把留白补回来，
-	// 否则菜单会离 chip 远出留白那么多，看起来"浮得没道理"。
+	// 本体底边贴在 chip 上方 kMenuGap 处；整窗比本体大一圈，定位要把阴影留白补回来
 	const QPoint above = mapToGlobal(QPoint(-menuShadowPad.left(),
 		-m_menu->height() - kMenuGap + menuShadowPad.bottom()));
 	QPoint pos = above;
 
 	if (screen) {
 		const QRect available = screen->availableGeometry();
-		// 水平越界就右对齐 chip，仍越界则夹到屏幕内
 		if (pos.x() + m_menu->width() > available.right())
 			pos.setX(mapToGlobal(QPoint(width(), 0)).x() - m_menu->width() + menuShadowPad.right());
 		pos.setX(qBound(available.left(), pos.x(), qMax(available.left(), available.right() - m_menu->width())));
-		// 上方放不下时改到下方展开（同样要把阴影上留白补回来）
 		if (pos.y() < available.top())
 			pos.setY(mapToGlobal(QPoint(0, height() + kMenuGap)).y() - menuShadowPad.top());
 	}
@@ -646,16 +558,12 @@ void ModelSelector::openMenu()
 	m_chevron->setText(QStringLiteral("▾"));
 }
 
-// 换模型 / 换档位是同一套动作：乐观更新 chip -> 发 session/selectModel ->
-// 以服务端回显为准；失败就回去拉一次目录（回到服务端事实）。
-// 差别只有两点，用参数区分：换模型后要重新拉目录（新模型可能带来别的档位集合），
-// 以及成功后发哪个信号。
+// 换模型/换档位同一套动作：乐观更新 chip → session/selectModel → 以回显为准，失败回拉目录
 void ModelSelector::submitSelection(const ModelSelection& selection, bool reloadDirectory,
 	const std::function<void(const ModelSelection& selected)>& onAccepted)
 {
-	// 先乐观更新 chip，避免等待往返期间界面停在旧值
 	m_directory.current = selection;
-	// 用户的选择就是该会话的选择：记下来，后续目录刷新不会被部署默认值覆盖
+	// 记下会话级选择
 	m_sessionSelection = selection;
 	m_hasSessionSelection = true;
 	updateChip();
@@ -680,7 +588,6 @@ void ModelSelector::submitSelection(const ModelSelection& selection, bool reload
 				return;
 			qWarning().noquote() << QStringLiteral("[ModelSelector] session/selectModel failed:")
 				<< error.code << error.message;
-			// 失败：回到服务端事实
 			self->refresh();
 		});
 }
@@ -689,16 +596,14 @@ void ModelSelector::chooseModel(const QString& provider, const QString& modelId)
 {
 	if (provider.isEmpty() || modelId.isEmpty() || !m_api || m_sessionId.isEmpty())
 		return;
-
-	// 点的是当前模型：什么都不用做（避免白跑一次 RPC）
+	// 点的是当前模型：避免白跑 RPC
 	if (provider == m_directory.current.provider && modelId == m_directory.current.model)
 		return;
 
 	ModelSelection selection;
 	selection.provider = provider;
 	selection.model = modelId;
-	// 档位留空 = 由新模型的适配器默认档位决定。
-	// 沿用旧档位是错的：同一个档位 id 在新模型上未必存在，服务端会拒绝或静默改写。
+	// 档位留空 = 由新模型的适配器默认值决定，沿用旧档位会被服务端拒绝
 	selection.reasoningEffort.clear();
 
 	submitSelection(selection, /*reloadDirectory=*/true, [this](const ModelSelection& selected) {

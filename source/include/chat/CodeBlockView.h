@@ -11,7 +11,6 @@ public:
 	static constexpr int DefaultMaxHeight = 320;
 
 	explicit CodeBlockView(QWidget* parent = nullptr);
-
 	void setCodeHtml(const QString& html);
 
 	// 内容变化后重新计算高度；外部也可调用

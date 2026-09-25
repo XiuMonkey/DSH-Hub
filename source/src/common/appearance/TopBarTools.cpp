@@ -12,9 +12,7 @@
 
 namespace
 {
-	// 与 resources/ToolsFilterPlugin/index.js 注册的路由一致
 	const char* const kEndpointPath = "/api/tools-filter";
-	// 程序自动建立的目录名（历史版本叫 "tools"，见 normalizedDirectoryName()）
 	const char* const kDefaultDirectoryName = "Default";
 	const char* const kLegacyDirectoryName = "tools";
 
@@ -24,7 +22,6 @@ namespace
 		return text.size() > 160 ? text.left(160) + QStringLiteral("…") : text;
 	}
 
-	// 从一行 ToolsList 里取出工具名（可能是字符串，也可能是 {ToolName, …}）
 	QString rowToolName(const QJsonValue& row)
 	{
 		if (row.isString())
@@ -34,7 +31,7 @@ namespace
 		return QString();
 	}
 
-	// 插件那边的假标记集合（FALSE / 0 / no / off，不分大小写；布尔与数字按 String(value) 的路子算）；界面必须与它同款 —— 插件的判定才是真正生效的那个，读得不一样就会在勾选框上撒谎。
+	// 假标记集合必须与插件同款，否则界面会在勾选框上撒谎
 	bool flagIsFalse(const QJsonValue& value)
 	{
 		if (value.isBool())
@@ -49,7 +46,7 @@ namespace
 			|| text == QStringLiteral("NO") || text == QStringLiteral("OFF");
 	}
 
-	// 这一行表达的可见性：字符串 = 可见；对象看 IsVisible（只有显式的假标记才算隐藏）
+	// 字符串 = 可见；对象看 IsVisible，只有显式假标记才算隐藏
 	bool rowVisible(const QJsonValue& row)
 	{
 		if (row.isString())
@@ -59,7 +56,7 @@ namespace
 		return !flagIsFalse(row.toObject().value(QStringLiteral("IsVisible")));
 	}
 
-	// 目录名归一：空名 → Default（配置里没写 DirectoryName 的目录在界面上得有个标题）；历史自动建立的 "tools" → Default（不归一的话老会话的窗口里会显示一个叫 tools 的目录）；名字只是给人看的标签，插件那边的目录名不参与任何判定。
+	// 空名与历史遗留的 "tools" 都归一到 Default，否则老会话里会显示一个叫 tools 的目录
 	QString normalizedDirectoryName(const QString& raw)
 	{
 		const QString name = raw.trimmed();
@@ -70,13 +67,12 @@ namespace
 		return name;
 	}
 
-	// 目录的比较键：只有大小写不同不该变成两个目录
 	QString directoryKey(const QString& name)
 	{
 		return normalizedDirectoryName(name).toLower();
 	}
 
-	// 原版自带工具的功能目录：插件返回的 `directory` 字段缺失时（旧插件版本、纯函数单测），用它保证初始文档最少也能按功能分组；未知工具再回退 Default。
+	// 插件返回的 directory 缺失（旧插件、纯单测）时用它做功能分组
 	QString builtinFunctionDirectory(const QString& toolName)
 	{
 		if (toolName.isEmpty())
@@ -152,7 +148,7 @@ QString ToolsFilter::defaultDirectoryName()
 	return QLatin1String(kDefaultDirectoryName);
 }
 
-// 由 baseUrl 拼出接口地址：只借它的 scheme/host/port，path 重设、query 与 fragment 清掉；ServerManager 交出来的 baseUrl 是带启动令牌的那条（…/?token=…），直接拼 path 会把接口地址当成 token 的参数值、请求落到 `GET /`，于是拿回一份 HTML 而不是 JSON（理由同 PluginMarketClient::endpointUrl）。
+// 只借 baseUrl 的 scheme/host/port：它带启动令牌，直接拼会让请求落到 GET / 拿回 HTML
 QUrl ToolsFilter::endpointUrl() const
 {
 	QUrl url = m_baseUrl;
@@ -187,7 +183,6 @@ void ToolsFilter::fetch(const QString& sessionId, std::function<void(const ToolF
 
 	QNetworkRequest request(url);
 	QNetworkReply* reply = m_nam->get(request);
-	// 回调挂在 this 上：本对象销毁时自动断开，不会有回调打到已释放的对象
 	connect(reply, &QNetworkReply::finished, this, [this, reply, sessionId, done]() {
 		const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 		const QByteArray raw = reply->readAll();
@@ -199,7 +194,7 @@ void ToolsFilter::fetch(const QString& sessionId, std::function<void(const ToolF
 		catalog.sessionId = sessionId;
 
 		if (failed) {
-			// 插件缺席时请求会落到 /api 前缀路由（连接插件），拿回的不是我们的 JSON
+			// 插件缺席时会落到 /api 前缀路由，拿回的不是我们的 JSON
 			catalog.error = status > 0
 				? qtTrId("toolfilter_plugin_no_response_http_fmt").arg(status)
 				: qtTrId("toolfilter_plugin_no_response_fmt").arg(transportError);
@@ -224,7 +219,7 @@ void ToolsFilter::fetch(const QString& sessionId, std::function<void(const ToolF
 		catalog.configFound = root.value(QStringLiteral("configFound")).toBool();
 		catalog.dropGuidance = root.value(QStringLiteral("dropGuidance")).toBool(true);
 		catalog.visibleCount = root.value(QStringLiteral("visibleCount")).toInt();
-		// 这份名单由配置持有；UI 保存时整份替换，必须原样带回，否则会被冲掉
+		// UI 保存时整份替换，必须原样带回
 		for (const QJsonValue& value : root.value(QStringLiteral("hideContexts")).toArray()) {
 			const QString name = value.toString();
 			if (!name.isEmpty())
@@ -253,7 +248,7 @@ void ToolsFilter::ensureSession(const QString& sessionId,
 			return;
 		}
 
-		// 还没有配置文件：用工具名建一份初始版（描述与参数不写进去）；分组交给 buildDirectories()，它按插件返回的 `directory` 元数据分（插件工具各归其插件，原版工具按功能分目录）。
+		// 用工具名建一份初始版（不写描述与参数），分组交给 buildDirectories()
 		QVector<ToolFilterDirectory> allVisible = catalog.directories;
 		for (ToolFilterDirectory& directory : allVisible) {
 			directory.expanded = true;
@@ -291,7 +286,7 @@ void ToolsFilter::save(const QString& sessionId, const QVector<ToolFilterDirecto
 	payload.insert(QStringLiteral("config"), config);
 
 	QNetworkRequest request(endpointUrl());
-	// 插件要求 application/json（否则 415）—— 这也是它挡跨站简单请求的方式
+	// 插件只收 application/json，否则 415
 	request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
 	QNetworkReply* reply = m_nam->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
 	connect(reply, &QNetworkReply::finished, this, [reply, sessionId, done]() {
@@ -327,9 +322,9 @@ void ToolsFilter::save(const QString& sessionId, const QVector<ToolFilterDirecto
 QVector<ToolFilterDirectory> ToolsFilter::buildDirectories(const QJsonArray& tools, const QJsonObject& storedConfig)
 {
 	QVector<ToolFilterDirectory> directories;
-	QHash<QString, int> indexByKey;            // 目录键 → directories 下标
-	QHash<QString, QString> directoryOfTool;   // 工具名 → 认领它的目录键
-	QHash<QString, bool> storedVisible;        // 工具名 → 是否可见
+	QHash<QString, int> indexByKey;
+	QHash<QString, QString> directoryOfTool;
+	QHash<QString, bool> storedVisible;
 
 	auto ensureDirectory = [&](const QString& rawName) -> int {
 		const QString name = normalizedDirectoryName(rawName);
@@ -345,7 +340,7 @@ QVector<ToolFilterDirectory> ToolsFilter::buildDirectories(const QJsonArray& too
 		return directories.size() - 1;
 		};
 
-	// 1) 目录骨架：按存储顺序，**空目录也留着** —— 配置文件里声明过的目录都要在界面上露面（用户自己写进去的分组不能因为"暂时没有工具"就消失）。
+	// 空目录也留着 —— 配置里声明过的目录都要在界面上露面
 	const QJsonArray filterList = storedConfig.value(QStringLiteral("FilterList")).toArray();
 	const bool autoGroup = filterList.isEmpty();
 	for (const QJsonValue& directoryValue : filterList) {
@@ -361,7 +356,6 @@ QVector<ToolFilterDirectory> ToolsFilter::buildDirectories(const QJsonArray& too
 		const int index = ensureDirectory(name);
 		if (isNewDirectory) {
 			directories[index].description = directory.value(QStringLiteral("Description")).toString();
-			// 只有显式的假标记才算"整组隐藏"（与插件 compileFilterList 同款判定）
 			directories[index].expanded = !flagIsFalse(directory.value(QStringLiteral("IsExpanded")));
 		}
 
@@ -370,21 +364,21 @@ QVector<ToolFilterDirectory> ToolsFilter::buildDirectories(const QJsonArray& too
 			const QString toolName = rowToolName(row);
 			if (toolName.isEmpty())
 				continue;
-			// 归属：同一个工具出现在多个目录里时，**第一个**认领它的目录说话（界面上一个工具只能有一行）；可见性相反，按插件语义"后写覆盖先写"。
+			// 同一工具出现在多个目录时第一个认领的说话；可见性相反，后写覆盖先写
 			if (!directoryOfTool.contains(toolName))
 				directoryOfTool.insert(toolName, key);
 			storedVisible.insert(toolName, rowVisible(row));
 		}
 	}
 
-	// 2) 没有存储配置时，插件随 tools 一起返回的 `directory` 就是初始目录：插件工具各归其插件，原版工具按功能分组。没有该字段时才回退 Default。
+	// 无存储配置时，插件随 tools 返回的 directory 即初始目录，缺该字段才回退 Default
 	const QString defaultKey = directoryKey(defaultDirectoryName());
 	int defaultIndex = -1;
 	if (!autoGroup) {
 		defaultIndex = ensureDirectory(defaultDirectoryName());
 	}
 
-	// 3) 工具归位：顺序跟着插件返回的目录（名字 → 描述 → 参数），这样同一个工具在界面上总是同一行。
+	// 工具顺序跟着插件返回的目录
 	for (const QJsonValue& value : tools) {
 		const QJsonObject tool = value.toObject();
 		ToolFilterEntry entry;
@@ -429,7 +423,7 @@ QVector<ToolFilterDirectory> ToolsFilter::buildDirectories(const QJsonArray& too
 
 QJsonArray ToolsFilter::buildToolsList(const QVector<ToolFilterEntry>& tools)
 {
-	// 可见的只写工具名；隐藏的写 { ToolName, IsVisible:"False" }
+	// 隐藏的写 { ToolName, IsVisible:"False" }
 	QJsonArray toolsList;
 	for (const ToolFilterEntry& tool : tools) {
 		if (tool.name.isEmpty())
@@ -472,12 +466,11 @@ QJsonObject ToolsFilter::buildDocument(const QVector<ToolFilterDirectory>& direc
 	QJsonArray filterList;
 	for (const ToolFilterDirectory& directory : directories) {
 		QJsonObject payload;
-		// IsExpanded 是**筛选语义**（"False" = 插件整组隐藏），界面上的展开/收起不写在这里 —— 所以这里原样带回读到的值，默认新建的目录写 "True"。
+		// IsExpanded 是筛选语义（"False" = 插件整组隐藏），与界面展开 / 收起无关，原样带回
 		payload.insert(QStringLiteral("IsExpanded"),
 			directory.expanded ? QStringLiteral("True") : QStringLiteral("False"));
 		payload.insert(QStringLiteral("DirectoryName"),
 			directory.name.isEmpty() ? defaultDirectoryName() : directory.name);
-		// 描述只在配置文件里存在（界面不能改它），有就原样带回
 		if (!directory.description.isEmpty())
 			payload.insert(QStringLiteral("Description"), directory.description);
 		payload.insert(QStringLiteral("ToolsList"), buildToolsList(directory.tools));
@@ -490,7 +483,7 @@ QJsonObject ToolsFilter::buildDocument(const QVector<ToolFilterDirectory>& direc
 	QJsonObject document;
 	document.insert(QStringLiteral("FilterList"), filterList);
 	document.insert(QStringLiteral("DropGuidance"), dropGuidance ? QStringLiteral("True") : QStringLiteral("False"));
-	// 只在名单非空时才写这一项：保持初始版配置文件最小（只有工具名）
+	// 名单非空才写这一项
 	if (!hideContexts.isEmpty()) {
 		QJsonArray names;
 		for (const QString& name : hideContexts) {

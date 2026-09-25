@@ -1,32 +1,19 @@
 #include "common/session/ModelSelectionService.h"
 
 #include "common/session/SessionCommands.h"
-
 #include <QDebug>
 #include <QCoreApplication>
-
 #include <memory>
 
-// ------------------------------------------------------------------
-// ModelSelectionService.cpp
-// ------------------------------------------------------------------
-// 这里只放需要 DshApiClient 的联网部分；解析与派生查询是 inline 在头文件
-// 里的（见 ModelSelectionService.h），便于脱离网络做单元测试。
-//
-// 模型信息的事实来源全在服务端：
-//   - 目录（有哪些模型、每个模型公布哪些思考档位）来自适配器：session/modelCatalog
-//     （会话级的当前选择在 session/list 的投影里）；
-//   - 用户新增/覆盖的模型条目写进 settings 文档：llm-deepseek 整节即 profile，
-//     llm-pi-ai 是 providers.<路由>，两者都用 `models` 数组承载条目；
-//   - llm/listConfigurableProviders 告诉客户端每条路由的 settings 命名空间与路径，
-//     所以客户端不需要把提供方→命名空间的映射写死在自己这里。
-// ------------------------------------------------------------------
+// 本文件只放需要联网的部分：解析与派生查询都 inline 在头文件里，便于脱网做单元测试。
+// 模型信息的事实来源全在服务端 —— 目录来自 session/modelCatalog；用户新增/覆盖的条目写进
+// settings（llm-deepseek 整节即 profile，llm-pi-ai 是 providers.<路由>，都用 `models` 数组承载）；
+// llm/listConfigurableProviders 告知每条路由的 settings 命名空间，所以客户端不硬编码提供方映射。
 
 namespace
 {
-	// dsh 0.1.5：斜杠 endpoint；无参端点（catalog/providers/describe）args 为空。
-	// session.models / llm.models 两个旧端点都并入 session/modelCatalog
-	// （返回 { default, routableProviders, groups, failures }）。
+	// dsh 0.1.5：旧的 session.models / llm.models 已并入 session/modelCatalog；
+	// 无参端点（catalog / providers / describe）args 为空。
 	const char* const kModelsMethod = "session/modelCatalog";
 	const char* const kSelectModelMethod = "session/selectModel";
 	const char* const kLlmModelsMethod = "session/modelCatalog";
@@ -50,23 +37,16 @@ namespace
 
 namespace ModelSelectionService
 {
-	void fetch(
-		DshApiClient* api,
-		const QString& sessionId,
+	void fetch(DshApiClient* api, const QString& sessionId,
 		const std::function<void(const SessionModelDirectory& directory)>& onLoaded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
 		if (!api || sessionId.isEmpty())
 			return;
 
-		// dsh 0.1.5：session/models 变成无参的 session/modelCatalog（全局目录），
-		// 所以这里不再发 sessionId；会话级的"当前选择"在 session/list 行的
-		// projections.values.modelSelection 里（step2 再接）。
+		// 目录是全局的、不再发 sessionId；会话级的"当前选择"在 session/list 行的投影里
 		Q_UNUSED(sessionId);
-
-		api->callMethod(
-			QLatin1String(kModelsMethod),
-			SessionCommands::emptyArgs(),
+		api->callMethod(QLatin1String(kModelsMethod), SessionCommands::emptyArgs(),
 			[onLoaded](const QJsonObject& value) {
 				if (onLoaded)
 					onLoaded(parseDirectory(value));
@@ -77,24 +57,19 @@ namespace ModelSelectionService
 			});
 	}
 
-	void select(
-		DshApiClient* api,
-		const QString& sessionId,
-		const ModelSelection& selection,
+	void select(DshApiClient* api, const QString& sessionId, const ModelSelection& selection,
 		const std::function<void(const ModelSelection& selected)>& onSelected,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
 		if (!api || sessionId.isEmpty() || !selection.isValid())
 			return;
 
-		api->callMethod(
-			QLatin1String(kSelectModelMethod),
+		api->callMethod(QLatin1String(kSelectModelMethod),
 			SessionCommands::sessionSelectModel(sessionId, selection.provider, selection.model,
 				selection.reasoningEffort),
 			[selection, onSelected](const QJsonObject& value) {
 				if (!onSelected)
 					return;
-
 				// 以服务端回显为准；缺失字段回退到请求值
 				ModelSelection selected = parseSelection(value.value(QStringLiteral("selected")).toObject());
 				if (selected.provider.isEmpty())
@@ -109,19 +84,11 @@ namespace ModelSelectionService
 			});
 	}
 
-	// ------------------------------------------------------------------
-	// 服务端模型视图：目录 + 可配置提供方 + settings 命名空间
-	// ------------------------------------------------------------------
-	// 三个 RPC 依次发，任一可选部分失败都只降级、不整体失败：
-	//   - session/modelCatalog 失败 -> 没有目录可显示，整体失败；
-	//   - llm/listConfigurableProviders 失败 -> 目录仍显示，但“新增模型”拿不到写回地址；
-	//   - settings/describe 失败 -> 目录仍显示，条目看不到容量/来源，
-	//     写回也会被禁用（面板据此提示）。
-	// 三个请求的返回顺序不确定：共享状态累积结果，等三个都有着落、
-	// 且目录到手之后才回调一次，避免界面为了半份数据重建多次。
-	void fetchView(
-		DshApiClient* api,
-		const std::function<void(const ServerModelView& view)>& onLoaded,
+	// 依次发三个 RPC，可选部分失败只降级、不整体失败：目录失败 => 整体失败；
+	// providers 失败 => 目录仍可显示但"新增模型"拿不到写回地址；settings/describe 失败 =>
+	// 条目看不到容量/来源且写回被禁（面板据此提示）。三者返回顺序不定，故累积结果、
+	// 等三个都有着落且目录到手后只回调一次，免得界面为半份数据重建多次。
+	void fetchView(DshApiClient* api, const std::function<void(const ServerModelView& view)>& onLoaded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
 		if (!api)
@@ -130,7 +97,7 @@ namespace ModelSelectionService
 		struct Accumulator
 		{
 			ServerModelView view;
-			int pending = 3;      // 还有几个 RPC 没回来
+			int pending = 3; // 还有几个 RPC 没回来
 			bool catalogDone = false;
 			bool delivered = false;
 
@@ -140,7 +107,6 @@ namespace ModelSelectionService
 				--pending;
 				if (delivered || pending > 0 || !catalogDone)
 					return;
-
 				delivered = true;
 				if (onLoaded)
 					onLoaded(view);
@@ -151,9 +117,7 @@ namespace ModelSelectionService
 		// 三个回调都收敛到这一份：省掉每处重复写条件与空函数
 		auto settle = [shared, onLoaded]() { shared->settle(onLoaded); };
 
-		api->callMethod(
-			QLatin1String(kLlmModelsMethod),
-			SessionCommands::emptyArgs(),
+		api->callMethod(QLatin1String(kLlmModelsMethod), SessionCommands::emptyArgs(),
 			[shared, settle](const QJsonObject& value) {
 				shared->view.groups = parseCatalogGroups(value);
 				shared->view.failures = parseFailures(value.value(QStringLiteral("failures")).toArray());
@@ -166,12 +130,9 @@ namespace ModelSelectionService
 					onError(error);
 			});
 
-		// 0.1.5：llm/models 没了，可选提供方路由用 llm/listConfigurableProviders，
-		// 它返回的是**裸数组** [{ provider, displayName, settingsNs, settingsPath, … }]，
-		// 所以走 callMethodValue。
-		api->callMethodValue(
-			QLatin1String(kLlmProvidersMethod),
-			SessionCommands::emptyArgs(),
+		// 0.1.5：llm/models 没了，可选提供方路由走 llm/listConfigurableProviders；
+		// 它返回的是**裸数组** [{ provider, displayName, settingsNs, settingsPath, … }]，故用 callMethodValue
+		api->callMethodValue(QLatin1String(kLlmProvidersMethod), SessionCommands::emptyArgs(),
 			[shared, settle](const QJsonValue& value) {
 				shared->view.providers = parseProviders(value.toArray());
 				settle();
@@ -182,9 +143,7 @@ namespace ModelSelectionService
 					<< error.code << error.message;
 			});
 
-		api->callMethod(
-			QLatin1String(kSettingsDescribeMethod),
-			SessionCommands::emptyArgs(),
+		api->callMethod(QLatin1String(kSettingsDescribeMethod), SessionCommands::emptyArgs(),
 			[shared, settle](const QJsonObject& value) {
 				bool writable = false;
 				shared->view.namespaces = parseNamespaces(value, &writable);
@@ -198,16 +157,9 @@ namespace ModelSelectionService
 			});
 	}
 
-	// ------------------------------------------------------------------
-	// llm/discoverModels：向适配器问"这条路由能服务哪些模型"
-	// ------------------------------------------------------------------
-	// 与 settings/mutate 的路子不同：这条只读，服务端不落任何东西，回包是候选清单。
-	// 结果端点是**裸数组**（[{ id, name?, contextWindow?, maxTokens? }]），
-	// 所以走 callMethodValue —— 用 callMethod 会因为 result.value 不是对象而拿到空对象。
-	void discoverModels(
-		DshApiClient* api,
-		const QString& settingsNs,
-		const QJsonObject& request,
+	// 只读、服务端不落任何东西，回包是候选清单；结果端点是**裸数组**
+	// （[{ id, name?, contextWindow?, maxTokens? }]），用 callMethod 会因 result.value 不是对象而拿到空对象
+	void discoverModels(DshApiClient* api, const QString& settingsNs, const QJsonObject& request,
 		const std::function<void(const QVector<DiscoveredModel>& models)>& onLoaded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
@@ -221,8 +173,7 @@ namespace ModelSelectionService
 			return;
 		}
 
-		api->callMethodValue(
-			QLatin1String(kLlmDiscoverModelsMethod),
+		api->callMethodValue(QLatin1String(kLlmDiscoverModelsMethod),
 			SessionCommands::llmDiscoverModels(settingsNs, request),
 			[onLoaded](const QJsonValue& value) {
 				if (onLoaded)
@@ -234,15 +185,8 @@ namespace ModelSelectionService
 			});
 	}
 
-	// ------------------------------------------------------------------
-	// settings/mutate：新增 / 删除模型条目
-	// ------------------------------------------------------------------
-
-	// settings/mutate 的公共收尾：回包本身就是该命名空间的新视图，
-	// 缺失时用请求前的视图兜底（新增与删除共用）。
-	void reportNamespaceUpdate(
-		const QJsonObject& value,
-		const SettingsNamespace& fallback,
+	// settings/mutate 的公共收尾：回包本身就是该命名空间的新视图，缺失时用请求前的视图兜底
+	void reportNamespaceUpdate(const QJsonObject& value, const SettingsNamespace& fallback,
 		const std::function<void(const SettingsNamespace& updated)>& onUpdated)
 	{
 		if (!onUpdated)
@@ -250,26 +194,20 @@ namespace ModelSelectionService
 
 		SettingsNamespace updated = fallback;
 		if (value.contains(QStringLiteral("ns"))) {
-			const QVector<SettingsNamespace> parsed = parseNamespaces(
-				QJsonObject{ { QStringLiteral("namespaces"), QJsonArray{ value } } });
+			const QVector<SettingsNamespace> parsed =
+				parseNamespaces(QJsonObject{ { QStringLiteral("namespaces"), QJsonArray{ value } } });
 			if (!parsed.isEmpty())
 				updated = parsed.first();
 		}
 		onUpdated(updated);
 	}
 
-	// settings/mutate 的公共发送
-	void mutateSettings(
-		DshApiClient* api,
-		const QString& ns,
-		const QJsonArray& ops,
+	void mutateSettings(DshApiClient* api, const QString& ns, const QJsonArray& ops,
 		const SettingsNamespace& fallbackView,
 		const std::function<void(const SettingsNamespace& updated)>& onUpdated,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
-		api->callMethod(
-			QLatin1String(kSettingsMutateMethod),
-			SessionCommands::settingsMutate(ns, ops),
+		api->callMethod(QLatin1String(kSettingsMutateMethod), SessionCommands::settingsMutate(ns, ops),
 			[fallbackView, onUpdated](const QJsonObject& value) {
 				reportNamespaceUpdate(value, fallbackView, onUpdated);
 			},
@@ -279,10 +217,7 @@ namespace ModelSelectionService
 			});
 	}
 
-	void addModel(
-		DshApiClient* api,
-		const ConfigurableProvider& provider,
-		const SettingsNamespace& namespaceView,
+	void addModel(DshApiClient* api, const ConfigurableProvider& provider, const SettingsNamespace& namespaceView,
 		const AddModelRequest& request,
 		const std::function<void(const SettingsNamespace& updated)>& onAdded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
@@ -301,35 +236,28 @@ namespace ModelSelectionService
 		// inputModalities 只属于 deepseek。命名空间名就是适配器族的标识。
 		const bool piAi = provider.settingsNs.contains(QStringLiteral("pi-ai"));
 
-		// `models` 是数组、写入即整体替换，所以必须把“整份列表 + 新条目”一起写回。
-		// 基准取用户层已有数组（有的话），避免把 settings 解析出来的默认值固化进用户配置。
+		// `models` 是数组、写入即整体替换，所以必须把"整份列表 + 新条目"一起写回；
+		// 基准取用户层已有数组，避免把 settings 解析出来的默认值固化进用户配置。
 		const QJsonArray existing = modelsForWrite(namespaceView, provider.settingsPath);
 		const QJsonObject entry = buildModelEntry(request, piAi);
 		const QJsonArray merged = upsertModelEntry(existing, entry);
-
 		QJsonArray ops;
 
-		// 表单里填了 key 且这条 profile 原本没点名引用：把引用一并记下来。
-		// 少了这一步，新模型所在的整条路由不会去读那把 key（profile 里没有 apiKeyEnv，
-		// 适配器会退回环境发现或直接报缺凭据）。
+		// 表单里填了 key 且这条 profile 原本没点名引用：把引用一并记下来。少了这一步，
+		// 新模型所在的整条路由不会去读那把 key（profile 里没有 apiKeyEnv，适配器会退回环境发现或报缺凭据）。
 		if (!request.apiKeyRef.isEmpty() && request.recordApiKeyEnv) {
 			QStringList path = provider.settingsPath;
 			path.append(QStringLiteral("apiKeyEnv"));
 			ops.append(setOp(path, request.apiKeyRef));
 		}
-
 		ops.append(setOp(modelsPath(provider), merged));
 
 		mutateSettings(api, provider.settingsNs, ops, namespaceView, onAdded, onError);
 	}
 
-	// 删除模型：把“去掉该条目后的整份数组”写回去（数组写入即整体替换）
-	void removeModel(
-		DshApiClient* api,
-		const ConfigurableProvider& provider,
-		const SettingsNamespace& namespaceView,
-		const QString& modelId,
-		const std::function<void(const SettingsNamespace& updated)>& onRemoved,
+	// 删除模型：把"去掉该条目后的整份数组"写回去（数组写入即整体替换）
+	void removeModel(DshApiClient* api, const ConfigurableProvider& provider, const SettingsNamespace& namespaceView,
+		const QString& modelId, const std::function<void(const SettingsNamespace& updated)>& onRemoved,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
 		if (!api || modelId.isEmpty() || provider.settingsNs.isEmpty()) {
@@ -354,24 +282,17 @@ namespace ModelSelectionService
 
 		QJsonArray ops;
 		ops.append(setOp(modelsPath(provider), remaining));
-
 		mutateSettings(api, provider.settingsNs, ops, namespaceView, onRemoved, onError);
 	}
 
-	// ------------------------------------------------------------------
-	// 凭据：按引用查询 / 写入
-	// ------------------------------------------------------------------
-	void describeCredential(
-		DshApiClient* api,
-		const QString& ref,
+	void describeCredential(DshApiClient* api, const QString& ref,
 		const std::function<void(const CredentialStatus& status)>& onDescribed,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
 		if (!api || ref.isEmpty())
 			return;
 
-		api->callMethod(
-			QLatin1String(kCredentialsDescribeMethod),
+		api->callMethod(QLatin1String(kCredentialsDescribeMethod),
 			SessionCommands::credentialsDescribe(QJsonArray{ ref }),
 			[ref, onDescribed](const QJsonObject& value) {
 				if (onDescribed)
@@ -383,10 +304,7 @@ namespace ModelSelectionService
 			});
 	}
 
-	void saveCredential(
-		DshApiClient* api,
-		const QString& ref,
-		const QString& value,
+	void saveCredential(DshApiClient* api, const QString& ref, const QString& value,
 		const std::function<void()>& onSaved,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError)
 	{
@@ -400,11 +318,8 @@ namespace ModelSelectionService
 			return;
 		}
 
-		// 只发不收：值不回显，回调里也不留任何副本。
-		// 0.1.5：credentials/set 的结果是 void，回包里没有 value 字段（正常）。
-		api->callMethod(
-			QLatin1String(kCredentialsSetMethod),
-			SessionCommands::credentialsSet(ref, value),
+		// 只发不收：值不回显，回调里也不留任何副本。0.1.5 起 credentials/set 的结果是 void
+		api->callMethod(QLatin1String(kCredentialsSetMethod), SessionCommands::credentialsSet(ref, value),
 			[onSaved](const QJsonObject&) {
 				if (onSaved)
 					onSaved();

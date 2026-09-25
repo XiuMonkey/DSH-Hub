@@ -11,7 +11,6 @@
 #include <QMetaObject>
 #include <QObject>
 #include <QString>
-
 #include <utility>
 
 class ConnectionManager : public QObject, public VirtualConnectionManager
@@ -21,11 +20,9 @@ class ConnectionManager : public QObject, public VirtualConnectionManager
 
 public:
 	static ConnectionManager& instance();
-
 	~ConnectionManager() override;
 
 	void RegisterConnection(QString index, ConnectionGroup group) override;
-
 	template <typename Func>
 	void RegisterConnection(QString index, const QObject* sender, QByteArray signal,const QObject* receiver, Func slot)
 	{
@@ -34,7 +31,6 @@ public:
 		ConnectionRegistry.insert(index, { const_cast<QObject*>(sender),const_cast<QObject*>(receiver), signal, "Lambda" });
 		HandleMap.insert(index, handle);
 	}
-
 	template <typename Sender, typename Signal, typename Func>
 	void RegisterConnection(QString index, const Sender* sender, Signal signal,const QObject* receiver, Func slot)
 	{
@@ -43,22 +39,16 @@ public:
 		ConnectionRegistry.insert(index, { const_cast<Sender*>(sender),const_cast<QObject*>(receiver),QMetaMethod::fromSignal<Signal>(signal).methodSignature(), "Lambda" });
 		HandleMap.insert(index, handle);
 	}
-
 	void PublicRemoveConnection(QString index) override;
-
 	void SuspendConnection(QString index) override;
-
 	void TakeoverConnection(QString index, QObject* receiver, QByteArray slot) override;
-
 	void Reconnect(QString index) override;
 
 private:
 	void PrivateRemoveConnection(ConnectionGroup group);
-
 	void PrivateRemoveConnection(QMetaObject::Connection handle);
 
 	QHash<QString, ConnectionGroup> ConnectionRegistry;
-
 	QHash<QString, QMetaObject::Connection> HandleMap;
 };
 

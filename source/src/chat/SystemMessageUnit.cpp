@@ -12,7 +12,6 @@ SystemMessageUnit::SystemMessageUnit(QWidget* parent)
 	setReadOnly(true);
 
 	// 无边框、透明背景、斜体浅灰文字
-
 	setObjectName(QStringLiteral("systemUnit")); // 外观规则见 resources/styles/chat.qss（#systemUnit）
 	viewport()->setAutoFillBackground(false);
 	setFrameShape(QFrame::NoFrame);
@@ -25,8 +24,7 @@ SystemMessageUnit::SystemMessageUnit(QWidget* parent)
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	document()->setDocumentMargin(0);
 
-	connect(document(), &QTextDocument::contentsChanged,
-		this, &SystemMessageUnit::updateHeightToContent);
+	connect(document(), &QTextDocument::contentsChanged, this, &SystemMessageUnit::updateHeightToContent);
 }
 
 void SystemMessageUnit::setMessage(const QString& text)

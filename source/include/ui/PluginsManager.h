@@ -19,9 +19,10 @@ class QTimer;
 class PluginMarketClient;
 class PluginMarketInstaller;
 
-// “插件管理”界面：与 Settings 同思路的常驻对象，管插件市场/已安装列表的绘制与交互，外加窗口本身的开关（遮罩、居中、判重、关闭清理）。
-// 与界面无关的逻辑都在 common：HTTP -> PluginMarketClient，市场包缺失时的自动安装（pnpm + profile 清单）-> PluginMarketInstaller，
-// registry JSON 解析 / 关键词过滤 / 分页切片 -> PluginMarketModel；遮罩是窗口级共用的那一层，打开时申请、关闭时归还。
+// "插件管理"界面：与 Settings 同思路的常驻对象，管插件市场/已安装列表的绘制与交互，外加窗口本身的
+// 开关（遮罩、居中、判重、关闭清理）。与界面无关的逻辑都在 common：HTTP → PluginMarketClient，
+// 市场包缺失时的自动安装（pnpm + profile 清单）→ PluginMarketInstaller，registry JSON 解析 /
+// 关键词过滤 / 分页切片 → PluginMarketModel；遮罩是窗口级共用的那一层，打开时申请、关闭时归还。
 class PluginsManager : public StatusPopupWindow
 {
 	Q_OBJECT

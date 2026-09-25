@@ -1,8 +1,11 @@
 #pragma once
 
-// 鼠标滚轮的"平滑化"：接管某个 QAbstractScrollArea 视口上的滚轮事件，把一格换算成像素增量累积成目标位置，再用 QPropertyAnimation 对滚动条 value 做补间。
-// 为什么需要：Qt Widgets 默认的滚轮处理是一次同步 setValue（Qt 6.11.2 实测一格 = wheelScrollLines 3 × singleStep 20 = 60px，中间没有任何过渡帧），观感就是"跳格"。
-// 宿主必须靠 userScrolledAway / isAnimating 判断"用户正在滚"：流式输出的"离底 80px 内跟随底部"比一格 60px 还大，只看位置会把用户往上滚的一格立刻拽回底部。
+// 鼠标滚轮的"平滑化"：接管某个 QAbstractScrollArea 视口上的滚轮事件，把一格换算成像素增量累积成
+// 目标位置，再用 QPropertyAnimation 对滚动条 value 做补间。
+// 为什么需要：Qt Widgets 默认的滚轮处理是一次同步 setValue（Qt 6.11.2 实测一格 =
+// wheelScrollLines 3 × singleStep 20 = 60px，中间没有任何过渡帧），观感就是"跳格"。
+// 宿主必须靠 userScrolledAway / isAnimating 判断"用户正在滚"：流式输出的"离底 80px 内跟随底部"
+// 比一格 60px 还大，只看位置会把用户往上滚的一格立刻拽回底部。
 
 #include <QObject>
 
@@ -15,7 +18,8 @@ class SmoothWheelScroller : public QObject
 	Q_OBJECT
 
 public:
-	// area 为空（或稍后销毁）时本对象只是空转，不会崩；只接管滚轮，键盘、拖动滚动条、程序 setValue 都不受影响，滚动区自己没得滚时不接管（嵌套滚动链照旧）
+	// area 为空（或稍后销毁）时本对象只是空转，不会崩；只接管滚轮，键盘、拖动滚动条、程序 setValue
+	// 都不受影响，滚动区自己没得滚时不接管（嵌套滚动链照旧）
 	explicit SmoothWheelScroller(QAbstractScrollArea* area, QObject* parent = nullptr);
 	~SmoothWheelScroller() override;
 
@@ -25,7 +29,8 @@ public:
 	bool isAnimating() const;
 
 signals:
-	// 用户主动往上滚（想看更早的内容）；**同步发出** —— 滚轮事件处理完就已发出而补间还没走第一步、滚动条仍贴底，光看位置看不出来
+	// 用户主动往上滚（想看更早的内容）；同步发出 —— 滚轮事件处理完就已发出而补间还没走第一步、
+	// 滚动条仍贴底，光看位置看不出来
 	void userScrolledAway();
 
 protected:

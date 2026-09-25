@@ -6,10 +6,7 @@
 
 namespace
 {
-	// 把单行文本按可用宽度裁成最多两行：
-	//   - 放得下就原样返回；
-	//   - 两行放得下则从中间断行；
-	//   - 第二行仍放不下时截断并补 …。
+	// 最多两行：放不下原样，否则中间断行补 …
 	QString statusTextTwoLines(const QString& text, int width, const QFontMetrics& fm)
 	{
 		if (text.isEmpty() || fm.horizontalAdvance(text) <= width)
@@ -17,7 +14,6 @@ namespace
 
 		const int ellipsisWidth = fm.horizontalAdvance(QStringLiteral("…"));
 
-		// 从 start 开始按可用宽度贪心截取一行（新行符按宽度 0 处理，简单起见不换行语义）
 		const auto takeLine = [&fm](const QString& src, int start, int maxWidth) -> QString {
 			QString out;
 			int used = 0;
@@ -37,7 +33,6 @@ namespace
 		if (fm.horizontalAdvance(rest) <= width)
 			return first + QLatin1Char('\n') + rest;
 
-		// 第二行也放不下：第二行截到“省略号也放得下”为止，末尾补 …
 		const int secondMax = qMax(20, width - ellipsisWidth);
 		QString second = takeLine(rest, 0, secondMax);
 		if (rest.size() > second.size())
@@ -76,8 +71,7 @@ void StatusPopupWindow::refreshStatusDisplay()
 	if (!m_statusLabel)
 		return;
 
-	// 布局后按真实宽度排版；还没拿到真实宽度时先全量显示，
-	// 等 Resize 事件（布局真正生效）到来再按实际宽度决定是否省略。
+	// 未拿到真实宽度时先全量显示，等 Resize 事件到达再按宽度省略
 	int width = m_statusLabel->width();
 	if (width <= 10) {
 		const QWidget* win = m_statusLabel->window();
@@ -95,7 +89,7 @@ void StatusPopupWindow::refreshStatusDisplay()
 
 bool StatusPopupWindow::eventFilter(QObject* watched, QEvent* event)
 {
-	// 布局真正生效（标签宽度变化）时重算一次，避免早期按窄宽度错误截断
+	// 宽度变化时重算，避免早期窄宽度截断
 	if (watched == m_statusLabel && event->type() == QEvent::Resize)
 		refreshStatusDisplay();
 	return PopupWindow::eventFilter(watched, event);

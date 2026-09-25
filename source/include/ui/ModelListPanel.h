@@ -2,7 +2,8 @@
 
 // 「设置 → 模型列表」面板：列出服务端公布的模型（可展开表头 + 详情），底部“添加模型”就地拉出填写表单。
 // 表单里“获取模型”按当前路由问一次 llm/discoverModels，候选铺成下拉回填模型 ID（只读，不写配置）。
-// 表单放在滚动区内部而非窗口底部，面板高度才不随表单开合变化（按钮不会上下跳）；数据与写入都在服务端，本面板不缓存清单。
+// 表单放在滚动区内部而非窗口底部，面板高度才不随表单开合变化（按钮不会上下跳）；
+// 数据与写入都在服务端，本面板不缓存清单。
 
 #include "common/session/ModelSelectionService.h"
 
@@ -30,13 +31,11 @@ public:
 
 	// (provider, modelId) 唯一键：刷新后用来恢复展开状态
 	QString key() const;
-
 	bool isExpanded() const;
 	void setExpanded(bool expanded);
 
 signals:
 	void expandedChanged(const QString& key, bool expanded);
-
 	// 在成员上右键（表头或详情都算）—— 面板据此弹出菜单
 	void contextMenuRequested(const QString& provider, const QString& modelId, const QPoint& globalPos);
 
@@ -45,8 +44,7 @@ protected:
 
 private:
 	// 详情区的一行“名称：值”；值缺失时整行不建
-	static void addDetailRow(QVBoxLayout* layout, QWidget* parent,
-		const QString& name, const QString& value);
+	static void addDetailRow(QVBoxLayout* layout, QWidget* parent, const QString& name, const QString& value);
 
 	QString m_key;
 	QString m_provider;
@@ -119,13 +117,13 @@ private:
 
 	ServerModelView m_view;
 	QVector<ModelInfo> m_rows;
-	QSet<QString> m_expanded;   // 展开过的成员 key，刷新后恢复
+	QSet<QString> m_expanded; // 展开过的成员 key，刷新后恢复
 
 	QLabel* m_status = nullptr;
 	QLabel* m_notice = nullptr;
 	QScrollArea* m_scroll = nullptr;
 	QWidget* m_listContent = nullptr;
-	QVBoxLayout* m_listLayout = nullptr;   // 只装模型行（刷新时整体清空）
+	QVBoxLayout* m_listLayout = nullptr; // 只装模型行（刷新时整体清空）
 	QWidget* m_rowsHost = nullptr;
 	// 成员行右键菜单（懒创建，见 ModelListPanel.cpp 里的 ContextMenu）
 	class ContextMenu;
@@ -157,7 +155,7 @@ private:
 
 	// 当前表单路由的凭据引用与状态
 	QString m_keyRef;
-	QString m_apiKeyRefBase;   // 引用行的基础文案（状态另接在后面）
+	QString m_apiKeyRefBase; // 引用行的基础文案（状态另接在后面）
 	CredentialStatus m_credential;
 	bool m_submitting = false;
 };

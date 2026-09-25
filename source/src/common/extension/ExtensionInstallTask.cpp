@@ -5,8 +5,8 @@
 
 ExtensionInstallTask::~ExtensionInstallTask()
 {
-	// std::async 的 future 析构会等待任务结束，这里显式写出来表明意图：
-	// 绝不能让后台线程继续写已经消失的 this。
+	// std::async 的 future 析构会等待任务结束，这里显式写出来表明意图：绝不能让后台线程继续写
+	// 已经消失的 this。
 	waitForFinished();
 }
 

@@ -1,5 +1,4 @@
-// Thunk.cpp：Windows x64 运行时 thunk 生成器 —— 按参数/返回值描述生成可执行机器码，
-// 把统一参数数组翻译成目标 DLL 函数的真实调用约定（DllCaller 的 native 风格使用）。
+// Windows x64 运行时 thunk 生成器：按参数/返回值描述生成机器码，把统一参数数组翻译成目标 DLL 的真实调用约定
 
 #include "ExtensionSystem/Thunk.h"
 
@@ -10,8 +9,7 @@
 
 namespace
 {
-	// 生成器一次性分配一页。16 参数上限下实际机器码约 120 字节，远小于它；
-	// build() 用它分配，emitMachineCode() 用它做越界护栏。
+	// emitMachineCode() 用它做越界护栏
 	constexpr std::size_t kThunkPageSize = 4096;
 
 	class X86Writer
@@ -48,17 +46,8 @@ namespace
 			u8(0x48); u8(0x8B); u8(0xDA);
 		}
 
-		// 栈帧调整一律用 imm32 形式（48 81 EC id / 48 81 C4 id）。
-		// ⚠️ 不要改回 imm8 形式（48 83 EC ib / 48 83 C4 ib）：imm8 是**符号扩展**的，而
-		// stackAlloc 在 15/16 个参数时正好是 128，编码成 0x80 就会被当成 -128 —— 本该向下分配
-		// 128 字节栈帧，实际把栈顶往上抬了 128 字节，影子空间与全部栈参数于是被写到 thunk 入口
-		// rsp **之上**的调用者栈帧里（最多写穿约 128 字节）。
-		//
-		// ⚠️ 别以为它无害、或用求和结果就能测出来：这条缺陷**不表现成传错参数**。call 把返回
-		// 地址压在 thunk 写好的位置之上，与被调函数读取栈参数的偏移两边自洽，参数投递照样正确；
-		// 被破坏的只有**调用者的栈内存**，而是否立刻炸完全取决于调用者的帧布局 —— 实测：
-		// 15 个参数侥幸返回正确值，16 个参数直接 0xC0000005。所以回归用例
-		// （TestThunk::testMaximumStackArguments）必须断言下面这条指令的编码形式。
+		// ⚠️ 栈帧调整必须用 imm32（48 81 EC id），不能改回 imm8（48 83 EC ib）：imm8 是符号扩展的，
+		// stackAlloc 在 15/16 参数时正好是 128，编码成 0x80 会被当成 -128，栈参数被写到 rsp 之上
 		void subRspImm32(std::uint32_t v)
 		{
 			u8(0x48); u8(0x81); u8(0xEC);
@@ -88,7 +77,6 @@ namespace
 
 		void movGpr32FromR10Disp8(int regCode, bool rexR, std::uint8_t disp)
 		{
-			// 没有 REX.W，加载 32 位并自动零扩展为 64 位
 			const std::uint8_t rex = 0x40 | (rexR ? 0x04 : 0x00) | 0x01;
 			u8(rex);
 			u8(0x8B);
@@ -148,7 +136,7 @@ namespace
 
 		void movsdXmmFromR10Disp8(int xmmIndex, std::uint8_t disp)
 		{
-			// 前缀顺序：F2 是 legacy 前缀，REX 在它后面
+			// F2 是 legacy 前缀，必须在 REX 之前
 			u8(0xF2);
 			u8(0x41);
 			u8(0x0F);
@@ -162,7 +150,7 @@ namespace
 			u8(0x48);
 			u8(0x89);
 			u8(0x44);
-			u8(0x24); //这个一定要有，是x64确认偏移的SIB字节
+			u8(0x24); // 一定要有，是 x64 确认偏移的 SIB 字节
 			u8(disp);
 		}
 
@@ -204,7 +192,7 @@ namespace
 		std::uint8_t* m_buffer = nullptr;
 		std::size_t m_size = 0;
 	};
-} // namespace
+}
 
 namespace Thunk
 {
@@ -223,7 +211,6 @@ namespace Thunk
 
 		m_errorString.clear();
 
-		// 直接使用足够大的页，避免精确计算大小。
 		m_code = VirtualAlloc(nullptr, kThunkPageSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 		if (!m_code) {
 			m_errorString = QStringLiteral("VirtualAlloc failed");
@@ -237,7 +224,7 @@ namespace Thunk
 			return false;
 		}
 
-		// ⚠️ 不要在这里再赋值 m_codeSize：它由 emitMachineCode() 末尾设置；原 bug 是这里写过 m_codeSize = writer.size()，而外层 writer 一个字节都没 emit 过 ⇒ 长度被覆盖成 0 ⇒ 下面刷新 0 字节。
+		// ⚠️ 不要在这里再赋值 m_codeSize：它由 emitMachineCode() 末尾设置，否则长度会被覆盖成 0
 		FlushInstructionCache(GetCurrentProcess(), m_code, m_codeSize);
 		return true;
 	}
@@ -267,9 +254,7 @@ namespace Thunk
 
 		const int stackArgCount = signature.args.size() > 4 ? signature.args.size() - 4 : 0;
 		const int stackBytes = stackArgCount * 8;
-		// push rbx 已经让 RSP 16 字节对齐，这里只需要分配 16 的倍数。
-		// 16 个参数时 stackAlloc = 128；imm32 能表示任意 32 位值，所以"128 装不进 imm8"那类
-		// 编码事故在下面这条指令上不可能再发生（见 subRspImm32 的说明）。
+		// push rbx 已让 RSP 16 字节对齐，只需分配 16 的倍数
 		const int stackAlloc = (32 + stackBytes + 15) & ~15;
 
 		writer.pushRbx();
@@ -340,8 +325,7 @@ namespace Thunk
 		writer.popRbx();
 		writer.ret();
 
-		// X86Writer 不做边界检查，所以这里兜一道：越界说明编码逻辑被改坏了，
-		// 宁可报错也不要静默写穿 VirtualAlloc 出来的那一页。
+		// X86Writer 不做边界检查，越界说明编码逻辑被改坏了，宁可报错也不要写穿这一页
 		if (writer.size() > kThunkPageSize) {
 			m_errorString = QStringLiteral("generated thunk exceeds the allocated page");
 			return false;
@@ -350,4 +334,4 @@ namespace Thunk
 		m_codeSize = writer.size();
 		return true;
 	}
-} // namespace Thunk
+}

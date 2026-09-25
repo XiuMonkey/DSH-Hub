@@ -1,7 +1,6 @@
 #include "common/extension/PluginMarketModel.h"
 
 #include <QJsonObject>
-
 #include <algorithm>
 
 QString MarketPlugin::displayDescription() const

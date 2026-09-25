@@ -1,10 +1,5 @@
-// ------------------------------------------------------------------
-// AgentMessageUnit.cpp
-// ------------------------------------------------------------------
-// 可复用 Agent 消息展示控件的实现（气泡容器化 · 路线2 第2步）。
-// 容器 = QWidget + QVBoxLayout 部件流：普通文本切 QTextBrowser(agentProse)，
-// 代码围栏切 CodeBlockView 子单元，Thinking/Tool 用富文本锚点挂宿主 ProseView。
-// ------------------------------------------------------------------
+// 可复用 Agent 消息展示控件：容器 = QWidget + QVBoxLayout 部件流 —— 普通文本切
+// QTextBrowser(agentProse)，代码围栏切 CodeBlockView 子单元，Thinking/Tool 用富文本锚点。
 
 #include "chat/AgentMessageUnit.h"
 #include "ui/LayoutUtils.h"
@@ -31,10 +26,6 @@
 
 namespace
 {
-	// 渲染分段计时（仅当设置环境变量 DSH_HUB_RENDER_TRACE=1 时输出）：
-	// 用于分辨“文本加工”（Markdown→HTML/代码高亮等纯计算）与
-	// “控件装配/排版”（QTextBrowser/CodeBlockView 创建、布局、高度拟合）
-	// 各自耗时，为把纯计算段搬去 worker 线程提供依据。
 	bool renderTraceEnabled()
 	{
 		static const bool on = qEnvironmentVariableIsSet("DSH_HUB_RENDER_TRACE");
@@ -47,8 +38,6 @@ namespace
 			qInfo().noquote() << "[Render]" << where << ms << "ms";
 	}
 
-	// 排版诊断开关（DSH_HUB_LAYOUT_TRACE=1）：打印每帧提交的高度与子部件构成，
-	// 用于定位“气泡被瞬间撑高”这类排版问题。默认关闭，零开销。
 	bool layoutTraceEnabled()
 	{
 		static const bool on = qEnvironmentVariableIsSet("DSH_HUB_LAYOUT_TRACE");
@@ -58,8 +47,7 @@ namespace
 
 namespace
 {
-	// 返回 widget（代码子单元的外层 QWidget，或代码块本体）里的 CodeBlockView；
-	// 本控件内部唯一的文本编辑控件就是 CodeBlockView（objectName=codeBlockView）。
+	// 取 widget 里唯一的 QTextEdit（CodeBlockView，objectName=codeBlockView）
 	QTextEdit* codeBlockEditIn(QWidget* widget)
 	{
 		if (!widget)
@@ -72,8 +60,7 @@ namespace
 		return nullptr;
 	}
 
-	// 思考卡锚点。%1 = 索引，%2 = 箭头字形，%3 = 转义后的预览。颜色现取、不缓存
-	//（主题切换靠重建窗口，缓存就会"忘了跟着换"）。
+	// 思考卡锚点；颜色须现取不能缓存，主题切换靠重建窗口
 	QString thinkingAnchorHtml(int index, const QString& arrow, const QString& preview)
 	{
 		return (QStringLiteral("<a href=\"dsh://thinking/%1\" style=\"color:")
@@ -82,14 +69,13 @@ namespace
 			+ QStringLiteral("</a>")).arg(index).arg(arrow, preview);
 	}
 
-	// 思考卡正文：转义后包 <i>。
 	QString thinkingBodyHtml(const QString& content)
 	{
 		return (QStringLiteral("<p style='color:") + ThemeManager::instance().textSecondary()
 			+ QStringLiteral(";'><i>%1</i></p>")).arg(content.toHtmlEscaped());
 	}
 
-	// 工具卡锚点。色取主题 accent；%3 是调用方拼好的标题（已转义，这里不再处理）。
+	// 工具卡锚点；标题由调用方拼好并已转义，这里不再处理
 	QString toolAnchorHtml(int index, const QString& arrow, const QString& title)
 	{
 		return (QStringLiteral("<a href=\"dsh://tool/%1\" style=\"color:")
@@ -101,21 +87,20 @@ namespace
 AgentMessageUnit::AgentMessageUnit(QWidget* parent)
 	: QWidget(parent)
 {
-	setObjectName(QStringLiteral("agentUnit")); // 外观规则见 resources/styles/chat.qss（#agentUnit / #agentBubble #agentUnit）
-	setAttribute(Qt::WA_StyledBackground, true); // 让容器自己的 QSS 背景/圆角生效
+	setObjectName(QStringLiteral("agentUnit"));
+	setAttribute(Qt::WA_StyledBackground, true);
 	setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
 	setFixedWidth(DefaultWidth);
 
+	// 间距由子部件自控，布局间距保持 0，避免叠加出额外空白
 	m_partsLayout = new QVBoxLayout(this);
-	// 区域间距由各子部件自身控制（代码单元自带上下呼吸间距）；
-	// 布局间距保持 0，避免“文本段 + 代码单元 + 文本段”之间产生额外叠加空白
 	m_partsLayout->setContentsMargins(8, 2, 8, 2);
 	m_partsLayout->setSpacing(0);
 }
 
 AgentMessageUnit::~AgentMessageUnit()
 {
-	// 子部件（ProseView / 代码子单元）都是 this 的孩子，随容器一起销毁即可。
+	// 子部件随容器销毁
 }
 
 QTextBrowser* AgentMessageUnit::makeProseView()
@@ -129,15 +114,14 @@ QTextBrowser* AgentMessageUnit::makeProseView()
 QTextBrowser* AgentMessageUnit::createRichPart(const QString& objectName)
 {
 	auto* view = new QTextBrowser(this);
-	view->setObjectName(objectName); // 透明/无边框外观见 chat.qss（#agentProse 等）
+	view->setObjectName(objectName);
 
-	// 滚动条是 QAbstractScrollArea 基类构造时建好的，那时 objectName 还没设，
-	// 规则会被缓存成"匹配不到"；设完名字后重新解析一次（#agentProse QScrollBar）
+	// 滚动条在基类构造时就建好（那时还没 objectName），设完名字后必须重新 polish
 	ThemeManager::instance().repolishScrollArea(view);
 
 	view->setReadOnly(true);
 
-	// 关闭内部滚动：高度交给 fitProseView()；水平滚动条按需，防止极端 HTML 撑宽
+	// 高度交给 fitProseView()，须关内部纵向滚动；横向按需防撑宽
 	view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	view->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 	view->setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
@@ -148,14 +132,13 @@ QTextBrowser* AgentMessageUnit::createRichPart(const QString& objectName)
 	view->viewport()->setAutoFillBackground(false);
 	view->document()->setDocumentMargin(0);
 
-	// dsh:// 锚点由我们自己处理（展开/收起思考、工具），普通外链照常打开
+	// dsh:// 锚点自行处理，普通外链照常打开；view 随内容重建，不进登记表
 	view->setOpenLinks(false);
 	view->setOpenExternalLinks(true);
-	// view 随气泡内容重建，不进登记表
 	connect(view, &QTextBrowser::anchorClicked,
 		this, [this](const QUrl& url) { handleAnchorClicked(url); });
 
-	// 内容变化后自适应高度（整批重建期间先抑制，重建结束统一拟合）
+	// 内容变化后自适应高度；整批重建期间抑制，结束后统一拟合
 	connect(view->document(), &QTextDocument::contentsChanged,
 		this, [this, view]() {
 			if (!m_rebuilding)
@@ -168,8 +151,7 @@ QTextBrowser* AgentMessageUnit::createRichPart(const QString& objectName)
 QTextBrowser* AgentMessageUnit::proseHost()
 {
 	if (!m_proseViews.isEmpty()) {
-		// 只有“末尾部件本身就是 ProseView”时才复用它，保证锚点/分隔始终追加在
-		// 当前消息真实尾部之后（若末尾是代码块则另起新的空 ProseView）。
+		// 只有末尾部件本身是 ProseView 才复用，否则锚点会追加到代码块之前
 		QTextBrowser* tailProse = m_proseViews.last();
 		QWidget* lastWidget = nullptr;
 		if (m_partsLayout->count() > 0) {
@@ -184,13 +166,8 @@ QTextBrowser* AgentMessageUnit::proseHost()
 
 void AgentMessageUnit::fitProseView(QTextBrowser* view)
 {
-	// 内容宽度是确定的：容器定宽（DefaultWidth）减去布局左右边距，所以这里先把
-	// **视图自身宽度**校正到内容宽度，再按同一宽度排版文档。
-	//
-	// 关键：新建的视图在被布局之前宽度还是 Qt 的默认值（100px），而 QTextBrowser
-	// 会把文档宽度跟着自己的视口宽度走。若此时直接读 documentSize()，拿到的就是
-	// “按 100px 窄宽换行”的高度（实测长回复可达 7000+ px），一旦 setFixedHeight()
-	// 提交，气泡就会被瞬间撑得极高，等下一轮拟合再恢复——这正是流式输出时的抖动。
+	// ⚠️ 新建视图布局前宽度仍是 Qt 默认 100px，必须先校正宽度再 setFixedHeight，
+	// 否则按窄宽算出的高度会瞬间撑高气泡（流式抖动的来源）
 	const QMargins margins = m_partsLayout->contentsMargins();
 	const int contentWidth = qMax(1, width() - margins.left() - margins.right());
 	if (view->width() != contentWidth)
@@ -227,8 +204,7 @@ void AgentMessageUnit::updateHeightToContent()
 	if (layoutTraceEnabled())
 		debugTraceLayout(QStringLiteral("after-refit"));
 
-	// 子部件刚加入布局时几何可能还没生效（宽度仍很小），立即拟合会按错误宽度
-	// 算出过高的固定高度；延后到事件循环里布局真正跑完后，再按真实宽度重算一次。
+	// 布局几何尚未生效时拟合会算出过高高度，延后到事件循环再按真实宽度重算
 	QTimer::singleShot(0, this, [this]() {
 		if (m_rebuilding)
 			return;
@@ -240,17 +216,11 @@ void AgentMessageUnit::updateHeightToContent()
 	traceRender("updateHeightToContent", timer.elapsed());
 }
 
-// 排版诊断：把“这一帧提交的高度”和子部件构成打出来，用于定位气泡被瞬间撑高
-// 的问题（DSH_HUB_LAYOUT_TRACE=1 时随 updateHeightToContent 输出）。
 void AgentMessageUnit::debugTraceLayout(const QString& stage) const
 {
 	QStringList parts;
-	parts << QStringLiteral("stage=%1 unit=%2x%3 hint=%4x%5")
-		.arg(stage)
-		.arg(width())
-		.arg(height())
-		.arg(sizeHint().width())
-		.arg(sizeHint().height());
+	parts << QStringLiteral("stage=%1 unit=%2x%3 hint=%4x%5").arg(stage).arg(width()).arg(height())
+		.arg(sizeHint().width()).arg(sizeHint().height());
 
 	for (int i = 0; i < m_partsLayout->count(); ++i) {
 		QLayoutItem* item = m_partsLayout->itemAt(i);
@@ -259,20 +229,14 @@ void AgentMessageUnit::debugTraceLayout(const QString& stage) const
 			continue;
 		parts << QStringLiteral("[%1#%2 %3x%4 hintH=%5]")
 			.arg(QString::fromLatin1(widget->metaObject()->className()), widget->objectName())
-			.arg(widget->width())
-			.arg(widget->height())
-			.arg(widget->sizeHint().height());
+			.arg(widget->width()).arg(widget->height()).arg(widget->sizeHint().height());
 	}
 
-	// 换行 QLabel 的 heightForWidth 随宽度变化，是最可疑的一类子部件
 	for (QLabel* label : findChildren<QLabel*>()) {
 		if (!label->wordWrap())
 			continue;
-		parts << QStringLiteral("{QLabel#%1 w=%2 h=%3 hintH=%4 hfw=%5}")
-			.arg(label->objectName())
-			.arg(label->width())
-			.arg(label->height())
-			.arg(label->sizeHint().height())
+		parts << QStringLiteral("{QLabel#%1 w=%2 h=%3 hintH=%4 hfw=%5}").arg(label->objectName())
+			.arg(label->width()).arg(label->height()).arg(label->sizeHint().height())
 			.arg(label->heightForWidth(label->width()));
 	}
 
@@ -288,22 +252,18 @@ void AgentMessageUnit::resizeEvent(QResizeEvent* event)
 
 void AgentMessageUnit::clearParts()
 {
-	// 不摘离控件树：这里可能正处在某个子控件的 anchorClicked 处理中。
+	// 不摘离控件树：此处可能正处在子控件的 anchorClicked 处理中
 	LayoutUtils::clearLayout(m_partsLayout, LayoutUtils::ClearMode::HideThenDefer);
 	m_proseViews.clear();
 }
 
 void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 {
-	// 统一换行符，避免 Windows \r\n 影响解析
 	QString text = markdown;
 	text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
 	text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
 
-	// 匹配 ```语言\n代码\n```
-	QRegularExpression fenceRe(
-		QStringLiteral("```([\\w+#-]*)\\s*\\n([\\s\\S]*?)```")
-	);
+	QRegularExpression fenceRe(QStringLiteral("```([\\w+#-]*)\\s*\\n([\\s\\S]*?)```"));
 
 	int pos = 0;
 	QRegularExpressionMatchIterator it = fenceRe.globalMatch(text);
@@ -311,24 +271,19 @@ void AgentMessageUnit::insertMarkdownWithCodeShadow(const QString& markdown)
 	while (it.hasNext()) {
 		QRegularExpressionMatch match = it.next();
 
-		// 代码块前面的普通 Markdown：一段普通文本 = 一个新 ProseView
 		const QString before = text.mid(pos, match.capturedStart() - pos);
 		if (!before.trimmed().isEmpty())
 			appendProseRegion(before);
 
-		// 代码围栏 → 独立代码子单元（语言标签 + CodeBlockView）
 		addCodeBlockUnit(match.captured(1), match.captured(2));
 
 		pos = match.capturedEnd();
 	}
 
-	// 最后剩余部分
 	const QString after = text.mid(pos);
 	if (!after.trimmed().isEmpty()) {
-		// 流式输出时可能遇到还没闭合的 ``` 代码块，先按代码块渲染，等闭合后下次会正常解析
-		QRegularExpression unclosedFenceRe(
-			QStringLiteral("```([\\w+#-]*)\\s*\\n([\\s\\S]*)$")
-		);
+		// 流式输出可能遇到未闭合的 ``` 代码块，先按代码块渲染，闭合后重解析
+		QRegularExpression unclosedFenceRe(QStringLiteral("```([\\w+#-]*)\\s*\\n([\\s\\S]*)$"));
 		QRegularExpressionMatch unclosedMatch = unclosedFenceRe.match(after);
 
 		if (unclosedMatch.hasMatch()) {
@@ -353,8 +308,7 @@ void AgentMessageUnit::appendMarkdownWithCodeShadow(const QString& markdown)
 	segment.text = markdown;
 	m_segments.append(segment);
 
-	// 只渲染新增的这一段，而不是每次清空后全量重建，避免连续追加多段内容时
-	// 变成 O(n^2) 的重复渲染；整段插入期间先抑制逐段高度重算，最后统一更新一次。
+	// 只渲染新增段，避免连续追加变成 O(n^2)；插入期间抑制逐段高度重算
 	m_rebuilding = true;
 	insertMarkdownWithCodeShadow(markdown);
 	m_rebuilding = false;
@@ -366,8 +320,7 @@ void AgentMessageUnit::appendMarkdownWithCodeShadow(const QString& markdown)
 
 void AgentMessageUnit::appendProseRegion(const QString& markdown)
 {
-	// 修剪首尾空白：markdown 段落边缘的换行会在转换后形成多余空段，
-	// 这是“文本段之间大片空白”的主要来源之一
+	// 修剪首尾空白：段落边缘的换行会形成多余空段，是文本段间大空白的主因
 	QString text = markdown.trimmed();
 	if (text.isEmpty())
 		return;
@@ -377,8 +330,6 @@ void AgentMessageUnit::appendProseRegion(const QString& markdown)
 
 	QTextBrowser* view = makeProseView();
 
-	// 保留现状的渲染风格：临时 QTextDocument.setMarkdown → toHtml → insertHtml，
-	// 并恢复行内代码占位符
 	QStringList codes;
 	const QString marked = replaceInlineCodeWithPlaceholders(text, codes);
 	QTextDocument doc;
@@ -397,22 +348,17 @@ void AgentMessageUnit::addCodeBlockUnit(const QString& language, const QString& 
 	QElapsedTimer timer;
 	timer.start();
 
-	// 子单元 = 一个小 QVBoxLayout：[可选语言行(QLabel) + CodeBlockView]，
-	// 整体作为一个布局子部件插入 m_partsLayout，保证与普通文本严格按顺序排布。
+	// 子单元 = [语言行(QLabel) + CodeBlockView]，作为布局子部件插入以保持顺序
 	auto* unit = new QWidget(this);
 	auto* unitLayout = new QVBoxLayout(unit);
-	// 代码单元上下各留少量呼吸间距（原 HTML 卡 margin 8 缩到 6，
-	// 且布局间距已为 0，不会与段落空白叠加）
 	unitLayout->setContentsMargins(0, 6, 0, 6);
 	unitLayout->setSpacing(0);
 
-	auto* langLabel = new QLabel(
-		language.isEmpty() ? QStringLiteral("code") : language, unit);
-	langLabel->setObjectName(QStringLiteral("codeBlockLang")); // 次要色外观见 chat.qss
+	auto* langLabel = new QLabel(language.isEmpty() ? QStringLiteral("code") : language, unit);
+	langLabel->setObjectName(QStringLiteral("codeBlockLang"));
 
 	auto* codeView = new CodeBlockView(unit);
-	codeView->setMinimumWidth(0); // 超长代码行交给横向滚动条，不撑宽容器
-	// 语法高亮（灰色底由 chat.qss #codeBlockView 提供），无高亮规则时也能正常显示原文
+	codeView->setMinimumWidth(0);
 	codeView->setCodeHtml(CodeHighlighter::instance().highlight(language, code));
 
 	unitLayout->addWidget(langLabel);
@@ -441,7 +387,6 @@ void AgentMessageUnit::appendThinking(const QString& thinking)
 	segment.thinkingIndex = index;
 	m_segments.append(segment);
 
-	// 只渲染新增的思考块，避免把已有回复全部重绘一遍。
 	insertThinking(index);
 	if (!m_bulkFit)
 		updateHeightToContent();
@@ -511,8 +456,7 @@ void AgentMessageUnit::flushStream()
 	if (m_streamSegments.isEmpty())
 		return;
 
-	// 指纹去重：DSHHub 可能对同一批 chunk 触发多次 flush（追加即刷 + 定时器），
-	// 内容没变时跳过，避免流式期间每帧都重画。
+	// 指纹去重：DSHHub 可能对同一批 chunk 多次 flush，内容没变就跳过
 	const QString fingerprint = streamFingerprint();
 	if (fingerprint == m_lastFlushedFingerprint && hasContent())
 		return;
@@ -520,9 +464,7 @@ void AgentMessageUnit::flushStream()
 
 	const int count = m_streamSegments.size();
 
-	// 若 live 思考段已不再是"尾部思考段"（例如开始出现 Reply/tool 段），
-	// 先封闭它：卡片保留，并把该段计入已封存数量，防止下方循环再次
-	// appendThinking 重复建卡。
+	// live 思考段不再是尾部时先封闭并计入已封存数，防止下方循环重复建卡
 	if (m_liveThinkingSegment >= 0) {
 		const bool stillTailThinking = (m_liveThinkingSegment == count - 1)
 			&& m_streamSegments.last().type == StreamSegment::Thinking;
@@ -535,7 +477,7 @@ void AgentMessageUnit::flushStream()
 		const StreamSegment& seg = m_streamSegments.at(i);
 		const bool isTail = (i == count - 1);
 
-		// 尾部回复：live 增量（只更新最后一段的尾部区域）
+		// 尾部回复走 live 增量，只更新最后一段的尾部区域
 		if (isTail && seg.type == StreamSegment::Reply) {
 			if (m_liveIndex != i) {
 				if (m_liveIndex >= 0)
@@ -549,21 +491,19 @@ void AgentMessageUnit::flushStream()
 			return;
 		}
 
-		// 尾部思考：思考也随 token 流式增长，应像 Reply 一样 live 更新
+		// 尾部思考也随 token 增长，像 Reply 一样 live 更新
 		if (isTail && seg.type == StreamSegment::Thinking) {
 			if (m_liveIndex >= 0)
-				closeLiveReply(); // 上一个 live 区域是 Reply
+				closeLiveReply();
 			if (m_liveThinkingSegment != i) {
 				m_liveThinkingSegment = i;
-				m_liveThinkingBlock = -1; // 强制重建/接管卡片
+				m_liveThinkingBlock = -1;
 			}
 			updateLiveThinking(seg.content);
 			return;
 		}
 
-		// —— 非尾部段：要么把上一轮 live 段“封闭”（内容已完整渲染，只清状态），
-		//    要么这是首次出现的段，用既有 append* 一次性渲染（它们本来就是
-		//    只追加、不重建既有内容）——
+		// 非尾部段：封闭上一轮 live 段，或对首次出现的段用 append* 一次性渲染
 		if (i == m_liveIndex) {
 			closeLiveReply();
 			m_streamSealedCount = i + 1;
@@ -577,8 +517,7 @@ void AgentMessageUnit::flushStream()
 				appendMarkdownWithCodeShadow(seg.content);
 				break;
 			case StreamSegment::ToolCall:
-				appendToolCall(seg.toolName.isEmpty() ? qtTrId("chat_tool_label") : seg.toolName,
-					seg.content);
+				appendToolCall(seg.toolName.isEmpty() ? qtTrId("chat_tool_label") : seg.toolName, seg.content);
 				break;
 			case StreamSegment::ToolResult:
 				appendToolResult(seg.content);
@@ -593,7 +532,6 @@ void AgentMessageUnit::flushStream()
 void AgentMessageUnit::updateLiveThinking(const QString& content)
 {
 	if (m_liveThinkingBlock < 0) {
-		// 首次出现该思考段：建一张折叠的思考卡
 		const int index = m_thinkingBlocks.size();
 		const bool wasExpanded = m_expandedThinkingIndices.contains(index);
 		m_thinkingBlocks.append({ content, wasExpanded });
@@ -610,18 +548,15 @@ void AgentMessageUnit::updateLiveThinking(const QString& content)
 
 	ThinkingBlock& block = m_thinkingBlocks[m_liveThinkingBlock];
 	if (block.content == content)
-		return; // 内容没变（指纹已挡掉绝大多数重复）
+		return;
 	block.content = content;
 
-	// 标题预览原地刷新（折叠时用户看到的摘要）
 	if (block.card) {
 		if (QLabel* header = block.card->findChild<QLabel*>(QStringLiteral("agentThinkHeader"))) {
 			const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
-			header->setText(thinkingAnchorHtml(m_liveThinkingBlock, arrow,
-				thinkingPreview(content).toHtmlEscaped()));
+			header->setText(thinkingAnchorHtml(m_liveThinkingBlock, arrow, thinkingPreview(content).toHtmlEscaped()));
 		}
 	}
-	// 展开时正文原地刷新
 	if (block.expanded && block.body) {
 		block.body->setHtml(thinkingBodyHtml(content));
 	}
@@ -642,14 +577,14 @@ void AgentMessageUnit::sealLiveThinking()
 
 void AgentMessageUnit::renderLiveReply(const QString& markdown)
 {
-	// 文本没变且区域已渲染过 -> 跳过（指纹在 flushStream 已挡掉绝大多数重复）
+	// 文本没变且区域已渲染过则跳过
 	if (markdown == m_liveRenderedText && m_liveSegmentEntry >= 0)
 		return;
 
 	QElapsedTimer timer;
 	timer.start();
 
-	// m_segments 里只保留该 Reply 的最新全文（整条 rebuild / 主题重载时可重放）
+	// m_segments 只保留该 Reply 的最新全文，供 rebuild / 主题重载重放
 	if (m_liveSegmentEntry < 0) {
 		Segment segment;
 		segment.type = Segment::Markdown;
@@ -661,8 +596,7 @@ void AgentMessageUnit::renderLiveReply(const QString& markdown)
 		m_segments[m_liveSegmentEntry].text = markdown;
 	}
 
-	// 删除上一次 live 区域（位于布局尾部、m_liveLayoutMark 之后）的部件：
-	// 代码子单元 + 该区域新建的 ProseView。
+	// 删掉上次 live 区域（m_liveLayoutMark 之后）的部件，并从 m_proseViews 摘除
 	if (m_liveLayoutMark >= 0) {
 		while (m_partsLayout->count() > m_liveLayoutMark) {
 			QLayoutItem* item = m_partsLayout->takeAt(m_liveLayoutMark);
@@ -679,7 +613,6 @@ void AgentMessageUnit::renderLiveReply(const QString& markdown)
 		m_liveLayoutMark = m_partsLayout->count();
 	}
 
-	// 只重新渲染 live 区域；插入期间抑制逐段高度重算，结束统一拟合一次
 	m_rebuilding = true;
 	insertMarkdownWithCodeShadow(markdown);
 	m_rebuilding = false;
@@ -732,7 +665,7 @@ void AgentMessageUnit::clearStreamSegments()
 {
 	m_streamSegments.clear();
 	m_lastFlushedFingerprint.clear();
-	resetLiveState(); // 只清簿记；已渲染的部件/内容保留（对应已完成的消息）
+	resetLiveState(); // 只清簿记，已渲染的部件保留（对应已完成的消息）
 }
 
 void AgentMessageUnit::rebuild()
@@ -775,7 +708,6 @@ void AgentMessageUnit::addThinkingCard(int index)
 	ThinkingBlock& block = m_thinkingBlocks[index];
 	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 
-	// 卡片 = 可点击标题（QLabel 富文本锚点）+ 展开时显示正文富文本
 	auto* card = new QWidget(this);
 	block.card = card;
 	auto* layout = new QVBoxLayout(card);
@@ -869,7 +801,7 @@ void AgentMessageUnit::toggleThinking(int index)
 	else
 		m_expandedThinkingIndices.remove(index);
 
-	// 就地展开/收起卡片（不整条重建，避免跳动/抖动）；异常时兜底整条重建
+	// 就地展开/收起，不整条重建（避免抖动）；异常时兜底
 	if (block.card)
 		updateThinkingCard(index);
 	else
@@ -888,7 +820,6 @@ void AgentMessageUnit::addToolCard(int index)
 	ToolBlock& block = m_toolBlocks[index];
 	const QString arrow = block.expanded ? QStringLiteral("▼") : QStringLiteral("▶");
 
-	// 卡片 = 可点击标题 + 展开时显示工具参数/结果富文本
 	auto* card = new QWidget(this);
 	block.card = card;
 	auto* layout = new QVBoxLayout(card);
@@ -1006,7 +937,7 @@ QString AgentMessageUnit::textContent() const
 		else if (QTextEdit* code = codeBlockEditIn(widget))
 			piece = code->toPlainText();
 		else {
-			// 思考/工具卡片：标题（QLabel，去掉 HTML 标签）与展开正文（QTextBrowser）
+			// 思考/工具卡片：取标题（去 HTML 标签）与展开正文
 			for (QLabel* label : widget->findChildren<QLabel*>()) {
 				QString text = label->text();
 				text.remove(QRegularExpression(QStringLiteral("<[^>]*>")));

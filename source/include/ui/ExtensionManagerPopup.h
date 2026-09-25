@@ -1,7 +1,8 @@
 #pragma once
 
-// 扩展管理弹窗：不直接弹文件选择框，而是先开管理窗口，在其中安装 .ext、查看已安装、移除扩展；继承 StatusPopupWindow 以与插件弹窗样式一致。
-// 与界面无关的逻辑都在 common：extensions.json / 扩展目录 / cordis.patch.yml -> ExtensionRegistry，后台解压与安装 -> ExtensionInstallTask。
+// 扩展管理弹窗：不直接弹文件选择框，而是先开管理窗口，在其中安装 .ext、查看已安装、移除扩展；
+// 继承 StatusPopupWindow 以与插件弹窗样式一致。与界面无关的逻辑都在 common：extensions.json /
+// 扩展目录 / cordis.patch.yml -> ExtensionRegistry，后台解压与安装 -> ExtensionInstallTask。
 
 #include "ui/StatusPopupWindow.h"
 
@@ -21,8 +22,7 @@ class ExtensionManagerPopup : public StatusPopupWindow
 	Q_OBJECT
 
 public:
-	explicit ExtensionManagerPopup(const QString& serverProfilePath,
-		QWidget* parent = nullptr);
+	explicit ExtensionManagerPopup(const QString& serverProfilePath, QWidget* parent = nullptr);
 
 	// 清理 cordis.patch.yml 中指向不存在包的残留条目
 	void cleanupResiduals();

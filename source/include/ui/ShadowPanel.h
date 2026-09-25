@@ -1,8 +1,10 @@
 #pragma once
 
-// 给任意卡片控件套一层「悬浮外壳」加阴影（用 CardShadow），而不动卡片自己：外壳透明，只在四周留白里画阴影，被包的卡片保持原样、objectName 与 QSS 选择器继续生效。
+// 给任意卡片控件套一层「悬浮外壳」加阴影（用 CardShadow），而不动卡片自己：外壳透明，只在四周留白里
+// 画阴影，被包的卡片保持原样、objectName 与 QSS 选择器继续生效。
 // 阴影色从色板取（构造时给 key），每次绘制现取，所以换主题后重绘即自动跟随，不需要额外的通知机制。
-// 为什么要有这一层：QSS 不支持 box-shadow，而 QGraphicsDropShadowEffect 的阴影画在控件矩形之外，会被滚动区/相邻兄弟裁掉并留残影；让阴影画在「外壳自己的矩形之内」是唯一到处都稳的做法。
+// 为什么要有这一层：QSS 不支持 box-shadow，而 QGraphicsDropShadowEffect 的阴影画在控件矩形之外，
+// 会被滚动区/相邻兄弟裁掉并留残影；让阴影画在「外壳自己的矩形之内」是唯一到处都稳的做法。
 
 #include "common/appearance/CardShadow.h"
 
@@ -17,9 +19,9 @@ class ShadowPanel : public QWidget
 	Q_OBJECT
 
 public:
-	// shadowKey = 色板阴影 key（shadow / shadowSubtle / shadowFloat）；spec **必须显式给**（各面留白成本不一样，用默认值容易悄悄用错档）
-	ShadowPanel(const QString& shadowKey, const CardShadow::Spec& spec,
-		QWidget* parent = nullptr);
+	// shadowKey = 色板阴影 key（shadow / shadowSubtle / shadowFloat）；spec 必须显式给
+	// （各面留白成本不一样，用默认值容易悄悄用错档）
+	ShadowPanel(const QString& shadowKey, const CardShadow::Spec& spec, QWidget* parent = nullptr);
 
 	// 把卡片交给外壳：立刻纳入内部布局，四周留出有效留白对应的空白
 	void setCard(QWidget* card);

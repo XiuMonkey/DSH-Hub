@@ -1,7 +1,6 @@
 #pragma once
 
-// 左侧边栏控件：Logo、各功能按钮、WorkspaceList 与 Sidebar 本体。
-// 会话/工作区的数据与 RPC 逻辑在 common（SessionCatalog / SessionService），本文件只保留控件与绘制。
+// 左侧边栏控件：Logo、功能按钮、WorkspaceList 与 Sidebar 本体；数据与 RPC 逻辑在 common，本文件只画。
 
 #include "common/session/SessionCatalog.h"
 
@@ -9,7 +8,6 @@
 #include <QPushButton>
 #include <QString>
 #include <QWidget>
-
 #include <functional>
 #include <vector>
 
@@ -79,26 +77,19 @@ public:
 	explicit SidebarExtensionButton(QWidget* parent = nullptr);
 };
 
-// 会话列表中的单个会话按钮
 class SessionButton : public QPushButton
 {
 	Q_OBJECT
 
 public:
-	explicit SessionButton(const QString& sessionId,
-		const QString& title,
-		QWidget* parent = nullptr);
+	explicit SessionButton(const QString& sessionId, const QString& title, QWidget* parent = nullptr);
 
 	QString sessionId() const;
-
-	// 更新显示标题（内部会重新计算省略号文本）
 	void setSessionTitle(const QString& title);
-
 	void setSelected(bool selected);
 
 signals:
 	void sessionClicked(const QString& sessionId);
-	// 右键菜单请求删除会话
 	void deleteRequested(const QString& sessionId);
 
 protected:
@@ -115,7 +106,6 @@ private:
 	QString m_fullTitle;
 };
 
-// 工作区按钮：点击折叠/展开该工作区下的会话，右侧绘制加号
 class WorkspaceButton : public QPushButton
 {
 	Q_OBJECT
@@ -139,7 +129,7 @@ private:
 	bool m_plusHovered = false;
 };
 
-// 工作区列表：按工作区分组渲染会话按钮，数据（分组/标题/归档状态）来自 SessionCatalog，本类只负责画。
+// 工作区列表：按工作区分组渲染会话按钮，数据来自 SessionCatalog，本类只负责画
 class WorkspaceList : public QWidget
 {
 	Q_OBJECT
@@ -147,12 +137,8 @@ class WorkspaceList : public QWidget
 public:
 	explicit WorkspaceList(QWidget* parent = nullptr);
 
-	// 数据源：由 SessionService 在刷新时写入
 	SessionCatalog& catalog();
-
-	// 按 catalog 的当前内容整体重建
 	void rebuildFromCatalog();
-
 	void addSession(const QString& sessionId, const QString& title);
 	void addSessionToWorkspace(const QString& sessionId, const QString& title, const QString& workspaceId);
 	void clearSessions();
@@ -180,7 +166,6 @@ private:
 	WorkspaceGroup* createWorkspaceGroup(const QString& workspaceId, const QString& title);
 	WorkspaceGroup* defaultGroup();
 	WorkspaceGroup* groupFor(const QString& workspaceId);
-	// 在对应工作区分组下创建（或更新）一个会话按钮
 	void addSessionButton(const QString& sessionId, const QString& title);
 	void clearWorkspaceGroups();
 
@@ -191,35 +176,26 @@ private:
 	WorkspaceGroup* m_defaultGroup = nullptr;
 };
 
-// 左侧边栏：统筹管理 Logo、按钮和 WorkspaceList，并转发会话相关信号
+// 左侧边栏：统筹 Logo、按钮与 WorkspaceList，并转发会话相关信号
 class Sidebar : public QWidget
 {
 	Q_OBJECT
 
 public:
 	explicit Sidebar(QWidget* parent = nullptr);
-	// 析构时把自己从全局注册表摘掉（Destroy 带身份校验，见 CommonRegistry.h）
+	// 析构时把自己从全局注册表摘掉（Destroy 带身份校验）
 	~Sidebar() override;
 
-	// 让外部可以直接操作真正的会话管理者
 	WorkspaceList* workspaceList() const;
-	// 新建会话成功后，在侧边栏添加并选中该会话
 	void addCreatedSession(const QString& sessionId, const QString& workspaceId = QString());
 
-	// 数据解析由 SessionService 负责，本类只把结果映射成界面状态并转发信号
 	void refreshSessions(DshApiClient* api);
 	void createSession(DshApiClient* api, const QString& workspaceId = QString());
 
-	// 文件与目录清理由 SessionService 负责，会话列表的清理由 WorkspaceList（catalog）负责
-	void clearAllSessions(
-		const QString& dshHome,
-		const std::function<void()>& onCleared,
+	void clearAllSessions(const QString& dshHome, const std::function<void()>& onCleared,
 		const std::function<void()>& onCreateNew);
 
-	// 插件市场入口的开关：后端被客户端扩展接管时收掉那颗按钮（市场整条路都是 DSH 服务端
-	// 专属的 7 个 /dsh-market/* 端点 + pnpm/dsh CLI）。
-	// ⚠️ **只管市场那一颗**：扩展管理（m_extensionButton，extensionsRequested）是客户端扩展
-	// 的装载通道，接管时绝不能跟着关 —— 见 misc/API_TAKEOVER_PLAN.zh-CN.md §2.5-A 那张表。
+	// ⚠️ 只管市场那一颗按钮：扩展管理（extensionsRequested）是扩展的装载通道，接管时绝不能跟着关
 	void setPluginsEntryEnabled(bool enabled);
 
 signals:
@@ -242,7 +218,7 @@ signals:
 	void sessionCreateError(const QString& code, const QString& message);
 
 private:
-	// 会话列表的滚动容器：列表内容再长也只滚动，不参与撑高侧栏
+	// 滚动容器：列表再长也只滚动，不撑高侧栏
 	QScrollArea* m_workspaceScroll = nullptr;
 	WorkspaceList* m_workspaceList = nullptr;
 	SidebarLogo* m_logo = nullptr;

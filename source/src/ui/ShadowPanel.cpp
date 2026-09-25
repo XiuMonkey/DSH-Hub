@@ -12,8 +12,7 @@ ShadowPanel::ShadowPanel(const QString& shadowKey, const CardShadow::Spec& spec,
 	, m_spec(spec)
 	, m_shadowKey(shadowKey)
 {
-	// 外壳自己不画背景（QSS 里也没有匹配它的规则），只画阴影，
-	// 让下层的窗口/面板底色透出来。
+	// 外壳自己不画背景，只画阴影
 	m_layout = new QVBoxLayout(this);
 	m_layout->setSpacing(0);
 	applyMargins();
@@ -69,18 +68,13 @@ void ShadowPanel::paintEvent(QPaintEvent* event)
 	if (!m_card)
 		return;
 
-	// 卡片就摆在内部布局留出的空白里，直接用它的实际几何，
-	// 这样即使布局给了额外的拉伸（AlignLeft 之类的）也能对上。
-	// 卡片尺寸变化必然带动外壳尺寸变化，而 Qt 在 resize 后本来就会重绘整块，
-	// 所以这里不需要额外的 resizeEvent。
+	// 用卡片实际几何，布局给额外拉伸也对得上
 	const QRect cardRect = m_card->geometry();
 	if (cardRect.isEmpty())
 		return;
 
 	QPainter painter(this);
-	// 走 CardShadow::parseColor：色板里的阴影色是 rgba(...) 写法，
-	// QColor 的字符串构造不认它（会得到无效色 → 阴影整块不画）
-	CardShadow::paint(painter, cardRect, m_spec,
-		CardShadow::parseColor(ThemeManager::instance().color(m_shadowKey)), devicePixelRatioF(),
-		m_padOverride);
+	// ⚠️ 必须走 parseColor：色板是 rgba(...)，QColor 直接构造得无效色、阴影不画
+	CardShadow::paint(painter, cardRect, m_spec, CardShadow::parseColor(ThemeManager::instance().color(m_shadowKey)),
+		devicePixelRatioF(), m_padOverride);
 }

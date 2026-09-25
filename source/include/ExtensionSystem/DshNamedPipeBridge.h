@@ -1,6 +1,7 @@
 #pragma once
 
-// DSH Hub 客户端的命名管道桥接服务：监听 \\.\pipe\dshhub-bridge，Node/DSh server 可连接本管道，以 JSON + 换行 的协议发送工具调用请求，由客户端负责装载 DLL 并返回结果。
+// DSH Hub 客户端的命名管道桥接服务：监听 \\.\pipe\dshhub-bridge，Node/DSh server 可连接本管道，
+// 以 JSON + 换行 的协议发送工具调用请求，由客户端负责装载 DLL 并返回结果。
 
 #include <QObject>
 #include <QLocalServer>
@@ -23,18 +24,12 @@ public:
 	QString errorString() const;
 
 	// 主动向某个连接的客户端发送 JSON 响应（协议：JSON + '\n'）
-	void sendResponse(QLocalSocket* socket,
-		int id,
-		bool ok,
-		const QJsonObject& result,
+	void sendResponse(QLocalSocket* socket, int id, bool ok, const QJsonObject& result,
 		const QString& error = QString());
 
 signals:
 	// 收到一个完整的请求行（JSON 已被解析）
-	void requestReceived(int id,
-		const QString& tool,
-		const QJsonObject& args,
-		QLocalSocket* socket);
+	void requestReceived(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket);
 
 private slots:
 	void onNewConnection();

@@ -15,7 +15,8 @@ void SessionPrefetcher::setApi(DshApiClient* api)
 	m_api = api;
 }
 
-// 预取一个会话的最近一页历史：callMethod 全程异步（排队 → 响应 → 线程池解析 JSON → 主线程回调），这里发出去即可，不需要线程也不需要阻塞等待。
+// 预取一个会话的最近一页历史：callMethod 全程异步（排队 → 响应 → 线程池解析 JSON → 主线程回调），
+// 这里发出去即可，不需要线程也不需要阻塞等待。
 void SessionPrefetcher::prefetch(const QString& sessionId, int throughSeq, int maxMessages)
 {
 	if (!m_api || sessionId.isEmpty())
@@ -30,14 +31,11 @@ void SessionPrefetcher::prefetch(const QString& sessionId, int throughSeq, int m
 
 	m_inFlight.insert(sessionId);
 
-	m_api->callMethod(
-		QStringLiteral("session/page"),
-		SessionCommands::sessionPage(sessionId, throughSeq, maxMessages),
+	m_api->callMethod(QStringLiteral("session/page"), SessionCommands::sessionPage(sessionId, throughSeq, maxMessages),
 		[this, sessionId, throughSeq](const QJsonObject& value) {
 			m_inFlight.remove(sessionId);
 
-			const QJsonArray events = SessionCommands::eventsFromRecords(
-				value.value(QStringLiteral("records")).toArray());
+			const QJsonArray events = SessionCommands::eventsFromRecords(value.value(QStringLiteral("records")).toArray());
 			const bool hasMore = value.value(QStringLiteral("hasMore")).toBool();
 
 			qInfo().noquote() << "[SessionPrefetcher] prefetched sessionId=" << sessionId

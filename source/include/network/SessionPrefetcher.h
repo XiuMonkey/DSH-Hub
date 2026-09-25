@@ -1,7 +1,8 @@
 #pragma once
 
-// 首屏预取：进会话时直接用"已经拿到的那一页历史"点亮界面，不等 session/follow 的往返。
-// 陷阱：必须走**一元** session/page 而不是流 —— session/follow 会在快照后 promote 该会话（激活 Agent + 常驻 follower），给 N 个会话开流等于激活 N 个会话。
+// 首屏预取：进会话时直接用“已经拿到的那一页历史”点亮界面，不等 session/follow 的往返。
+// 陷阱：必须走一元 session/page 而不是流 —— session/follow 会在快照后 promote 该会话
+// （激活 Agent + 常驻 follower），给 N 个会话开流等于激活 N 个会话。
 // 请求复用 DshApiClient（自带认证 cookie 与 args 信封），避免自建 QNAM 在认证栅栏下 401。
 
 #include <QJsonArray>
@@ -25,10 +26,8 @@ public:
 	void prefetch(const QString& sessionId, int throughSeq, int maxMessages = 20);
 
 signals:
-	// 某个会话的一页历史已到。
+	// 某个会话的一页历史已到；prefetchFailed 仅用于排查，不影响主流程
 	void historyFetched(const QString& sessionId, const QJsonArray& events, int throughSeq, bool hasMore);
-
-	// 预取失败（仅排查用，不影响主流程）。
 	void prefetchFailed(const QString& sessionId, const QString& code, const QString& message);
 
 private:

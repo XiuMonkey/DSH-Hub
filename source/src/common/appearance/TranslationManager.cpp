@@ -1,5 +1,4 @@
 #include "common/appearance/TranslationManager.h"
-
 #include "common/settings/ClientSettings.h"
 
 #include <QCoreApplication>
@@ -27,7 +26,8 @@ namespace
 	// 生效中的语言代码（已解析过“跟随系统”）
 	QString g_activeCode;
 
-	// 装一个 .qm：外部 translations/ 优先（可覆盖），失败退回 qrc 内置包（与样式同策略）；返回实际来源（"external"/"builtin"），都没装上返回空串。
+	// 装一个 .qm：外部 translations/ 优先（可覆盖），失败退回 qrc 内置包（与样式同策略）；
+	// 返回实际来源（"external"/"builtin"），都没装上返回空串
 	QString installFrom(const QString& fileBase, const QString& dir)
 	{
 		auto* translator = new QTranslator(QCoreApplication::instance());
@@ -63,7 +63,7 @@ namespace
 		g_translator = nullptr;
 	}
 
-	// 把内置语言包释放到外部目录，让用户能直接改它（存在则不覆盖）；与 ThemeManager 释放样式模板同理。
+	// 把内置语言包释放到外部目录，让用户能直接改它（存在则不覆盖）；与 ThemeManager 释放样式模板同理
 	void releaseBuiltinPack(const QString& fileBase, const QString& dir)
 	{
 		const QString target = QDir(dir).filePath(fileBase + QStringLiteral(".qm"));
@@ -102,7 +102,8 @@ namespace
 			releaseBuiltinPack(QString::fromLatin1(base), dir);
 	}
 
-	// 目标语言代码：显式指定优先，否则退到系统语言（QTranslator 自己有 fallback，这里显式取是为了给出准确的回退语言名）。
+	// 目标语言代码：显式指定优先，否则退到系统语言（QTranslator 自己有 fallback，
+	// 这里显式取是为了给出准确的回退语言名）
 	QString resolvedCodeFor(const QString& languageCode, const QString& systemCode)
 	{
 		if (!languageCode.isEmpty())
@@ -157,7 +158,8 @@ namespace Translation
 		if (languageCode.isEmpty())
 			return true; // 没指定 = 默认语言
 
-		// 中文的任意变体（zh / zh_CN / zh_TW）都归入默认语言这一个槽位；这只影响语言列表的去重，不代表中文"不需要语言包"。
+		// 中文的任意变体（zh / zh_CN / zh_TW）都归入默认语言这一个槽位；这只影响语言列表的去重，
+		// 不代表中文"不需要语言包"
 		return QLocale(languageCode).language() == QLocale::Chinese;
 	}
 
@@ -165,7 +167,6 @@ namespace Translation
 	{
 		QVector<LanguageInfo> languages;
 		QStringList seen;
-
 		const QString prefix = QString::fromLatin1(kFileBase) + QLatin1Char('_');
 
 		for (const QString& fileName : fileNames) {
@@ -202,12 +203,15 @@ namespace Translation
 		LanguageInfo fallback;
 		fallback.code = defaultLanguageCode();
 		fallback.name = QLocale(fallback.code).nativeLanguageName();
-		// 源码里唯一保留的自然语言字面量：它是语言下拉里这一项的显示名，且仅在 Qt 取不到系统语言名时才用到；若改成从语言包取，包一旦缺失这一项就会显示成代号，反而更糟。
+		// 源码里唯一保留的自然语言字面量：它是语言下拉里这一项的显示名，且仅在 Qt 取不到系统语言名时
+		// 才用到；若改成从语言包取，包一旦缺失这一项就会显示成代号，反而更糟。
 		if (fallback.name.isEmpty())
 			fallback.name = QStringLiteral("中文");
 		languages.append(fallback);
 
-		// 候选语言 = qrc 内置包 ∪ 外部 translations/ 里的 .qm：内置包必须一起算，它们是在本次 init() 里刚释放到外部目录的，而 Windows 的目录项更新有延迟 —— 紧接着 entryList 可能还看不到，只扫外部就会"首次启动时英文不在列表、重启才出现"（qrc 是内存数据，无此问题）；parseAvailableLanguages 会去重。
+		// 候选语言 = qrc 内置包 ∪ 外部 translations/ 里的 .qm。⚠️ 内置包必须一起算：它们是本次 init()
+		// 刚释放到外部目录的，而 Windows 的目录项更新有延迟，紧接着 entryList 可能还看不到，只扫外部
+		// 就会"首次启动时英文不在列表、重启才出现"（qrc 是内存数据，无此问题）；parseAvailableLanguages 去重
 		QStringList candidates;
 		for (const char* base : kBuiltinPacks) {
 			const QString name = QString::fromLatin1(base) + QStringLiteral(".qm");
@@ -242,7 +246,8 @@ namespace Translation
 				continue;
 			}
 
-			// ID-based .ts：主键是 <message> 的 id 属性，"就地换文案"必须按 id 查；正式 .ts 不维护 <source>，这里也不再解析它。
+			// ID-based .ts：主键是 <message> 的 id 属性，"就地换文案"必须按 id 查；
+			// 正式 .ts 不维护 <source>，这里也不再解析它
 			QXmlStreamReader xml(&file);
 			QString id;
 			const int before = sources.size();
@@ -294,7 +299,8 @@ namespace Translation
 		releaseBuiltinPack(translationFileBase(defaultLanguageCode()), dir);
 
 		if (isDefaultLanguage(wanted)) {
-			// 默认语言（中文）同样依赖语言包（文案只存在于数据文件里，改文案不必重编译）；兜底是 key 本身（qtTrId 对未知 id 原样返回）而非中文原文，所以内置包缺失会让界面露出 topbar_settings 这类代号。
+			// 默认语言（中文）同样依赖语言包（文案只存在于数据文件里，改文案不必重编译）；兜底是 key
+			// 本身（qtTrId 对未知 id 原样返回）而非中文原文，所以内置包缺失会让界面露出 topbar_settings 这类代号
 			const QString origin = installFrom(translationFileBase(wanted), dir);
 			if (origin.isEmpty()) {
 				qWarning().noquote() << QStringLiteral("[Translation] default pack for")
@@ -322,7 +328,8 @@ namespace Translation
 		const QString systemCode = QLocale::system().name();
 		const QString wanted = resolvedCodeFor(languageCode, systemCode);
 
-		// 换 translator 之前先拍一份“界面上正显示的旧文案 -> 源串”的快照：只有在旧语言下才能把当前文案认出来（换完就对不上了）。
+		// 换 translator 之前先拍一份“界面上正显示的旧文案 -> 源串”的快照：
+		// 只有在旧语言下才能把当前文案认出来（换完就对不上了）
 		const WidgetTextSnapshot snapshot = snapshotWidgetTexts();
 
 		const QString dir = translationsDir();
@@ -345,7 +352,8 @@ namespace Translation
 		const bool changed = (active != g_activeCode);
 		g_activeCode = active;
 
-		// 装/卸 translator 时 Qt 自己会给所有控件发 LanguageChange，按标准做法接了 changeEvent 的控件会自己刷新；剩下的固定文案靠快照就地换掉（见 TranslationUi.cpp 的说明与局限）。
+		// 装/卸 translator 时 Qt 自己会给所有控件发 LanguageChange，按标准做法接了 changeEvent 的
+		// 控件会自己刷新；剩下的固定文案靠快照就地换掉（见 TranslationUi.cpp 的说明与局限）
 		applyWidgetTextSnapshot(snapshot);
 
 		// 再通知一次非控件对象（重复刷新是幂等的，代价很小）

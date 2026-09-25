@@ -1,7 +1,7 @@
 #include "ExtensionSystem/ExtensionLoader.h"
+
 #include "ExtensionSystem/ClientExtension.h"
 #include "common/extension/ExtensionRegistry.h"
-
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
@@ -108,7 +108,6 @@ namespace
 		QDirIterator it(dirPath, { QStringLiteral("*.json") }, QDir::Files, QDirIterator::Subdirectories);
 		while (it.hasNext()) {
 			const QString filePath = it.next();
-
 			QFile file(filePath);
 			if (!file.open(QIODevice::ReadOnly))
 				continue;
@@ -125,7 +124,8 @@ namespace
 			}
 		}
 	}
-	// 极简 JSON5 → QJsonObject：剥掉 // 与 /* */ 注释、去掉尾随逗号，再交给 QJsonDocument（它只认严格 JSON）；逐字节扫描，只在字符串外面动手。
+	// 极简 JSON5 → QJsonObject：剥掉 // 与 /* */ 注释、去掉尾随逗号，再交给 QJsonDocument（它只认严格
+	// JSON）；逐字节扫描，只在字符串外面动手。
 	QJsonObject parseJson5Object(const QByteArray& raw, QString* error)
 	{
 		QByteArray cleaned;
@@ -182,7 +182,8 @@ namespace
 			cleaned.append(c);
 		}
 
-		// 尾随逗号：JSON5 允许 ,] 与 ,}，QJsonDocument 不允许 —— 手工扫一遍（Qt 6 的 QByteArray 没有 replace(QRegularExpression, ...) 了），并跳过字符串内部，免得吃掉 "a,]b" 这种字面量里的逗号。
+		// 尾随逗号：JSON5 允许 ,] 与 ,}，QJsonDocument 不允许 —— 手工扫一遍（Qt 6 的 QByteArray 没有
+		// replace(QRegularExpression, ...) 了），并跳过字符串内部，免得吃掉 "a,]b" 这种字面量里的逗号。
 		QByteArray trimmed;
 		trimmed.reserve(cleaned.size());
 		bool inStr = false;
@@ -233,10 +234,8 @@ namespace
 	}
 } // namespace
 
-bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
-	const QString& serverProfilePath,
-	LoadedExtension* out,
-	QString* error)
+bool ExtensionLoader::loadAndInstall(const QString& extFilePath, const QString& serverProfilePath,
+	LoadedExtension* out, QString* error)
 {
 	const QFileInfo extInfo(extFilePath);
 	qInfo().noquote() << QStringLiteral("[ExtensionLoader] loadAndInstall start: %1").arg(extFilePath);
@@ -271,8 +270,10 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 		return false;
 
 	if (ClientExtension::isClientExtensionType(loaded.type)) {
-		// 客户端扩展：不碰 serverProfilePath（不写 extensions.json、不改 cordis.patch.yml、不重启服务端），只把 dll + regulation 落到 <exe>/clientExtensions/<Name>/。
-		// 这里**不装载 DLL** —— 本函数跑在 ExtensionInstallTask 的后台线程上，装载必须由 GUI 线程做（调用方拿到 isClientExtension 后自己调 ClientExtension::loadOne）。
+		// 客户端扩展：不碰 serverProfilePath（不写 extensions.json、不改 cordis.patch.yml、不重启服务端），
+		// 只把 dll + regulation 落到 <exe>/clientExtensions/<Name>/。这里**不装载 DLL** —— 本函数跑在
+		// ExtensionInstallTask 的后台线程上，装载必须由 GUI 线程做（调用方拿到 isClientExtension 后自己
+		// 调 ClientExtension::loadOne）。
 		const QString name = loaded.declaredName.isEmpty()
 			? extInfo.completeBaseName()
 			: loaded.declaredName;
@@ -286,7 +287,8 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 			return false;
 		}
 
-		// **整包落地**：dll、regulation.json5 之外的文件与子目录也一并拷进去（客户端扩展可以带自己的资源，例如扩展自己的 styles/ 文件夹），与下面工具扩展那条线（installPlugin 的持久化循环）做法一致。
+		// **整包落地**：dll、regulation.json5 之外的文件与子目录也一并拷进去（客户端扩展可以带自己的资源，
+		// 例如扩展自己的 styles/ 文件夹），与下面工具扩展那条线（installPlugin 的持久化循环）做法一致。
 		const QString packageRoot = QFileInfo(loaded.dllPath).absolutePath();
 		const QFileInfoList entries = QDir(packageRoot).entryInfoList(
 			QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
@@ -304,7 +306,8 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 			else {
 				QFile::remove(dest);
 				if (!QFile::copy(entry.absoluteFilePath(), dest)) {
-					// 最常见的成因：这个扩展**正在运行**、它的 dll 被本进程映射着，Windows 不允许覆盖同名文件 —— 只能重启客户端之后再装。
+					// 最常见的成因：这个扩展**正在运行**、它的 dll 被本进程映射着，Windows 不允许覆盖同名
+					// 文件 —— 只能重启客户端之后再装。
 					m_errorString = QStringLiteral("cannot copy client extension file: %1"
 						"（若该扩展正在运行，其 dll 被本进程占用，请重启客户端后再安装）")
 						.arg(entry.absoluteFilePath());
@@ -338,7 +341,8 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 			return false;
 	}
 	else if (!serverProfilePath.isEmpty() && !loaded.pluginName.isEmpty()) {
-		// 纯 native DLL 扩展没有 AttachedPlugin，但运行文件也要持久化到 extensions/<name>，否则重启后 regulation.json5 / main.dll 会随临时目录丢失。
+		// 纯 native DLL 扩展没有 AttachedPlugin，但运行文件也要持久化到 extensions/<name>，否则重启后
+		// regulation.json5 / main.dll 会随临时目录丢失。
 		const QString extRoot = serverProfilePath + QStringLiteral("/extensions/") + loaded.pluginName;
 		QDir().mkpath(extRoot);
 
@@ -359,7 +363,8 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 			else {
 				QFile::remove(dest);
 				if (!QFile::copy(entry.absoluteFilePath(), dest)) {
-					m_errorString = QStringLiteral("cannot copy extension runtime file: %1").arg(entry.absoluteFilePath());
+					m_errorString = QStringLiteral("cannot copy extension runtime file: %1")
+						.arg(entry.absoluteFilePath());
 					if (error)
 						*error = m_errorString;
 					return false;
@@ -375,13 +380,12 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath,
 		*out = loaded;
 
 	m_errorString.clear();
-	qInfo().noquote() << QStringLiteral("[ExtensionLoader] loadAndInstall finished, total=%1 ms").arg(installTimer.elapsed());
+	qInfo().noquote() << QStringLiteral("[ExtensionLoader] loadAndInstall finished, total=%1 ms")
+		.arg(installTimer.elapsed());
 	return true;
 }
 
-bool ExtensionLoader::extractArchive(const QString& extFilePath,
-	const QString& destDir,
-	QString* error)
+bool ExtensionLoader::extractArchive(const QString& extFilePath, const QString& destDir, QString* error)
 {
 	qInfo().noquote() << QStringLiteral("[ExtensionLoader] extract start: %1 -> %2").arg(extFilePath, destDir);
 	QElapsedTimer extractTimer;
@@ -433,12 +437,11 @@ bool ExtensionLoader::extractArchive(const QString& extFilePath,
 		outFile.close();
 	}
 
-	qInfo().noquote() << QStringLiteral("[ExtensionLoader] extract finished, elapsed=%1 ms").arg(extractTimer.elapsed());
+	qInfo().noquote() << QStringLiteral("[ExtensionLoader] extract finished, elapsed=%1 ms")
+		.arg(extractTimer.elapsed());
 	return true;
 }
-bool ExtensionLoader::findFiles(const QString& rootDir,
-	LoadedExtension* out,
-	QString* error)
+bool ExtensionLoader::findFiles(const QString& rootDir, LoadedExtension* out, QString* error)
 {
 	QDir root(rootDir);
 
@@ -502,16 +505,15 @@ bool ExtensionLoader::findFiles(const QString& rootDir,
 		}
 	}
 
-	// 纯 native DLL 扩展没有 AttachedPlugin 时，用 .ext 文件名作为扩展名，否则扩展不会出现在已安装列表里，运行时文件也不会持久化到 extensions/ 下。
+	// 纯 native DLL 扩展没有 AttachedPlugin 时，用 .ext 文件名作为扩展名，否则扩展不会出现在已安装列表里，
+	// 运行时文件也不会持久化到 extensions/ 下。
 	if (out->pluginName.isEmpty())
 		out->pluginName = QFileInfo(rootDir).fileName();
 
 	return true;
 }
 
-bool ExtensionLoader::readDescriptor(const QString& jsonPath,
-	LoadedExtension* out,
-	QString* error)
+bool ExtensionLoader::readDescriptor(const QString& jsonPath, LoadedExtension* out, QString* error)
 {
 	QFile file(jsonPath);
 	if (!file.open(QIODevice::ReadOnly)) {
@@ -541,12 +543,11 @@ bool ExtensionLoader::readDescriptor(const QString& jsonPath,
 	return true;
 }
 
-bool ExtensionLoader::installPlugin(const QString& pluginPath,
-	const QString& serverProfilePath,
-	LoadedExtension* out,
-	QString* error)
+bool ExtensionLoader::installPlugin(const QString& pluginPath, const QString& serverProfilePath,
+	LoadedExtension* out, QString* error)
 {
-	qInfo().noquote() << QStringLiteral("[ExtensionLoader] installPlugin start: %1 -> %2").arg(pluginPath, serverProfilePath);
+	qInfo().noquote() << QStringLiteral("[ExtensionLoader] installPlugin start: %1 -> %2")
+		.arg(pluginPath, serverProfilePath);
 	const QDir profileDir(serverProfilePath);
 	const QString nodeModulesPath = profileDir.filePath(QStringLiteral("node_modules"));
 	if (!QDir(nodeModulesPath).exists()) {
@@ -568,7 +569,8 @@ bool ExtensionLoader::installPlugin(const QString& pluginPath,
 	const QString extRoot = profileDir.filePath(QStringLiteral("extensions"))
 		+ QStringLiteral("/") + out->pluginName;
 	QDir().mkpath(extRoot);
-	// 运行文件（main.dll / regulation.json5 / bin 等）持久化到 extRoot；AttachedPlugin 目录跳过，下面单独拷进 node_modules。
+	// 运行文件（main.dll / regulation.json5 / bin 等）持久化到 extRoot；AttachedPlugin 目录跳过，
+	// 下面单独拷进 node_modules。
 	const QString extRootDir = QFileInfo(out->dllPath).absolutePath();
 	const QString excludedPluginDir = QFileInfo(out->pluginPath).fileName();
 	QDir sourceRoot(extRootDir);
@@ -637,7 +639,8 @@ bool ExtensionLoader::installPlugin(const QString& pluginPath,
 		return false;
 	}
 
-	// 有些扩展包的 package.json 带 UTF-8 BOM，会让 Node 的 JSON.parse 与 typert-loader 出错，所以清掉已拷贝 JSON 文件的 BOM。
+	// 有些扩展包的 package.json 带 UTF-8 BOM，会让 Node 的 JSON.parse 与 typert-loader 出错，
+	// 所以清掉已拷贝 JSON 文件的 BOM。
 	stripUtf8BomFromJsonFiles(destPluginPath);
 
 	// 把插件内部导出的 name 归一成 package.json 里的名字。
@@ -662,7 +665,8 @@ bool ExtensionLoader::installPlugin(const QString& pluginPath,
 		}
 	}
 
-	// 确保 cordis.patch.yml 里有这个插件的行；行的格式与判重规则归 ExtensionRegistry 所有（它同时负责解析这个文件做移除与残留清理），这样"一行长什么样"只有一个地方定义。
+	// 确保 cordis.patch.yml 里有这个插件的行；行的格式与判重规则归 ExtensionRegistry 所有（它同时负责
+	// 解析这个文件做移除与残留清理），这样“一行长什么样”只有一个地方定义。
 	if (ExtensionRegistry::ensurePatchEntry(serverProfilePath, out->pluginName, out->pluginName,
 		QString(), &m_errorString) == ExtensionRegistry::PatchEntryResult::Failed) {
 		if (error)
