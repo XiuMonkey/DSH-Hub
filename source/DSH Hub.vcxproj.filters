@@ -60,6 +60,8 @@
     <ClCompile Include="src\ExtensionSystem\Thunk.cpp" />
     <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp" />
     <ClCompile Include="src\ExtensionSystem\ClientExtension.cpp" />
+    <ClCompile Include="src\ExtensionSystem\UiStage.cpp" />
+    <ClCompile Include="src\core\ConnectionManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <QtTranslation Include="..\assets\translations\dshhub_en.ts" />
@@ -92,6 +94,8 @@
     <ClInclude Include="include\common\extension\ExtensionRegistry.h" />
     <ClInclude Include="include\common\extension\ExtensionInstallTask.h" />
     <ClInclude Include="include\common\session\ModelSelectionService.h" />
+    <ClInclude Include="include\ExtensionSystem\UiStage.h" />
+    <ClInclude Include="include\ui\LayoutUtils.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\assets\resources\DSH Hub.rc" />
@@ -126,6 +130,7 @@
     <QtMoc Include="include\chat\AgentMessageUnit.h" />
     <QtMoc Include="include\common\appearance\ThemeManager.h" />
     <QtMoc Include="include\common\appearance\TranslationManager.h" />
+    <QtMoc Include="include\core\ConnectionManager.h" />
   </ItemGroup>
   <ItemGroup>
     <QtRcc Include="..\assets\resources\DSHHub.qrc" />

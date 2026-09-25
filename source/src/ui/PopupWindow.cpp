@@ -1,5 +1,6 @@
 #include "ui/PopupWindow.h"
 #include "ui/LayoutUtils.h"
+#include "core/ConnectionManager.h"
 #include "ui/ShadowPanel.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
@@ -52,7 +53,10 @@ PopupWindow::PopupWindow(QWidget* parent)
 	m_closeButton->setObjectName(QStringLiteral("popupCloseButton"));
 	m_closeButton->setFixedSize(28, 28);
 	m_closeButton->setCursor(Qt::PointingHandCursor);
-	connect(m_closeButton, &QPushButton::clicked, this, &QWidget::close);
+	// 弹窗有多个实例，index 带上自身地址
+	dshRegister(
+		QStringLiteral("PopupWindow.close.%1").arg(reinterpret_cast<quintptr>(this)),
+		m_closeButton, qOverload<bool>(&QPushButton::clicked), this, &QWidget::close);
 
 	headerLayout->addWidget(m_titleLabel, 1);
 	headerLayout->addWidget(m_closeButton, 0, Qt::AlignTop);

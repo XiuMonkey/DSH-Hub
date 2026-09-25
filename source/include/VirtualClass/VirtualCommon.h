@@ -1,7 +1,6 @@
 #pragma once
 #include <qplugin.h>
 #include <qboxlayout.h>
-
 // 接口里的参数只按指针传递，前向声明就够：宿主与插件各编一份，谁都不要依赖对方 exe 里的符号。
 class QWidget;
 
@@ -20,11 +19,6 @@ public:
 	virtual bool ExternalReloadStyles() = 0;
 };
 
-Q_DECLARE_INTERFACE(VirtualTopBar, "com.DSH_HUB.VirtualCommon/1.0")
-
-// IID 是宿主与插件之间唯一的约定：插件侧 obj->qt_metacast(IID) 用的就是这个串，两边 include 同一份头文件即自洽；改它 = 改接口 ABI，旧插件会静默转换失败。
-Q_DECLARE_INTERFACE(VirtualTheme, "com.DSH_HUB.VirtualTheme/1.0")
-
 // VirtualWindow —— 宿主主窗口对外暴露的"窗口级"能力：把扩展自己的顶层窗口当成宿主弹窗（铺遮罩 + 居中显示）。
 // 与 VirtualTheme 同一套路：宿主类实现它（Q_INTERFACES），插件把注册表里取到的 mainWindow 转成 VirtualWindow* —— 转换走 qt_metacast(IID)、调用走 vtable，插件侧零宿主符号。
 class VirtualWindow {
@@ -37,8 +31,6 @@ public:
 	// 收遮罩，必须与 ExternalShowOverlay 成对：遮罩在宿主窗口上只留一层、按 owner 记名（见 WindowFrame.h），只有最后一个 release 的才真正隐藏。
 	virtual void ExternalHideOverlay(QWidget* popup) = 0;
 };
-
-Q_DECLARE_INTERFACE(VirtualWindow, "com.DSH_HUB.VirtualWindow/1.0")
 
 // ------------------------------------------------------------------
 // VirtualShell —— "架空原 UI"：把宿主整个客户区让给扩展自绘
@@ -94,4 +86,24 @@ public:
 	virtual void ExternalSetCaptionBand(int top, int height) = 0;
 };
 
+class VirtualConnectionManager {
+public:
+	struct ConnectionGroup {
+		QObject* Sender = nullptr;
+		QObject* Receiver = nullptr;
+		QByteArray mSignal;
+		QByteArray mSlot;
+	};
+	virtual ~VirtualConnectionManager() = default;
+	virtual void RegisterConnection(QString mIndex,ConnectionGroup mConnectionGroup)=0;
+	virtual void PublicRemoveConnection(QString mIndex) = 0;
+	virtual void SuspendConnection(QString mIndex) = 0;
+	virtual void TakeoverConnection(QString mIndex, QObject* mObject, QByteArray mSlot) =0;
+	virtual void Reconnect(QString mIndex)=0;
+};
+
 Q_DECLARE_INTERFACE(VirtualShell, "com.DSH_HUB.VirtualShell/1.0")
+Q_DECLARE_INTERFACE(VirtualWindow, "com.DSH_HUB.VirtualWindow/1.0")
+Q_DECLARE_INTERFACE(VirtualConnectionManager, "com.DSH_HUB.VirtualConnectionManager/1.0")
+Q_DECLARE_INTERFACE(VirtualTopBar, "com.DSH_HUB.VirtualCommon/1.0")
+Q_DECLARE_INTERFACE(VirtualTheme, "com.DSH_HUB.VirtualTheme/1.0")

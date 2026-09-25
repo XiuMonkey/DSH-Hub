@@ -2,6 +2,7 @@
 // DshApiClient 的实现。职责：维护 HTTP 请求和 WebSocket 连接；自动为每个 RPC 请求生成 rpcId；把 HTTP 响应解析成业务成功/失败回调；把 WebSocket 收到的 JSON 帧原样通过信号抛给界面层。
 
 #include "network/DshApiClient.h"
+#include "core/ConnectionManager.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -47,15 +48,18 @@ DshApiClient::DshApiClient(QObject* parent)
 	, m_nam(new QNetworkAccessManager(this))
 	, m_stream(new QWebSocket)
 {
-	connect(m_stream, &QWebSocket::textMessageReceived,
+	dshRegister("DshApiClient.001",
+		m_stream, &QWebSocket::textMessageReceived,
 		this, &DshApiClient::onStreamTextMessage);
 
-	connect(m_stream, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
-		emit transportError(QStringLiteral("stream"), m_stream->errorString());
-		qWarning().noquote() << "[DshApi] stream error:" << m_stream->errorString();
+	dshRegister("DshApiClient.002",
+		m_stream, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
+			emit transportError(QStringLiteral("stream"), m_stream->errorString());
+			qWarning().noquote() << "[DshApi] stream error:" << m_stream->errorString();
 		});
 
-	connect(m_stream, &QWebSocket::connected, this, [this] {
+	dshRegister("DshApiClient.003",
+		m_stream, &QWebSocket::connected, this, [this] {
 		m_streamConnected = true;
 		m_reconnectDelayMs = 1000; // 连上了就把退避复位
 		qInfo().noquote() << "[DshApi] mux connected -> opening $events + workspace/follow + session/control";
@@ -74,9 +78,10 @@ DshApiClient::DshApiClient(QObject* parent)
 			m_sessionStreamId.clear();
 			followSession(sessionId);
 		}
-		});
+	});
 
-	connect(m_stream, &QWebSocket::disconnected, this, [this] {
+	dshRegister("DshApiClient.004",
+		m_stream, &QWebSocket::disconnected, this, [this] {
 		const int code = static_cast<int>(m_stream->closeCode());
 		const QString reason = m_stream->closeReason();
 		const bool wasConnected = m_streamConnected;
@@ -89,7 +94,7 @@ DshApiClient::DshApiClient(QObject* parent)
 		// 断线必须自愈：服务端在收到重复 streamId / 非法帧时会主动关掉整条 mux（close 1008），不重连的话所有逻辑流都再也开不出来。
 		if (wasConnected)
 			scheduleReconnect();
-		});
+	});
 }
 
 // 析构：先关闭流通道，再释放 QWebSocket 对象。
@@ -159,6 +164,7 @@ void DshApiClient::startAuthHandshake()
 
 	qInfo().noquote() << "[DshApi] auth handshake ->" << url.toString(QUrl::RemoveQuery) << "(token hidden)";
 	QNetworkReply* reply = m_nam->get(request);
+	// reply 用完即删，不进登记表
 	connect(reply, &QNetworkReply::finished, this, [this, reply, attempt]() {
 		reply->deleteLater();
 		if (m_destroyed || attempt != m_authAttempt)
@@ -265,14 +271,15 @@ void DshApiClient::scheduleReconnect()
 	if (!m_reconnectTimer) {
 		m_reconnectTimer = new QTimer(this);
 		m_reconnectTimer->setSingleShot(true);
-		connect(m_reconnectTimer, &QTimer::timeout, this, [this] {
-			if (m_destroyed || m_baseUrl.isEmpty() || m_streamClosing)
-				return;
-			qInfo().noquote() << "[DshApi] reconnecting mux…";
-			// 启动令牌是每进程常量，但 cookie 可能随连接代次失效，重连时重换一次更稳
-			m_authenticated = false;
-			m_authCookie.clear();
-			openStreams();
+		dshRegister("DshApiClient.005",
+			m_reconnectTimer, &QTimer::timeout, this, [this] {
+				if (m_destroyed || m_baseUrl.isEmpty() || m_streamClosing)
+					return;
+				qInfo().noquote() << "[DshApi] reconnecting mux…";
+				// 启动令牌是每进程常量，但 cookie 可能随连接代次失效，重连时重换一次更稳
+				m_authenticated = false;
+				m_authCookie.clear();
+				openStreams();
 			});
 	}
 
@@ -520,6 +527,7 @@ void DshApiClient::post(
 		QJsonDocument(body).toJson(QJsonDocument::Compact));
 
 	reply->setProperty("rpcId", rpcId);
+	// reply 用完即删，不进登记表
 	connect(reply, &QNetworkReply::finished, this, &DshApiClient::onReplyFinished);
 }
 

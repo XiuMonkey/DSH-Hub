@@ -1,5 +1,6 @@
 #include "core/DSHHub.h"
 #include "core/ServerManager.h"
+#include "core/ConnectionManager.h"
 #include "core/HostExports.h"
 #include "common/util/CommonRegistry.h"
 #include "common/session/SessionCommands.h"
@@ -20,7 +21,9 @@
 #include "ui/PluginsManager.h"
 #include "ExtensionSystem/DshNamedPipeBridge.h"
 #include "ExtensionSystem/DllCaller.h"
+#include "ExtensionSystem/ExtensionDllLoader.h"
 #include "ExtensionSystem/ClientExtension.h"
+#include "common/session/SessionProjectionState.h"
 #include "ui/ExtensionManagerPopup.h"
 
 #include "chat/AgentMessageUnit.h"
@@ -35,8 +38,6 @@
 
 #include <QDebug>
 #include <QDir>
-#include <QFileInfo>
-#include <QFile>
 #include <QFileDialog>
 
 #include <QJsonArray>
@@ -58,79 +59,43 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	qInfo().noquote() << QStringLiteral("[DSH Hub] constructor started");
 	TimingLogger::mark(QStringLiteral("DSHHub ctor enter"));
 
-	// 服务spawn 提前到构造函数最前：Node 进程启动.9~1.6s）与下面
-	// 的扩展加载 / UI 构建 / 首帧真正并行，缩短初始化墙钟时间。
-	// ServerManager::start 会同步填dshHome，因此之后创建的
-	// Settings/PluginsManager 仍可正常使用它
-	m_serverManager = new ServerManager(this);
-	connect(m_serverManager, &ServerManager::baseUrlReady, this, [this](const QUrl& url) {
-		TimingLogger::mark(QStringLiteral("server baseUrl ready -> open WS streams"));
-		if (!m_api)
-			return;
-		m_api->setBaseUrl(url);
-		if (m_pluginsManager) {
-			// 注意传"干净"的 baseUrl：ServerManager 给出来的这条带启动令牌
-			// （…/?token=…），插件市场拿它拼接口地址会把 path 弄丢（见
-			// PluginMarketClient::endpointUrl 的说明）。
-			m_pluginsManager->setBaseUrl(m_api->baseUrl());
-		}
-		m_api->openStreams();
-		});
-	connect(m_serverManager, &ServerManager::errorLine, this, [this](const QString& line) {
-		if (m_messageHost && m_messageHost->current())
-			m_messageHost->addSystemMessage(qtTrId("server_status_fmt").arg(line));
-		// 移除扩展后服务端启动失败时，自动清理 cordis.patch.yml 残留
-		if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
-			m_cleanupResidualsAfterServerError = false;
-			m_extensionPopup->cleanupResiduals();
-		}
-		if (!isInitializationComplete())
-			finishInitialization();
-		});
-	connect(m_serverManager, &ServerManager::outputLine, this, [](const QString& line) {
-		// 只记录服务端里可能与插件市场/扩展/服务本身相关的输出，避免刷爆日志
-		// 设置环境变量 DSH_HUB_SERVER_TRACE=1 可转储服务端全部 stdout
-		const QString lower = line.toLower();
-		if (qEnvironmentVariableIsSet("DSH_HUB_SERVER_TRACE")
-			|| lower.contains(QStringLiteral("dshmarket"))
-			|| lower.contains(QStringLiteral("market"))
-			|| lower.contains(QStringLiteral("install"))
-			|| lower.contains(QStringLiteral("pnpm"))
-			|| lower.contains(QStringLiteral("plugin"))
-			|| lower.contains(QStringLiteral("registry"))
-			|| lower.contains(QStringLiteral("snapshot"))
-			|| lower.contains(QStringLiteral("error"))
-			|| lower.contains(QStringLiteral("fail"))) {
-			qInfo().noquote() << "[DSH Server]" << line;
-		}
-		});
-	connect(m_serverManager, &ServerManager::finished, this, [this](int exitCode, QProcess::ExitStatus) {
-		if (m_serverManager && m_serverManager->isRestarting())
-			return;
+	// 构造函数只剩这一串装配步骤 —— 它本身就是最好的初始化清单。
+	// 三个顺序约束不要打乱（每条的来由写在对应方法的注释里）：
+	//   1. installWindowShell 最早：无边框标志必须在原生窗口创建之前设置
+	//   2. installServer 里的 spawn 最前：Node 启动（约 1s）与后面的步骤并行
+	//   3. registerHostObjects 最后：客户端扩展要查注册表、往已建好的布局挂控件
 
-		if (m_api && !m_api->isConnected()) {
-			if (m_messageHost && m_messageHost->current())
-				m_messageHost->addSystemMessage(qtTrId("server_exited_fmt").arg(exitCode));
-			if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
-				m_cleanupResidualsAfterServerError = false;
-				m_extensionPopup->cleanupResiduals();
-			}
-			if (exitCode != 0 && !isInitializationComplete())
-				finishInitialization();
-		}
-		});
+	installWindowShell();
+	installServer(initialBaseUrl, initialServerProcess);
+	installToolRuntime();
 
-	m_serverManager->start(initialBaseUrl, initialServerProcess);
+	buildUi();
+	loadHighlightRules();
 
-	// DLL/COM 工具调用线程池：请求Worker 上执行（GUI 不阻塞）
-	// DllCaller 内部DLL 串行、跨 DLL 并行
-	m_toolPool = new QThreadPool(this);
-	m_toolPool->setMaxThreadCount(4);
+	installInputWiring();
+	installSidebarWiring();
+	installApiWiring();
+	installMessageWiring();
 
-	// 无边框窗口：系统标题栏与边框全部由自绘替—标题栏见 TitleBar
-	// 圆角 + 1px 描边#dshhubCentral QSS 画（main-window.qss），
+	installSettingsAndPlugins();
+
+	TimingLogger::mark(QStringLiteral("DSHHub ctor done (server spawned / UI ready)"));
+
+	registerHostObjects();
+}
+
+/**
+ * 无边框 + 自绘圆角描边窗口的初始标志。
+ *
+ * ⚠️ 必须在原生窗口创建之前设置，否则会触发窗口重建 —— Qt 一旦建了原生句柄，
+ *    再改 FramelessWindowHint 就要销毁重建。所以它是构造函数的第一步，
+ *    排在 ServerManager / DllCaller 这些不碰窗口的动作之前。
+ */
+void DSHHub::installWindowShell()
+{
+	// 无边框窗口：系统标题栏与边框全部由自绘替代 —— 标题栏见 TitleBar，
+	// 圆角 + 1px 描边由 #dshhubCentral 的 QSS 画（main-window.qss），
 	// 窗口本体透明，圆角之外什么都不画
-	// 必须在原生窗口创建之前设置，否则会触发窗口重建
 	setObjectName(QStringLiteral("dshHubWindow"));
 	setWindowFlag(Qt::FramelessWindowHint, true);
 	setAttribute(Qt::WA_TranslucentBackground, true);
@@ -139,156 +104,229 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	ThemeManager::instance().applyToWindow(this);
 	setWindowTitle(QStringLiteral("DSH Hub"));
 	setAttribute(Qt::WA_DeleteOnClose);
+}
+
+/**
+ * 服务端进程：创建 ServerManager、接上 DSHHub.001-004 四条状态线、然后 spawn。
+ *
+ * ⚠️ spawn 必须放在构造函数最前段：Node 进程启动要 0.9~1.6s，提前起能让它与
+ *    工具扩展加载 / UI 构建 / 首帧真正并行，缩短初始化墙钟时间。
+ *    ServerManager::start 会同步填充 dshHome，因此之后创建的 Settings /
+ *    PluginsManager 仍可正常使用它（见 installSettingsAndPlugins）。
+ */
+void DSHHub::installServer(const QUrl& initialBaseUrl, QProcess* initialServerProcess)
+{
+	m_serverManager = new ServerManager(this);
+	dshRegister("DSHHub.001",
+		m_serverManager, &ServerManager::baseUrlReady, this, [this](const QUrl& url) {
+			TimingLogger::mark(QStringLiteral("server baseUrl ready -> open WS streams"));
+			if (!m_api)
+				return;
+			m_api->setBaseUrl(url);
+			if (m_pluginsManager) {
+				// 注意传"干净"的 baseUrl：ServerManager 给出来的这条带启动令牌
+				// （…/?token=…），插件市场拿它拼接口地址会把 path 弄丢（见
+				// PluginMarketClient::endpointUrl 的说明）。
+				m_pluginsManager->setBaseUrl(m_api->baseUrl());
+			}
+			m_api->openStreams();
+		});
+	dshRegister("DSHHub.002",
+		m_serverManager, &ServerManager::errorLine, this, [this](const QString& line) {
+			if (m_messageHost && m_messageHost->current())
+				m_messageHost->addSystemMessage(qtTrId("server_status_fmt").arg(line));
+			// 移除扩展后服务端启动失败时，自动清理 cordis.patch.yml 残留
+			if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
+				m_cleanupResidualsAfterServerError = false;
+				m_extensionPopup->cleanupResiduals();
+			}
+			if (!isInitializationComplete())
+				finishInitialization();
+		});
+	dshRegister("DSHHub.003",
+		m_serverManager, &ServerManager::outputLine, this, [](const QString& line) {
+			// 只记录服务端里可能与插件市场/扩展/服务本身相关的输出，避免刷爆日志
+			// 设置环境变量 DSH_HUB_SERVER_TRACE=1 可转储服务端全部 stdout
+			const QString lower = line.toLower();
+			if (qEnvironmentVariableIsSet("DSH_HUB_SERVER_TRACE")
+				|| lower.contains(QStringLiteral("dshmarket"))
+				|| lower.contains(QStringLiteral("market"))
+				|| lower.contains(QStringLiteral("install"))
+				|| lower.contains(QStringLiteral("pnpm"))
+				|| lower.contains(QStringLiteral("plugin"))
+				|| lower.contains(QStringLiteral("registry"))
+				|| lower.contains(QStringLiteral("snapshot"))
+				|| lower.contains(QStringLiteral("error"))
+				|| lower.contains(QStringLiteral("fail"))) {
+				qInfo().noquote() << "[DSH Server]" << line;
+			}
+		});
+	dshRegister("DSHHub.004",
+		m_serverManager, &ServerManager::finished, this, [this](int exitCode, QProcess::ExitStatus) {
+			if (m_serverManager && m_serverManager->isRestarting())
+				return;
+
+			if (m_api && !m_api->isConnected()) {
+				if (m_messageHost && m_messageHost->current())
+					m_messageHost->addSystemMessage(qtTrId("server_exited_fmt").arg(exitCode));
+				if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
+					m_cleanupResidualsAfterServerError = false;
+					m_extensionPopup->cleanupResiduals();
+				}
+				if (exitCode != 0 && !isInitializationComplete())
+					finishInitialization();
+			}
+		});
+
+	m_serverManager->start(initialBaseUrl, initialServerProcess);
+}
+
+/**
+ * 工具扩展运行时：DLL 调用线程池 + 命名管道桥 + 启动时装载已安装的工具扩展 DLL。
+ *
+ * ⚠️ 这三条线都属于"工具扩展"（跑 Worker 线程、只做 JSON 工具调用），
+ *    与 registerHostObjects 里的"客户端扩展"不是一套东西（那个跑 GUI 线程、改宿主界面）。
+ */
+void DSHHub::installToolRuntime()
+{
+	// DLL/COM 工具调用线程池：请求在 Worker 上执行（GUI 不阻塞）；
+	// DllCaller 内部同 DLL 串行、跨 DLL 并行
+	m_toolPool = new QThreadPool(this);
+	m_toolPool->setMaxThreadCount(4);
 
 	// 启动命名管道桥接服务，供 Node/DSh server 调用 DLL 工具
 	m_pipeBridge = new DshNamedPipeBridge(this);
-	connect(m_pipeBridge, &DshNamedPipeBridge::requestReceived,
-		this, &DSHHub::handlePipeRequest);
+	dshRegister("DSHHub.005",
+		m_pipeBridge, &DshNamedPipeBridge::requestReceived, this, &DSHHub::handlePipeRequest);
 	if (!m_pipeBridge->start()) {
 		qWarning() << QStringLiteral("[DSH Pipe] failed to start:") << m_pipeBridge->errorString();
 	}
 
-	// 初始JSON5 DLL 调用
+	// 工具扩展（DLL）装载：env 显式指定（调试）或扫描已安装扩展目录；
+	// 细节全在 ExtensionSystem/ExtensionDllLoader.h
 	m_dllCaller = new DllCaller;
-	const QString appDir = QCoreApplication::applicationDirPath();
-	const QString serverProfilePath = appDir + QStringLiteral("/resources/server/harness/profiles/web");
-	const QString extensionsRoot = serverProfilePath + QStringLiteral("/extensions");
-
-	QString descriptorPath = qEnvironmentVariable("DSH_DLL_JSON5", QString());
-	QString dllPath = qEnvironmentVariable("DSH_DLL", QString());
-
-	// 显式指定了完整一对（调试用）：只加载这一份，跳过自动发现
-	if (!descriptorPath.isEmpty() && !dllPath.isEmpty()) {
-		if (QFile::exists(descriptorPath) && QFile::exists(dllPath)) {
-			if (!m_dllCaller->loadDescriptor(descriptorPath)) {
-				qWarning() << "[DllCaller] descriptor error:" << m_dllCaller->errorString();
-			}
-			else if (!m_dllCaller->loadLibrary(dllPath)) {
-				qWarning() << "[DllCaller] library error:" << m_dllCaller->errorString();
-			}
-		}
-	}
-	else {
-		// env 只给了描述符（调试）：目录下main.dll 作为库一并加
-		if (!descriptorPath.isEmpty() && QFile::exists(descriptorPath)) {
-			if (dllPath.isEmpty())
-				dllPath = QFileInfo(descriptorPath).absolutePath() + QStringLiteral("/main.dll");
-			if (QFile::exists(dllPath)) {
-				if (!m_dllCaller->loadDescriptor(descriptorPath)) {
-					qWarning() << "[DllCaller] descriptor error:" << m_dllCaller->errorString();
-				}
-				else if (!m_dllCaller->loadLibrary(dllPath)) {
-					qWarning() << "[DllCaller] library error:" << m_dllCaller->errorString();
-				}
-			}
-		}
-
-		// 自动发现：逐个加载全部已安装扩展（原先只加载扫描到的第一个；
-		// 多扩展并存后改为全部加载，DllCaller 内部按扩展名去重
-		const QStringList scanRoots = {
-			extensionsRoot,
-			serverProfilePath + QStringLiteral("/node_modules")
-		};
-		for (const QString& scanRoot : scanRoots) {
-			const QDir root(scanRoot);
-			if (!root.exists())
-				continue;
-			const QFileInfoList entries = root.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-			for (const QFileInfo& entry : entries) {
-				const QString extDir = entry.absoluteFilePath();
-				const QString candidateJson = extDir + QStringLiteral("/regulation.json5");
-				const QString candidateDll = extDir + QStringLiteral("/main.dll");
-				if (!QFile::exists(candidateJson) || !QFile::exists(candidateDll))
-					continue;
-				if (!m_dllCaller->loadDescriptor(candidateJson)) {
-					qWarning() << "[DllCaller] auto-load descriptor failed:" << candidateJson
-						<< m_dllCaller->errorString();
-					continue;
-				}
-				if (!m_dllCaller->loadLibrary(candidateDll)) {
-					qWarning() << "[DllCaller] auto-load library failed:" << candidateDll
-						<< m_dllCaller->errorString();
-				}
-			}
-		}
-	}
+	const QString serverProfilePath =
+		QCoreApplication::applicationDirPath() + QStringLiteral("/resources/server/harness/profiles/web");
+	ExtensionDllLoader::loadAll(m_dllCaller, serverProfilePath);
 
 	TimingLogger::mark(QStringLiteral("extension DLLs loaded"));
+}
 
-	buildUi();
-	// 初始化时Qt 资源中加载代码高亮规
-	{
-		if (!CodeHighlighter::instance().loadFromFile(QStringLiteral(":/DSHHub/highlight_rules.json"))) {
-			qWarning().noquote() << QStringLiteral("[DSH Hub] 未找到内置资源 highlight_rules.json，代码高亮不可用");
-		}
+/** 从 Qt 资源里加载代码高亮规则（规则文件缺失时只记警告，代码高亮不可用）。 */
+void DSHHub::loadHighlightRules()
+{
+	if (!CodeHighlighter::instance().loadFromFile(QStringLiteral(":/DSHHub/highlight_rules.json"))) {
+		qWarning().noquote() << QStringLiteral("[DSH Hub] 未找到内置资源 highlight_rules.json，代码高亮不可用");
 	}
+}
 
-	// 信号
-	// （发中止入口与流式节流定时器流式 + 输入搬进MessageHost，在那里接线
-	connect(m_chatInput, &ChatInputWidget::modelChanged, this,
+/** 输入区接线：模型 / 思考深度变更只记日志（业务动作都在输入控件自己那侧）。 */
+void DSHHub::installInputWiring()
+{
+	dshRegister("DSHHub.006",
+		m_chatInput, &ChatInputWidget::modelChanged, this,
 		[](const QString& provider, const QString& model) {
 			qInfo().noquote() << QStringLiteral("[DSH Hub] model ->")
 				<< QStringLiteral("%1/%2").arg(provider, model);
 		});
-	connect(m_chatInput, &ChatInputWidget::thinkingDepthChanged, this, [](const QString& levelId) {
-		qInfo().noquote() << QStringLiteral("[DSH Hub] thinking depth ->")
-			<< (levelId.isEmpty() ? qtTrId("common_default_suffix") : levelId);
+	dshRegister("DSHHub.007",
+		m_chatInput, &ChatInputWidget::thinkingDepthChanged, this, [](const QString& levelId) {
+			qInfo().noquote() << QStringLiteral("[DSH Hub] thinking depth ->")
+				<< (levelId.isEmpty() ? qtTrId("common_default_suffix") : levelId);
 		});
+}
 
-	connect(m_sidebar, &Sidebar::newWorkspaceRequested,
-		this, &DSHHub::onNewWorkspaceClicked);
-	connect(m_sidebar, &Sidebar::createSessionInWorkspaceRequested,
-		this, &DSHHub::onCreateSessionInWorkspace);
-	connect(m_sidebar, &Sidebar::sessionSelected,
-		this, &DSHHub::onSessionSelected);
-	connect(m_sidebar, &Sidebar::deleteSessionRequested,
-		this, &DSHHub::onDeleteSessionRequested);
-	connect(m_sidebar, &Sidebar::clearRequested,
-		this, &DSHHub::onClearConversationClicked);
+/**
+ * 侧栏 15 条接线：新建 / 切会话 / 删除 / 清空 + 设置 / 插件 / 主题 / 扩展四个入口
+ * + 会话列表事件。
+ *
+ * 这里刻意按 sender 把原本散在构造函数两处的侧栏接线合并到一起（008-012 与 025-034
+ * 原来被 api 那 12 条隔开）。各条 RegisterConnection 彼此独立，合并只影响可读性。
+ */
+void DSHHub::installSidebarWiring()
+{
+	dshRegister("DSHHub.008",
+		m_sidebar, &Sidebar::newWorkspaceRequested, this, &DSHHub::onNewWorkspaceClicked);
+	dshRegister("DSHHub.009",
+		m_sidebar, &Sidebar::createSessionInWorkspaceRequested, this, &DSHHub::onCreateSessionInWorkspace);
+	dshRegister("DSHHub.010",
+		m_sidebar, &Sidebar::sessionSelected, this, &DSHHub::onSessionSelected);
+	dshRegister("DSHHub.011",
+		m_sidebar, &Sidebar::deleteSessionRequested, this, &DSHHub::onDeleteSessionRequested);
+	dshRegister("DSHHub.012",
+		m_sidebar, &Sidebar::clearRequested, this, &DSHHub::onClearConversationClicked);
 
-	connect(m_api, &DshApiClient::connected, this, &DSHHub::handleConnected);
-	connect(m_api, &DshApiClient::muxFrameReceived, this, &DSHHub::forwardMuxFrame);
-	// 0.1.5：历史由 session/follow 快照播种，工作区workspace/follow 驱动
-	connect(m_api, &DshApiClient::sessionSnapshotReady, this, &DSHHub::handleSessionSnapshot);
+	// 侧边栏"设置 / 插件"入口：Settings 与 PluginsManager 都是常驻"系统"，
+	// 窗口开关由它们自己管理，这里只做一次接线；实际创建放在
+	// installSettingsAndPlugins（在 ServerManager::start 之后，那时 dshHome 才可用）
+	dshRegister("DSHHub.025",
+		m_sidebar, &Sidebar::settingsRequested, this,
+		[this]() { if (m_settings) m_settings->openSettings(); });
+	dshRegister("DSHHub.026",
+		m_sidebar, &Sidebar::pluginsRequested, this,
+		[this]() { if (m_pluginsManager) m_pluginsManager->openPlugins(); });
+	dshRegister("DSHHub.027",
+		m_sidebar, &Sidebar::themeToggleRequested, this, &DSHHub::toggleTheme);
+	dshRegister("DSHHub.028",
+		m_sidebar, &Sidebar::extensionsRequested, this, &DSHHub::openExtensions);
+	dshRegister("DSHHub.029",
+		m_sidebar, &Sidebar::initialSessionReady, this, &DSHHub::onInitialSessionReady);
+	// 会话列表刷新（含启动、增删会话）对可见会话排一轮首屏预取
+	dshRegister("DSHHub.030",
+		m_sidebar, &Sidebar::sessionsRefreshed, this, &DSHHub::onSessionsRefreshed);
+	dshRegister("DSHHub.031",
+		m_sidebar, &Sidebar::sessionCreated, this, &DSHHub::onSessionCreated);
+	dshRegister("DSHHub.032",
+		m_sidebar, &Sidebar::noSessionAvailable, this, &DSHHub::onNoSessionAvailable);
+	dshRegister("DSHHub.033",
+		m_sidebar, &Sidebar::sessionListError, this, &DSHHub::onSessionListError);
+	dshRegister("DSHHub.034",
+		m_sidebar, &Sidebar::sessionCreateError, this, &DSHHub::onSessionCreateError);
+}
+
+/**
+ * mux 流 / 快照 / 投影 / workspace 共 12 条：DshApiClient → DSHHub 的数据入口。
+ * 小灰字那条路（016-018）与 workspace 那条路（019-023）见各自 handler 的注释。
+ */
+void DSHHub::installApiWiring()
+{
+	dshRegister("DSHHub.013",
+		m_api, &DshApiClient::connected, this, &DSHHub::handleConnected);
+	dshRegister("DSHHub.014",
+		m_api, &DshApiClient::muxFrameReceived, this, &DSHHub::forwardMuxFrame);
+	// 0.1.5：历史由 session/follow 快照播种，工作区由 workspace/follow 驱动
+	dshRegister("DSHHub.015",
+		m_api, &DshApiClient::sessionSnapshotReady, this, &DSHHub::handleSessionSnapshot);
 	// 小灰字：快照里那份"全量折叠"的投影做种子 + session/control 的实时推送做更新。
 	// 两条都是服务端现算，客户端不读任何缓存（列表行那条读的是投影缓存检查点，已弃用）。
-	connect(m_api, &DshApiClient::sessionProjectionsReady,
-		this, &DSHHub::handleSessionProjections);
-	connect(m_api, &DshApiClient::sessionProjectionsBaselineReady,
-		this, &DSHHub::handleSessionControlBaseline);
-	connect(m_api, &DshApiClient::sessionProjectionChanged,
-		this, &DSHHub::handleSessionProjectionChanged);
-	connect(m_api, &DshApiClient::workspaceSnapshotReady, this, &DSHHub::handleWorkspaceSnapshot);
-	connect(m_api, &DshApiClient::workspaceUpserted, this, &DSHHub::handleWorkspaceUpserted);
-	connect(m_api, &DshApiClient::workspaceRemoved, this, &DSHHub::handleWorkspaceRemoved);
-	connect(m_api, &DshApiClient::workspaceReordered, this, &DSHHub::handleWorkspaceReordered);
-	connect(m_api, &DshApiClient::workspaceArchiveChanged, this, &DSHHub::handleWorkspaceArchiveChanged);
-	connect(m_api, &DshApiClient::transportError, this, &DSHHub::handleTransportError);
-	// 侧边栏“设置”入口：Settings 是常驻“设置系统”，窗口开关由它自己管理，
-	// 这里只做一次接线；实际创建放在构造函数尾部（ServerManager start 之后
-	// 那时 dshHome 才可用）
-	connect(m_sidebar, &Sidebar::settingsRequested,
-		this, [this]() { if (m_settings) m_settings->openSettings(); });
-	connect(m_sidebar, &Sidebar::pluginsRequested,
-		this, [this]() { if (m_pluginsManager) m_pluginsManager->openPlugins(); });
-	connect(m_sidebar, &Sidebar::themeToggleRequested,
-		this, &DSHHub::toggleTheme);
-	connect(m_sidebar, &Sidebar::extensionsRequested,
-		this, &DSHHub::openExtensions);
-	connect(m_sidebar, &Sidebar::initialSessionReady,
-		this, &DSHHub::onInitialSessionReady);
-	// 会话列表刷新（含启动、增删会话）对可见会话排一轮首屏预
-	connect(m_sidebar, &Sidebar::sessionsRefreshed,
-		this, &DSHHub::onSessionsRefreshed);
-	connect(m_sidebar, &Sidebar::sessionCreated,
-		this, &DSHHub::onSessionCreated);
-	connect(m_sidebar, &Sidebar::noSessionAvailable,
-		this, &DSHHub::onNoSessionAvailable);
-	connect(m_sidebar, &Sidebar::sessionListError,
-		this, &DSHHub::onSessionListError);
-	connect(m_sidebar, &Sidebar::sessionCreateError,
-		this, &DSHHub::onSessionCreateError);
+	dshRegister("DSHHub.016",
+		m_api, &DshApiClient::sessionProjectionsReady, this, &DSHHub::handleSessionProjections);
+	dshRegister("DSHHub.017",
+		m_api, &DshApiClient::sessionProjectionsBaselineReady, this, &DSHHub::handleSessionControlBaseline);
+	dshRegister("DSHHub.018",
+		m_api, &DshApiClient::sessionProjectionChanged, this, &DSHHub::handleSessionProjectionChanged);
+	dshRegister("DSHHub.019",
+		m_api, &DshApiClient::workspaceSnapshotReady, this, &DSHHub::handleWorkspaceSnapshot);
+	dshRegister("DSHHub.020",
+		m_api, &DshApiClient::workspaceUpserted, this, &DSHHub::handleWorkspaceUpserted);
+	dshRegister("DSHHub.021",
+		m_api, &DshApiClient::workspaceRemoved, this, &DSHHub::handleWorkspaceRemoved);
+	dshRegister("DSHHub.022",
+		m_api, &DshApiClient::workspaceReordered, this, &DSHHub::handleWorkspaceReordered);
+	dshRegister("DSHHub.023",
+		m_api, &DshApiClient::workspaceArchiveChanged, this, &DSHHub::handleWorkspaceArchiveChanged);
+	dshRegister("DSHHub.024",
+		m_api, &DshApiClient::transportError, this, &DSHHub::handleTransportError);
+}
 
+/**
+ * 消息区宿主 MessageHost + 首屏预取 SessionPrefetcher，含 DSHHub.035-040 六条接线。
+ *
+ * ⚠️ 必须排在 installWindowShell / buildUi 之后：它要用 buildUi 建好的滚动区、
+ *    消息布局、输入控件与"加载更多"按钮。
+ */
+void DSHHub::installMessageWiring()
+{
 	// 消息区宿主：拥有当前列表、HistoryLoader、预构建队列与消息区的 UI 反馈。
 	// 控件由 buildUi() 搭好传进来，这里只做接线。
 	//
@@ -299,27 +337,31 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	// 因此它由 ~DSHHub 在函数体里显式删除——那时控件树还活着，与搬家前的顺序一致。
 	m_messageHost = new MessageHost(m_api, &m_cacheManager, m_scrollArea, m_messagesLayout,
 		m_loadMoreButton, m_toastLabel, m_chatInput, nullptr);
-	// 没有会话时点发送：建会话要动侧边栏/会话列表，归 DSHHub；建好后由它调 sendPrompt 回来
-	connect(m_messageHost, &MessageHost::sendWithoutSession,
-		this, &DSHHub::createSessionAndSend);
-	// 首屏内容真正上屏 收掉启动遮罩（finishInitialization 幂等
-	connect(m_messageHost, &MessageHost::contentReady, this, &DSHHub::finishInitialization);
+
+	dshRegister("DSHHub.035",
+		m_messageHost, &MessageHost::sendWithoutSession, this, &DSHHub::createSessionAndSend);
+	// 首屏内容真正上屏 -> 收掉启动遮罩（finishInitialization 幂等）
+	dshRegister("DSHHub.036",
+		m_messageHost, &MessageHost::contentReady, this, &DSHHub::finishInitialization);
 	// 整列表被整体替换（缓存恢复首屏构建完成）→ 先收掉内联交互面板，
 	// 再在刷新前同步滚到底，避免先显示顶部再闪烁
-	connect(m_messageHost, &MessageHost::contentReplaced, this, [this]() {
-		m_messageHost->clearInteractionPanels();
-		m_messageHost->scrollToBottomNow();
+	dshRegister("DSHHub.037",
+		m_messageHost, &MessageHost::contentReplaced, this, [this]() {
+			m_messageHost->clearInteractionPanels();
+			m_messageHost->scrollToBottomNow();
 		});
 	// 一次对话收尾：刷新会话标题（标题在侧栏，MessageHost 不碰）
-	connect(m_messageHost, &MessageHost::turnFinished, this, [this]() {
-		if (m_sidebar && m_api)
-			m_sidebar->workspaceList()->refreshTitles(m_api);
+	dshRegister("DSHHub.038",
+		m_messageHost, &MessageHost::turnFinished, this, [this]() {
+			if (m_sidebar && m_api)
+				m_sidebar->workspaceList()->refreshTitles(m_api);
 		});
 
-	// 首屏预取：session/list 回来后并发发一session/page，结果入库供"立即点亮"
+	// 首屏预取：session/list 回来后并发发一批 session/page，结果入库供"立即点亮"
 	m_prefetcher = new SessionPrefetcher(this);
 	m_prefetcher->setApi(m_api);
-	connect(m_prefetcher, &SessionPrefetcher::historyFetched, this,
+	dshRegister("DSHHub.039",
+		m_prefetcher, &SessionPrefetcher::historyFetched, this,
 		[this](const QString& sessionId, const QJsonArray& events, int throughSeq, bool hasMore) {
 			if (!m_messageHost)
 				return;
@@ -329,15 +371,25 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 				m_messageHost->noteObservedSeq(throughSeq);
 			}
 		});
-	connect(m_prefetcher, &SessionPrefetcher::prefetchFailed,
-		this, [](const QString& sessionId, const QString& code, const QString& message) {
+	dshRegister("DSHHub.040",
+		m_prefetcher, &SessionPrefetcher::prefetchFailed, this,
+		[](const QString& sessionId, const QString& code, const QString& message) {
 			qWarning().noquote() << "[DSH Hub] prefetch failed sessionId=" << sessionId
 				<< "code=" << code << "message=" << message;
 		});
+}
 
+/**
+ * 常驻"设置系统"与"插件系统"：创建 + DSHHub.041-044 四条接线 + 顶栏 baseUrl 现取回调。
+ *
+ * ⚠️ 必须排在 installServer 之后：Settings / PluginsManager 的构造要用 dshHome，
+ *    由 ServerManager::start 同步填充。
+ */
+void DSHHub::installSettingsAndPlugins()
+{
 	// ------------------------------------------------------------------
 	// 常驻“设置系统”：随主窗口存在，自管设置窗口的开关/遮罩/居中。
-	// 放在 start() 之后创建，因Settings 构造需dshHome
+	// 放在 start() 之后创建，因为 Settings 构造需要 dshHome
 	// （由 ServerManager::start 填充）。这里只做一次业务信号接线：
 	// 预设变更只记日志、新增模型后刷新选择器
 	// ------------------------------------------------------------------
@@ -346,20 +398,23 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	// Settings 里完成，这里不需要跟着改任何本地状态或当前会话 ——
 	// 客户端不再自己存一份默认值，新建会话时也不带 agentPreset，
 	// 由服务端按它自己的设置文档组装（“默认值只影响新建会话”是服务端的语义）。
-	connect(m_settings, &Settings::agentPresetChanged, this, [](const QString& presetId) {
-		qInfo().noquote() << QStringLiteral("[DSH Hub] default agent preset ->") << presetId;
+	dshRegister("DSHHub.041",
+		m_settings, &Settings::agentPresetChanged, this, [](const QString& presetId) {
+			qInfo().noquote() << QStringLiteral("[DSH Hub] default agent preset ->") << presetId;
 		});
-	connect(m_settings, &Settings::serverSettingsSaved, this, [this]() {
-		if (m_serverManager)
-			m_serverManager->restart();
+	dshRegister("DSHHub.042",
+		m_settings, &Settings::serverSettingsSaved, this, [this]() {
+			if (m_serverManager)
+				m_serverManager->restart();
 		});
 	// 设置里新增了模型：服务端 settings 已热生效，输入框底的模型选择
 	// 需要重新拉一次会话目录才能看到新模型
-	connect(m_settings, &Settings::modelAdded, this, [this](const QString& provider, const QString& modelId) {
-		qInfo().noquote() << QStringLiteral("[DSH Hub] model added ->")
-			<< QStringLiteral("%1/%2").arg(provider, modelId);
-		if (m_chatInput)
-			m_chatInput->refreshModelCatalog();
+	dshRegister("DSHHub.043",
+		m_settings, &Settings::modelAdded, this, [this](const QString& provider, const QString& modelId) {
+			qInfo().noquote() << QStringLiteral("[DSH Hub] model added ->")
+				<< QStringLiteral("%1/%2").arg(provider, modelId);
+			if (m_chatInput)
+				m_chatInput->refreshModelCatalog();
 		});
 
 	// ------------------------------------------------------------------
@@ -368,7 +423,8 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	// serverRestartRequested（插件内“重启服务”）只在此接线一次
 	// ------------------------------------------------------------------
 	m_pluginsManager = new PluginsManager(m_api ? m_api->baseUrl() : QUrl(), this);
-	connect(m_pluginsManager, &PluginsManager::serverRestartRequested,
+	dshRegister("DSHHub.044",
+		m_pluginsManager, &PluginsManager::serverRestartRequested,
 		m_serverManager, &ServerManager::restart);
 
 	// ------------------------------------------------------------------
@@ -378,9 +434,16 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	if (m_topBar) {
 		m_topBar->setBaseUrlProvider([this]() { return m_api ? m_api->baseUrl() : QUrl(); });
 	}
+}
 
-	TimingLogger::mark(QStringLiteral("DSHHub ctor done (server spawned / UI ready)"));
-
+/**
+ * 登记宿主对象并装载客户端扩展（ClientExtension）。
+ *
+ * ⚠️ 必须最后：窗口、顶栏 / 侧栏都建好且已登记之后才能装载 —— 客户端扩展在
+ *    attachHost() 里要查注册表并往布局里挂控件。
+ */
+void DSHHub::registerHostObjects()
+{
 	// 登记主窗口：插件可用 C 导出 DshHubHostRegistryFind 按 index 取到本窗口。
 	// 侧栏/顶栏各自在自己的构造函数里登记，这里只管窗口自身。
 	// 登记是覆盖语义 —— 切主题时新窗口先建、旧窗口下一轮事件循环才析构，
@@ -547,7 +610,7 @@ DSHHub::~DSHHub()
 	// 继续登记着只会让插件拿到半残对象。Destroy 带身份校验，安全。
 	CommonRegistry::instance().Destroy(DshHostIndex::kMainWindow, this);
 
-	// 先停掉工具调用线程池，避Worker 仍在m_dllCaller / 排队任务引用 this
+	// 先停掉工具调用线程池，避免 Worker 仍在 m_dllCaller / 排队任务中引用 this
 	if (m_toolPool) {
 		m_toolPool->clear();
 		m_toolPool->waitForDone();
@@ -593,9 +656,7 @@ void DSHHub::syncComposerSession()
 	// 新会话上；控件那条高度照旧占着，只是先不画字。
 	// 重新取数不在这里做：换会话时会重开 session/follow（见 onSessionSelected /
 	// switchToFreshSession），快照里那份现算投影会自己送上门。
-	m_sessionStatsBlock = QJsonObject();
-	m_tokenUsageBlock = QJsonObject();
-	m_statsAsOfSeq = -1;
+	m_projectionState.reset();
 	if (m_chatInput)
 		m_chatInput->clearSessionStats();
 }
@@ -1070,10 +1131,12 @@ void DSHHub::openExtensions()
 	// 就会出现"遮罩先出、弹窗后到"（见 WindowFrame::showOverlayWithPopup）。
 	m_extensionPopup = new ExtensionManagerPopup(m_serverManager->dshHome() + QStringLiteral("/profiles/web"), this);
 
-	connect(m_extensionPopup, &ExtensionManagerPopup::serverRestartRequested,
+	dshRegister("DSHHub.045",
+		m_extensionPopup, &ExtensionManagerPopup::serverRestartRequested,
 		m_serverManager, &ServerManager::restart);
-	connect(m_extensionPopup, &ExtensionManagerPopup::extensionInstalled,
-		this, [this](const QString& jsonPath, const QString& dllPath) {
+	dshRegister("DSHHub.046",
+		m_extensionPopup, &ExtensionManagerPopup::extensionInstalled, this,
+		[this](const QString& jsonPath, const QString& dllPath) {
 			if (m_dllCaller && m_dllCaller->loadDescriptor(jsonPath) && m_dllCaller->loadLibrary(dllPath)) {
 				qInfo().noquote() << "[DSH DllCaller] ready tools=" << m_dllCaller->tools().join(',');
 			}
@@ -1081,24 +1144,26 @@ void DSHHub::openExtensions()
 				qWarning().noquote() << "[DSH DllCaller] load failed:" << m_dllCaller->errorString();
 			}
 		});
-	connect(m_extensionPopup, &ExtensionManagerPopup::extensionRemoving,
-		this, [this](const QString& name) {
-			// 移除扩展前先卸载该扩展的 DLL，释放文件占用（其它扩展不受影响
+	dshRegister("DSHHub.047",
+		m_extensionPopup, &ExtensionManagerPopup::extensionRemoving, this,
+		[this](const QString& name) {
+			// 移除扩展前先卸载该扩展的 DLL，释放文件占用（其它扩展不受影响）
 			if (m_dllCaller && !m_dllCaller->removeExtension(name)) {
 				qWarning() << "[DSH DllCaller] removeExtension failed:" << name
 					<< m_dllCaller->errorString();
 			}
-			// 如果移除后服务端因残留配置启动失败，自动清理一
+			// 如果移除后服务端因残留配置启动失败，自动清理一次
 			m_cleanupResidualsAfterServerError = true;
 		});
-	connect(m_extensionPopup, &PopupWindow::closed, this, [this]() {
-		// 先收遮罩、再销毁弹窗：收遮罩那一步会同步重绘一次本窗口，两件事
-		// 落在同一帧上（理由见 WindowFrame.h 的 showOverlay/hideOverlay）。
-		WindowFrame::hideOverlay(this, this);
-		if (m_extensionPopup) {
-			m_extensionPopup->deleteLater();
-			m_extensionPopup = nullptr;
-		}
+	dshRegister("DSHHub.048",
+		m_extensionPopup, &PopupWindow::closed, this, [this]() {
+			// 先收遮罩、再销毁弹窗：收遮罩那一步会同步重绘一次本窗口，两件事
+			// 落在同一帧上（理由见 WindowFrame.h 的 showOverlay/hideOverlay）。
+			WindowFrame::hideOverlay(this, this);
+			if (m_extensionPopup) {
+				m_extensionPopup->deleteLater();
+				m_extensionPopup = nullptr;
+			}
 		});
 
 	// 铺遮罩 + 居中 + 显示：背靠背完成，两者落在同一帧
@@ -1107,14 +1172,14 @@ void DSHHub::openExtensions()
 
 void DSHHub::handlePipeRequest(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket)
 {
-	// DLL/COM 调用与响应回投（Worker 线程执行 + GUI 线程发送）收敛
+	// DLL/COM 调用与响应回投（Worker 线程执行 + GUI 线程发送）收敛到
 	// ToolRequestDispatcher，见其头文件注释
 	ToolRequestDispatcher::dispatch(m_dllCaller, m_pipeBridge, m_toolPool, id, tool, args, socket);
 }
 
 /**
  * session/follow 的快照到达：把游标交给历史加载器（唤醒可能挂起的首屏请求），
- * 并直接用快照里的 records 播种首屏——省掉一session/page 往返
+ * 并直接用快照里的 records 播种首屏 —— 省掉一次 session/page 往返
  */
 void DSHHub::handleSessionSnapshot(const QString& sessionId, int cursor, const QJsonArray& records, bool hasMore)
 {
@@ -1168,7 +1233,9 @@ void DSHHub::handleSessionProjectionChanged(const QString& sessionId, const QStr
 	if (!m_chatInput || sessionId != m_sessionId)
 		return;
 
-	if (key != QStringLiteral("sessionStats") && key != QStringLiteral("tokenUsage"))
+	// 小灰字只显示这两块键；别的 key 不能进合并态 —— 它会把 asOfSeq 顶高，
+	// 接着真正要用的那块就被 higher-seq-wins 丢掉了
+	if (!SessionProjectionState::handlesKey(key))
 		return;
 
 	QJsonObject values;
@@ -1187,27 +1254,12 @@ void DSHHub::applySessionProjections(const QString& sessionId, int asOfSeq, cons
 	if (!m_chatInput || sessionId != m_sessionId)
 		return;
 
-	// 服务端那套 higher-seq-wins：比已经并进来的还旧就丢掉（列表行的检查点常常很旧）
-	if (asOfSeq < m_statsAsOfSeq)
+	// higher-seq-wins + 按块合并都在 SessionProjectionState 里（那条规则最容易写错）
+	if (!m_projectionState.merge(asOfSeq, values))
 		return;
-	m_statsAsOfSeq = asOfSeq;
-
-	const QJsonValue sessionStats = values.value(QStringLiteral("sessionStats"));
-	if (sessionStats.isObject())
-		m_sessionStatsBlock = sessionStats.toObject();
-
-	const QJsonValue tokenUsage = values.value(QStringLiteral("tokenUsage"));
-	if (tokenUsage.isObject())
-		m_tokenUsageBlock = tokenUsage.toObject();
 
 	// 合并后整包重算：控件的拼行只看结果，不关心数据是哪一次来的
-	QJsonObject merged;
-	if (!m_sessionStatsBlock.isEmpty())
-		merged.insert(QStringLiteral("sessionStats"), m_sessionStatsBlock);
-	if (!m_tokenUsageBlock.isEmpty())
-		merged.insert(QStringLiteral("tokenUsage"), m_tokenUsageBlock);
-
-	const SessionUsageStats stats = parseSessionUsage(merged);
+	const SessionUsageStats stats = parseSessionUsage(m_projectionState.merged());
 
 	// 全 0（新会话、或投影还没送出任何事件）也照样交给控件：
 	// 控件那条小灰字是"始终显示"的，全 0 时显示 0 轮 · 0 步 | 输入 0 tok · 输出 0 tok，

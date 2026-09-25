@@ -1,8 +1,9 @@
 #include "ui/Tooltip.h"
 
 #include "common/appearance/CardShadow.h"
-#include "ui/ShadowPanel.h"
 #include "common/appearance/ThemeManager.h"
+#include "core/ConnectionManager.h"
+#include "ui/ShadowPanel.h"
 
 #include <QApplication>
 #include <QCursor>
@@ -175,7 +176,8 @@ namespace
 			m_fade->setEndValue(1.0);
 			// 兜底：万一动画被打断在中间，收尾也保证是完全不透明，
 			// 否则会留下一个"看得见却以为没显示"的半透明气泡
-			connect(m_fade, &QAbstractAnimation::finished, this, [this]() { setWindowOpacity(1.0); });
+			dshRegister("Tooltip.001",
+				m_fade, &QAbstractAnimation::finished, this, [this]() { setWindowOpacity(1.0); });
 		}
 
 		QWidget* owner() const { return m_owner.data(); }

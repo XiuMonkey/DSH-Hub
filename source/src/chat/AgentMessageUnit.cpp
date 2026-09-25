@@ -151,6 +151,7 @@ QTextBrowser* AgentMessageUnit::createRichPart(const QString& objectName)
 	// dsh:// 锚点由我们自己处理（展开/收起思考、工具），普通外链照常打开
 	view->setOpenLinks(false);
 	view->setOpenExternalLinks(true);
+	// view 随气泡内容重建，不进登记表
 	connect(view, &QTextBrowser::anchorClicked,
 		this, [this](const QUrl& url) { handleAnchorClicked(url); });
 

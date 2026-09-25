@@ -6,6 +6,7 @@
 // ------------------------------------------------------------------
 
 #include "core/DSHHub.h"
+#include "core/ConnectionManager.h"
 
 #include "ui/ChatInputWidget.h"
 #include "ui/LayoutUtils.h"
@@ -116,11 +117,14 @@ void DSHHub::buildUi()
 	m_titleBar = new TitleBar(central);
 	layout->addWidget(m_titleBar);
 
-	connect(m_titleBar, &TitleBar::minimizeRequested,
+	dshRegister("Main.001",
+		m_titleBar, &TitleBar::minimizeRequested,
 		this, [this]() { WindowFrame::minimize(this); });
-	connect(m_titleBar, &TitleBar::maximizeRestoreRequested,
+	dshRegister("Main.002",
+		m_titleBar, &TitleBar::maximizeRestoreRequested,
 		this, [this]() { WindowFrame::toggleMaximize(this); });
-	connect(m_titleBar, &TitleBar::closeRequested,
+	dshRegister("Main.003",
+		m_titleBar, &TitleBar::closeRequested,
 		this, [this]() { WindowFrame::closeWindow(this); });
 
 	m_scrollArea = LayoutUtils::makeThemedScrollArea(central, QStringLiteral("chatScrollArea"));

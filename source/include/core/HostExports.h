@@ -30,6 +30,8 @@ namespace DshHostIndex
 	inline constexpr const char* kTopBar = "topbar";
 	// 样式表管理单例（ThemeManager），init() 末尾登记；插件转成 VirtualTheme* 调 ExternalApplyToWindow / ExternalReloadStyles。
 	inline constexpr const char* kThemeManager = "themeManager";
+	// 信号槽登记表单例（ConnectionManager），启动期登记；插件转成 VirtualConnectionManager* 登记/接管自己的连接。
+	inline constexpr const char* kConnectionManager = "connectionManager";
 }
 
 namespace DshHost

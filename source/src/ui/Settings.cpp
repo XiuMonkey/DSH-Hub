@@ -1,4 +1,5 @@
 #include "ui/Settings.h"
+#include "core/ConnectionManager.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
 #include "network/DshApiClient.h"
@@ -68,7 +69,8 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 
 	m_modelList = new ModelListPanel(m_api, modelPanel);
 	// 新增模型后通知宿主（宿主要刷新输入框底的模型选择器）
-	connect(m_modelList, &ModelListPanel::modelAdded, this,
+	dshRegister("Settings.001",
+		m_modelList, &ModelListPanel::modelAdded, this,
 		[this](const QString& provider, const QString& modelId) {
 			emit modelAdded(provider, modelId);
 		});
@@ -118,22 +120,24 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 	agentLayout->addWidget(agentHint);
 	agentLayout->addStretch(1);
 
-	connect(m_agentPresetButton, &QPushButton::clicked, this, [this]() {
-		if (!m_agentPresetPopup || !m_agentPresetButton)
-			return;
+	dshRegister("Settings.002",
+		m_agentPresetButton, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+			if (!m_agentPresetPopup || !m_agentPresetButton)
+				return;
 
-		if (m_agentPresetPopup->isVisible()) {
-			m_agentPresetPopup->hide();
-			return;
-		}
+			if (m_agentPresetPopup->isVisible()) {
+				m_agentPresetPopup->hide();
+				return;
+			}
 
-		m_agentPresetPopup->setFixedWidth(m_agentPresetButton->width());
-		m_agentPresetPopup->move(m_agentPresetButton->mapTo(this, QPoint(0, m_agentPresetButton->height() + 4)));
-		m_agentPresetPopup->show();
-		m_agentPresetPopup->raise();
+			m_agentPresetPopup->setFixedWidth(m_agentPresetButton->width());
+			m_agentPresetPopup->move(m_agentPresetButton->mapTo(this, QPoint(0, m_agentPresetButton->height() + 4)));
+			m_agentPresetPopup->show();
+			m_agentPresetPopup->raise();
 		});
 
-	connect(m_agentPresetList, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+	dshRegister("Settings.003",
+		m_agentPresetList, qOverload<QListWidgetItem*>(&QListWidget::itemClicked), this, [this](QListWidgetItem* item) {
 		if (!item)
 			return;
 
@@ -200,10 +204,12 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 	serverLayout->addWidget(serverSaveButton);
 	serverLayout->addStretch(1);
 
-	connect(m_serverUrlEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
-		m_serverUrlText = text.trimmed();
+	dshRegister("Settings.004",
+		m_serverUrlEdit, qOverload<const QString&>(&QLineEdit::textChanged), this, [this](const QString& text) {
+			m_serverUrlText = text.trimmed();
 		});
-	connect(serverSaveButton, &QPushButton::clicked, this, &Settings::saveServerSettings);
+	dshRegister("Settings.005",
+		serverSaveButton, qOverload<bool>(&QPushButton::clicked), this, &Settings::saveServerSettings);
 
 	// ---------------- 外观 ----------------
 	auto* appearancePanel = new QWidget(content);
@@ -226,13 +232,14 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 	appearanceFeedback->setObjectName(QStringLiteral("settingsAppearanceFeedback"));
 	appearanceFeedback->hide();
 
-	connect(stylesResetButton, &QPushButton::clicked, this, [appearanceFeedback]() {
-		ThemeManager::instance().resetStyles();
-		if (appearanceFeedback) {
-			appearanceFeedback->setText(
-				qtTrId("settings_styles_reset_done"));
-			appearanceFeedback->show();
-		}
+	dshRegister("Settings.006",
+		stylesResetButton, qOverload<bool>(&QPushButton::clicked), this, [appearanceFeedback]() {
+			ThemeManager::instance().resetStyles();
+			if (appearanceFeedback) {
+				appearanceFeedback->setText(
+					qtTrId("settings_styles_reset_done"));
+				appearanceFeedback->show();
+			}
 		});
 
 	// ---------------- 界面语言 ----------------
@@ -265,7 +272,8 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 	languageFeedback->setObjectName(QStringLiteral("settingsAppearanceFeedback"));
 	languageFeedback->hide();
 
-	connect(languageCombo, &QComboBox::currentIndexChanged, this,
+	dshRegister("Settings.007",
+		languageCombo, qOverload<int>(&QComboBox::currentIndexChanged), this,
 		[this, languageCombo, languageFeedback](int) {
 			const QString code = languageCombo->currentData().toString();
 			Translation::setSavedLanguageCode(code);
@@ -285,7 +293,6 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 				languageFeedback->show();
 			}
 		});
-
 	appearanceLayout->addWidget(appearanceHint);
 	appearanceLayout->addWidget(languageLabel);
 	appearanceLayout->addWidget(languageCombo);
@@ -311,18 +318,21 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 
 	for (int i = 0; i < navButtons.size(); ++i) {
 		const int index = i;
-		connect(navButtons.at(i), &QPushButton::clicked, this, [this, navButtons, navPanels, index]() {
-			if (m_agentPresetPopup)
-				m_agentPresetPopup->hide();
-			for (int j = 0; j < navButtons.size(); ++j) {
-				const bool active = (j == index);
-				navButtons.at(j)->setChecked(active);
-				navPanels.at(j)->setVisible(active);
-			}
+		dshRegister(
+			QStringLiteral("Settings.nav.%1").arg(index),
+			navButtons.at(i), qOverload<bool>(&QPushButton::clicked), this, [this, navButtons, navPanels, index]() {
+				if (m_agentPresetPopup)
+					m_agentPresetPopup->hide();
+				for (int j = 0; j < navButtons.size(); ++j) {
+					const bool active = (j == index);
+					navButtons.at(j)->setChecked(active);
+					navPanels.at(j)->setVisible(active);
+				}
 			});
 	}
 
-	connect(this, &PopupWindow::closed, this, &Settings::closeSettings);
+	dshRegister("Settings.008",
+		this, &PopupWindow::closed, this, &Settings::closeSettings);
 
 	setContent(content);
 

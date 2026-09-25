@@ -78,6 +78,7 @@ bool PluginMarketInstaller::ensureInstalled(const QString& appDir)
 
 	m_installer->setProcessEnvironment(env);
 
+	// m_installer 每次安装新建、完成即销毁，不进登记表
 	connect(m_installer, &QProcess::readyReadStandardOutput, this, [this]() {
 		while (m_installer->canReadLine()) {
 			const QString line = QString::fromUtf8(m_installer->readLine()).trimmed();

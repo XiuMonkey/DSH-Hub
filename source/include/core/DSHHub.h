@@ -6,6 +6,9 @@
 #include <QJsonArray>
 #include "chat/CacheHistoryManager.h"
 
+// 小灰字（会话统计）的投影合并态：按块合并 + higher-seq-wins，纯 header
+#include "common/session/SessionProjectionState.h"
+
 // 客户端扩展的全内联虚接口（本窗口实现其中的 VirtualWindow）：插件按 index 取到本对象后 qobject_cast 成接口再用。
 #include "VirtualClass/VirtualCommon.h"
 
@@ -151,6 +154,26 @@ private:
 	void switchToFreshSession(const QString& sessionId, const QString& title, bool loadHistory);
 	// 主窗口 UI 搭建（实现位于 src/ui/Main.cpp，减少构造函数体积）
 	void buildUi();
+
+	// ---- 构造函数的装配步骤（实现位于 src/core/DSHHub.cpp，按构造函数里的调用顺序排列）----
+	// 无边框标志 / objectName / 主题 QSS：必须在原生窗口创建之前
+	void installWindowShell();
+	// 服务端进程：创建 + DSHHub.001-004 接线 + spawn（spawn 必须最前，Node 启动与后面并行）
+	void installServer(const QUrl& initialBaseUrl, QProcess* initialServerProcess);
+	// 工具运行时：DLL 调用线程池 + 命名管道桥（005）+ 工具扩展 DLL 装载
+	void installToolRuntime();
+	// Qt 资源里的代码高亮规则
+	void loadHighlightRules();
+	// UI 接线四组（按 sender 分：输入区 / 侧栏 / mux-api / 消息区+预取）
+	void installInputWiring();
+	void installSidebarWiring();
+	void installApiWiring();
+	void installMessageWiring();
+	// 常驻"设置系统"/"插件系统"：创建 + 041-044 接线 + 顶栏 baseUrl 现取回调
+	void installSettingsAndPlugins();
+	// 登记宿主对象 + 装载客户端扩展（必须最后：插件要查注册表、往已建好的布局挂控件）
+	void registerHostObjects();
+
 	void callSessionCreate();
 	// 新建会话挂到哪个工作区：优先"当前会话所在的那个"，其次退回基线里的第一个（服务端 session/create 响应里没有 workspaceId，归属只能来自 workspace/follow 基线）。
 	QString preferredWorkspaceId();
@@ -194,10 +217,10 @@ private:
 	QVBoxLayout* m_messagesLayout = nullptr;
 	ChatInputWidget* m_chatInput = nullptr;
 
-	// 小灰字（会话统计）：数据全部服务端现算、客户端不读任何缓存；两块投影按块记（来源可能只带一块），每次变化整包重算一行文本推给控件。
-	QJsonObject m_sessionStatsBlock;   // projections.values.sessionStats
-	QJsonObject m_tokenUsageBlock;     // projections.values.tokenUsage
-	int m_statsAsOfSeq = -1;           // 已并进来的投影反映到哪个 seq（higher-seq-wins）
+	// 小灰字（会话统计）的合并态：数据全部服务端现算、客户端不读任何缓存。
+	// 两块投影按块记 + higher-seq-wins，规则见 common/session/SessionProjectionState.h；
+	// 换会话时由 syncComposerSession() 调 reset()。
+	SessionProjectionState m_projectionState;
 
 	DshApiClient* m_api = nullptr;
 	ServerManager* m_serverManager = nullptr;

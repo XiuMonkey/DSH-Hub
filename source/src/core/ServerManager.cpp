@@ -1,4 +1,5 @@
 #include "core/ServerManager.h"
+#include "core/ConnectionManager.h"
 #include "common/extension/ExtensionRegistry.h"
 #include "common/settings/SettingsStore.h"
 
@@ -690,9 +691,11 @@ void ServerManager::launchBundledServer(const QString& nodePath,
 	m_serverProcess->setProcessEnvironment(env);
 	m_serverProcess->setWorkingDirectory(cwd);
 
-	connect(m_serverProcess, &QProcess::readyReadStandardOutput,
+	dshRegister("ServerManager.001",
+		m_serverProcess, &QProcess::readyReadStandardOutput,
 		this, &ServerManager::handleServerOutput);
-	connect(m_serverProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+	dshRegister("ServerManager.002",
+		m_serverProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
 		this, &ServerManager::handleServerFinished);
 
 	m_serverProcess->start(nodePath, QStringList{

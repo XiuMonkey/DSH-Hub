@@ -4,6 +4,7 @@
 #include "network/DshApiClient.h"
 #include "chat/CacheHistoryManager.h"
 #include "common/session/SessionCommands.h"
+#include "core/ConnectionManager.h"
 #include "ui/ShadowPanel.h"
 
 #include <QClipboard>
@@ -650,7 +651,9 @@ void HistoryLoader::load(const QString& sessionId)
 		if (!m_cursorWatchdog) {
 			m_cursorWatchdog = new QTimer(this);
 			m_cursorWatchdog->setSingleShot(true);
-			connect(m_cursorWatchdog, &QTimer::timeout, this, [this]() {
+			dshRegister(
+				QStringLiteral("HistoryLoader.watchdog.%1").arg(reinterpret_cast<quintptr>(this)),
+				m_cursorWatchdog, &QTimer::timeout, this, [this]() {
 				if (!m_loadPending || m_sessionId.isEmpty())
 					return;
 
@@ -669,7 +672,7 @@ void HistoryLoader::load(const QString& sessionId)
 				m_loading = false;
 				emit historyError(QStringLiteral("stream-timeout"),
 					qtTrId("chat_history_timeout"));
-				});
+			});
 		}
 		m_cursorWatchdog->start(2500);
 		return;

@@ -3,6 +3,7 @@
 //   响应 {"id":1,"ok":true,"result":{...}} 或 {"id":1,"ok":false,"error":"..."}
 
 #include "ExtensionSystem/DshNamedPipeBridge.h"
+#include "core/ConnectionManager.h"
 
 #include <QJsonDocument>
 #include <QJsonParseError>
@@ -12,7 +13,9 @@ DshNamedPipeBridge::DshNamedPipeBridge(QObject* parent)
 	: QObject(parent)
 	, m_server(new QLocalServer(this))
 {
-	connect(m_server, &QLocalServer::newConnection,
+	dshRegister(
+		QStringLiteral("DshNamedPipeBridge.%1").arg(reinterpret_cast<quintptr>(this)),
+		m_server, &QLocalServer::newConnection,
 		this, &DshNamedPipeBridge::onNewConnection);
 }
 
@@ -82,6 +85,7 @@ void DshNamedPipeBridge::sendResponse(QLocalSocket* socket,
 void DshNamedPipeBridge::onNewConnection()
 {
 	while (QLocalSocket* socket = m_server->nextPendingConnection()) {
+		// socket 每连接新建、断开即销毁，不进登记表
 		connect(socket, &QLocalSocket::readyRead,
 			this, &DshNamedPipeBridge::onReadyRead);
 		connect(socket, &QLocalSocket::disconnected,

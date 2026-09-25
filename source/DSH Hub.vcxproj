@@ -35,7 +35,6 @@
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt_defaults.props')">
     <Import Project="$(QtMsBuild)\qt_defaults.props" />
   </ImportGroup>
-
   <!-- 目录重组后 $(SolutionDir) 指向 source/，这里把输出钉回仓库根的 x64\，
        免得 VS 的输出跟着解决方案搬进 source\x64\（多个脚本与既有习惯都按 <repo>\x64\ 走）。
        不经解决方案直接编工程时 $(SolutionDir) 为空，"..\x64\" 相对工程目录仍是 <repo>\x64\。 -->
@@ -67,7 +66,6 @@
     <Import Project="$(QtMsBuild)\Qt.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-
   <!-- 让 exe 从 dependence\ 子目录解析 Qt / MSVC 运行库（私有程序集）。
        Windows 的加载器默认**不搜索 exe 的子目录**，靠这一段声明才会去找；
        DLL 清单在 source\dependence.manifest。加/换 DLL 时两处都要改。 -->
@@ -137,6 +135,7 @@
     <ClCompile Include="src\chat\AgentMessageUnit.cpp" />
     <ClCompile Include="src\chat\CodeBlockView.cpp" />
     <ClCompile Include="src\common\appearance\TopBarTools.cpp" />
+    <ClCompile Include="src\core\ConnectionManager.cpp" />
     <ClCompile Include="src\ExtensionSystem\UiStage.cpp" />
     <ClCompile Include="src\ui\LoadMoreButton.cpp" />
     <ClCompile Include="src\ui\ChatInputWidget.cpp" />
@@ -234,6 +233,7 @@
   <ItemGroup>
     <QtMoc Include="include\chat\UserMessageUnit.h" />
     <QtMoc Include="include\chat\AgentMessageUnit.h" />
+    <QtMoc Include="include\core\ConnectionManager.h" />
     <ClInclude Include="include\network\DshEventParser.h" />
     <ClInclude Include="include\ExtensionSystem\ExtensionLoader.h" />
     <ClInclude Include="include\ExtensionSystem\DllCaller.h" />

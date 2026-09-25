@@ -1,4 +1,5 @@
 #include "ui/ExtensionManagerPopup.h"
+#include "core/ConnectionManager.h"
 
 #include "ExtensionSystem/ClientExtension.h"
 
@@ -72,20 +73,26 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 	setContent(content);
 	resize(720, 480);
 
-	connect(m_installButton, &QPushButton::clicked, this, &ExtensionManagerPopup::installExtension);
-	connect(m_removeButton, &QPushButton::clicked, this, &ExtensionManagerPopup::removeSelected);
-	connect(m_refreshButton, &QPushButton::clicked, this, &ExtensionManagerPopup::refresh);
-	connect(m_listWidget, &QListWidget::itemSelectionChanged, this, [this]() {
-		m_removeButton->setEnabled(m_listWidget->currentItem() != nullptr);
+	dshRegister("ExtensionManagerPopup.001",
+		m_installButton, qOverload<bool>(&QPushButton::clicked), this, &ExtensionManagerPopup::installExtension);
+	dshRegister("ExtensionManagerPopup.002",
+		m_removeButton, qOverload<bool>(&QPushButton::clicked), this, &ExtensionManagerPopup::removeSelected);
+	dshRegister("ExtensionManagerPopup.003",
+		m_refreshButton, qOverload<bool>(&QPushButton::clicked), this, &ExtensionManagerPopup::refresh);
+	dshRegister("ExtensionManagerPopup.004",
+		m_listWidget, &QListWidget::itemSelectionChanged, this, [this]() {
+			m_removeButton->setEnabled(m_listWidget->currentItem() != nullptr);
 		});
 
 	m_installTimer = new QTimer(this);
 	m_installTimer->setInterval(100);
-	connect(m_installTimer, &QTimer::timeout, this, &ExtensionManagerPopup::pollInstall);
+	dshRegister("ExtensionManagerPopup.005",
+		m_installTimer, &QTimer::timeout, this, &ExtensionManagerPopup::pollInstall);
 
 	// 关闭弹窗时等待异步安装任务结束，避免任务继续写已销毁的 this
-	connect(this, &PopupWindow::closed, this, [this]() {
-		m_installTask.waitForFinished();
+	dshRegister("ExtensionManagerPopup.006",
+		this, &PopupWindow::closed, this, [this]() {
+			m_installTask.waitForFinished();
 		});
 
 	refresh();

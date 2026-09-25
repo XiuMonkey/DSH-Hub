@@ -1,4 +1,5 @@
 #include "ui/SpinnerWidget.h"
+#include "core/ConnectionManager.h"
 
 #include "common/appearance/ThemeManager.h"
 
@@ -10,9 +11,12 @@ SpinnerWidget::SpinnerWidget(QWidget* parent)
 {
 	m_timer = new QTimer(this);
 	m_timer->setInterval(30);
-	connect(m_timer, &QTimer::timeout, this, [this]() {
-		m_angle = (m_angle + 12) % 360;
-		update();
+	// 转圈控件有多实例，index 带上自身地址
+	dshRegister(
+		QStringLiteral("SpinnerWidget.%1").arg(reinterpret_cast<quintptr>(this)),
+		m_timer, &QTimer::timeout, this, [this]() {
+			m_angle = (m_angle + 12) % 360;
+			update();
 		});
 }
 

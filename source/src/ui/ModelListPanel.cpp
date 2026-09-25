@@ -1,5 +1,6 @@
 #include "ui/ModelListPanel.h"
 #include "ui/LayoutUtils.h"
+#include "core/ConnectionManager.h"
 
 #include "network/DshApiClient.h"
 #include "common/appearance/ThemeManager.h"
@@ -244,8 +245,10 @@ ModelListEntry::ModelListEntry(const ModelInfo& info, QWidget* parent)
 	layout->addWidget(m_detail);
 	m_detail->hide();
 
-	connect(m_header, &QPushButton::clicked, this, [this]() {
-		setExpanded(!isExpanded());
+	dshRegister(
+		QStringLiteral("ModelListPanel.header.%1").arg(m_key),
+		m_header, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+			setExpanded(!isExpanded());
 		});
 }
 
@@ -354,6 +357,7 @@ public:
 		remove->setFocusPolicy(Qt::NoFocus);
 		remove->setMinimumHeight(30);
 		remove->setEnabled(canRemove);
+		// 菜单行每次 build 重建，不进登记表
 		connect(remove, &QPushButton::clicked, this, [this]() {
 			m_chosen = true;
 			accept();
@@ -452,6 +456,7 @@ public:
 			row->setMinimumHeight(kMenuOptionMinHeight);
 			row->setToolTip(discoveredTooltip(model));
 
+			// 选项行每次 build 重建，不进登记表
 			connect(row, &QPushButton::clicked, this, [this, id = model.id]() {
 				m_chosen = id;
 				accept();
@@ -599,11 +604,12 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	layout->addWidget(m_scroll, 1);
 	layout->addWidget(m_addButton);
 
-	connect(m_addButton, &QPushButton::clicked, this, [this]() {
-		if (m_form && m_form->isVisible())
-			closeForm();
-		else
-			openForm();
+	dshRegister("ModelListPanel.001",
+		m_addButton, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+			if (m_form && m_form->isVisible())
+				closeForm();
+			else
+				openForm();
 		});
 }
 
@@ -687,7 +693,9 @@ void ModelListPanel::populateRows()
 		if (m_expanded.contains(entry->key()))
 			entry->setExpanded(true);
 
-		connect(entry, &ModelListEntry::expandedChanged, this,
+		dshRegister(
+			QStringLiteral("ModelListPanel.expand.%1").arg(entry->key()),
+			entry, &ModelListEntry::expandedChanged, this,
 			[this](const QString& key, bool expanded) {
 				if (expanded)
 					m_expanded.insert(key);
@@ -696,7 +704,9 @@ void ModelListPanel::populateRows()
 			});
 
 		// 右键出菜单（目前只有删除）
-		connect(entry, &ModelListEntry::contextMenuRequested,
+		dshRegister(
+			QStringLiteral("ModelListPanel.menu.%1").arg(entry->key()),
+			entry, &ModelListEntry::contextMenuRequested,
 			this, &ModelListPanel::showRowMenu);
 
 		m_listLayout->addWidget(entry);
@@ -896,15 +906,19 @@ void ModelListPanel::buildForm(QWidget* parent)
 	actions->addWidget(m_submitButton);
 	layout->addLayout(actions);
 
-	connect(cancelButton, &QPushButton::clicked, this, [this]() { closeForm(); });
-	connect(m_submitButton, &QPushButton::clicked, this, [this]() { submitForm(); });
-	connect(m_fetchButton, &QPushButton::clicked, this, [this]() { fetchModels(); });
+	dshRegister("ModelListPanel.002",
+		cancelButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { closeForm(); });
+	dshRegister("ModelListPanel.003",
+		m_submitButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { submitForm(); });
+	dshRegister("ModelListPanel.004",
+		m_fetchButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { fetchModels(); });
 
 	// 路由换了，提示文案与按族显示的字段都要跟着换
-	connect(m_providerCombo, &QComboBox::currentIndexChanged, this, [this](int) {
-		if (m_submitting)
-			return;
-		syncFormToRoute();
+	dshRegister("ModelListPanel.005",
+		m_providerCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int) {
+			if (m_submitting)
+				return;
+			syncFormToRoute();
 		});
 }
 
@@ -1335,6 +1349,7 @@ void ModelListPanel::fetchModels()
 		auto ticks = std::make_shared<int>(0);
 		auto* sampler = new QTimer(this);
 		sampler->setInterval(10);
+		// 一次性采样器，用完自毁，不进登记表
 		connect(sampler, &QTimer::timeout, this, [this, sampler, ticks]() {
 			if (++(*ticks) >= 50) {
 				sampler->stop();

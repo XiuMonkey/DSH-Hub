@@ -1,4 +1,5 @@
 #include "ui/ChatInputWidget.h"
+#include "core/ConnectionManager.h"
 
 #include "ui/ModelSelector.h"
 #include "ui/ShadowPanel.h"
@@ -325,9 +326,10 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 
 	m_editor->installEventFilter(this);
 
-	connect(m_editor->document(), &QTextDocument::contentsChanged, this, [this]() {
-		// 放到事件循环里再算，确保 QPlainTextEdit 已经用当前 viewport 宽度完成内部布局
-		QTimer::singleShot(0, this, [this]() { adjustHeight(); });
+	dshRegister("ChatInputWidget.001",
+		m_editor->document(), &QTextDocument::contentsChanged, this, [this]() {
+			// 放到事件循环里再算，确保 QPlainTextEdit 已经用当前 viewport 宽度完成内部布局
+			QTimer::singleShot(0, this, [this]() { adjustHeight(); });
 		});
 
 	QTimer::singleShot(0, this, [this]() { adjustHeight(); });
@@ -396,9 +398,11 @@ void ChatInputWidget::buildControlRow()
 
 	// 模型 / 思考档位：同一个控件（无会话 / 目录为空时自隐藏）
 	m_modelSelector = new ModelSelector(m_controlRow);
-	connect(m_modelSelector, &ModelSelector::modelChanged,
+	dshRegister("ChatInputWidget.002",
+		m_modelSelector, &ModelSelector::modelChanged,
 		this, &ChatInputWidget::modelChanged);
-	connect(m_modelSelector, &ModelSelector::levelChanged,
+	dshRegister("ChatInputWidget.003",
+		m_modelSelector, &ModelSelector::levelChanged,
 		this, &ChatInputWidget::thinkingDepthChanged);
 	m_toolsLayout->addWidget(m_modelSelector, 0, Qt::AlignVCenter);
 
@@ -430,7 +434,8 @@ void ChatInputWidget::buildControlRow()
 	rowLayout->addStretch(1);
 	rowLayout->addLayout(m_trailingLayout);
 
-	connect(m_sendButton, &QPushButton::clicked, this, &ChatInputWidget::handleSendClicked);
+	dshRegister("ChatInputWidget.004",
+		m_sendButton, qOverload<bool>(&QPushButton::clicked), this, &ChatInputWidget::handleSendClicked);
 }
 
 void ChatInputWidget::setSessionStats(const SessionUsageStats& stats)

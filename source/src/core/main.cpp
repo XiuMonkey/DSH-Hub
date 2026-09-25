@@ -2,6 +2,9 @@
 #include "core/DSHHub.h"
 #include "common/util/Logger.h"
 #include "common/appearance/ThemeManager.h"
+#include "core/ConnectionManager.h"
+#include "common/util/CommonRegistry.h"
+#include "core/HostExports.h"
 #include "ui/Tooltip.h"
 #include "common/appearance/TranslationManager.h"
 
@@ -16,6 +19,11 @@ int main(int argc, char* argv[])
 
 	Logger::init();
 	TimingLogger::mark(QStringLiteral("Logger init (baseline)"));
+
+	// 信号槽登记表：程序级单例，登记进注册表供插件按 index 取。
+	CommonRegistry::instance().AddToRegistry(DshHostIndex::kConnectionManager,
+		&ConnectionManager::instance());
+	TimingLogger::mark(QStringLiteral("connection manager init"));
 
 	// 运行目录的外观设置文件（ClientSetting/AppearanceSetting.json）：
 	// 首次运行落一份带默认值的模板，用户才找得到也改得动；已存在则一个字都不动。

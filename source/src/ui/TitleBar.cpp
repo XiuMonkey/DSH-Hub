@@ -10,6 +10,7 @@
 // ------------------------------------------------------------------
 
 #include "ui/TitleBar.h"
+#include "core/ConnectionManager.h"
 
 #include "common/appearance/ThemeManager.h"
 
@@ -120,11 +121,14 @@ TitleBar::TitleBar(QWidget* parent)
 	layout->addWidget(m_closeButton, 0, Qt::AlignTop);
 
 	// 按钮只发意图，动作由 common/WindowFrame 落地（接线在 DSHHub 构造函数）
-	connect(m_minimizeButton, &QPushButton::clicked,
+	dshRegister("TitleBar.001",
+		m_minimizeButton, qOverload<bool>(&QPushButton::clicked),
 		this, &TitleBar::minimizeRequested);
-	connect(m_maximizeButton, &QPushButton::clicked,
+	dshRegister("TitleBar.002",
+		m_maximizeButton, qOverload<bool>(&QPushButton::clicked),
 		this, &TitleBar::maximizeRestoreRequested);
-	connect(m_closeButton, &QPushButton::clicked,
+	dshRegister("TitleBar.003",
+		m_closeButton, qOverload<bool>(&QPushButton::clicked),
 		this, &TitleBar::closeRequested);
 }
 

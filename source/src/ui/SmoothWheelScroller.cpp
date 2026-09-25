@@ -1,4 +1,5 @@
 #include "ui/SmoothWheelScroller.h"
+#include "core/ConnectionManager.h"
 
 #include <QAbstractAnimation>
 #include <QAbstractScrollArea>
@@ -43,24 +44,32 @@ SmoothWheelScroller::SmoothWheelScroller(QAbstractScrollArea* area, QObject* par
 	m_animation->setTargetObject(m_area->verticalScrollBar());
 	m_animation->setPropertyName("value"); // QAbstractSlider::value
 	m_animation->setEasingCurve(QEasingCurve::OutCubic);
-	connect(m_animation, &QPropertyAnimation::finished, this, [this]() {
-		syncTargetToBar();
+	// 补间器有多实例（每个滚动区一个），index 带上自身地址
+	const QString scrollerIndex = QStringLiteral("SmoothWheelScroller.%1").arg(reinterpret_cast<quintptr>(this));
+	dshRegister(
+		scrollerIndex + QStringLiteral(".finish"),
+		m_animation, &QPropertyAnimation::finished, this, [this]() {
+			syncTargetToBar();
 
-		// 用户是往底部滚的，但补间这 100 多毫秒里内容又长高了（流式输出就是这样）：
-		// 底部已经移走，接着追新的底部。否则会"停在离底几十像素的地方"，
-		// 而宿主的跟随判定又要求真的贴底，于是跟随就这么断了。
-		QScrollBar* bar = m_area ? m_area->verticalScrollBar() : nullptr;
-		if (m_aimedAtBottom && m_lastDeltaDown && bar && bar->maximum() > bar->value()) {
-			m_target = static_cast<double>(bar->maximum());
-			animateToTarget();
-		}
+			// 用户是往底部滚的，但补间这 100 多毫秒里内容又长高了（流式输出就是这样）：
+			// 底部已经移走，接着追新的底部。否则会"停在离底几十像素的地方"，
+			// 而宿主的跟随判定又要求真的贴底，于是跟随就这么断了。
+			QScrollBar* bar = m_area ? m_area->verticalScrollBar() : nullptr;
+			if (m_aimedAtBottom && m_lastDeltaDown && bar && bar->maximum() > bar->value()) {
+				m_target = static_cast<double>(bar->maximum());
+				animateToTarget();
+			}
 		});
 
 	if (QScrollBar* bar = m_area->verticalScrollBar()) {
 		// 用户直接拖把手 / 点箭头 / PageDown：都是明确的用户操作，补间立刻让位。
 		// （程序 setValue 不会发这两个信号，所以补间自己不会被自己打断。）
-		connect(bar, &QScrollBar::sliderPressed, this, &SmoothWheelScroller::stop);
-		connect(bar, &QScrollBar::actionTriggered, this, [this](int) { stop(); });
+		dshRegister(
+			scrollerIndex + QStringLiteral(".sliderPressed"),
+			bar, &QScrollBar::sliderPressed, this, &SmoothWheelScroller::stop);
+		dshRegister(
+			scrollerIndex + QStringLiteral(".actionTriggered"),
+			bar, &QScrollBar::actionTriggered, this, [this](int) { stop(); });
 	}
 
 	syncTargetToBar();

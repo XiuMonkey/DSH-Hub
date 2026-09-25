@@ -1,5 +1,6 @@
 #include "ui/ModelSelector.h"
 #include "ui/LayoutUtils.h"
+#include "core/ConnectionManager.h"
 
 #include <algorithm>
 
@@ -104,13 +105,19 @@ ModelSelectorRow::ModelSelectorRow(
 
 	// 勾选标记跟随按钮状态：单选组把别的行取消勾选时，这里也要同步
 	updateCheckVisibility();
-	connect(this, &QPushButton::toggled, this, [this]() { updateCheckVisibility(); });
+	// 行有多实例，index 带上自身地址
+	const QString rowIndex = QStringLiteral("ModelSelector.row.%1").arg(reinterpret_cast<quintptr>(this));
+	dshRegister(
+		rowIndex + QStringLiteral(".check"),
+		this, qOverload<bool>(&QPushButton::toggled), this, [this]() { updateCheckVisibility(); });
 
-	connect(this, &QPushButton::clicked, this, [this]() {
-		if (m_kind == LevelKind)
-			emit levelChosen(m_id);
-		else
-			emit modelChosen(m_provider, m_id);
+	dshRegister(
+		rowIndex + QStringLiteral(".click"),
+		this, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+			if (m_kind == LevelKind)
+				emit levelChosen(m_id);
+			else
+				emit modelChosen(m_provider, m_id);
 		});
 }
 
@@ -345,7 +352,8 @@ ModelSelector::ModelSelector(QWidget* parent)
 
 	m_menu = new MenuDialog(this);
 
-	connect(this, &QPushButton::clicked, this, &ModelSelector::openMenu);
+	dshRegister("ModelSelector.003",
+		this, qOverload<bool>(&QPushButton::clicked), this, &ModelSelector::openMenu);
 
 	hide();
 }
@@ -535,7 +543,9 @@ void ModelSelector::buildMenu(int maxListHeight)
 				ModelSelectorRow::ModelKind, group.id, option.id,
 				option.name, subtitle, selected, m_menu->modelSection());
 
-			connect(row, &ModelSelectorRow::modelChosen, m_menu,
+			dshRegister(
+				QStringLiteral("ModelSelector.model.%1.%2").arg(group.id, option.id),
+				row, &ModelSelectorRow::modelChosen, m_menu,
 				[this](const QString& provider, const QString& model) {
 					m_menu->accept();
 					chooseModel(provider, model);
@@ -563,7 +573,9 @@ void ModelSelector::buildMenu(int maxListHeight)
 			ModelSelectorRow::LevelKind, QString(), level.id,
 			level.name, level.description, level.id == selectedId, m_menu->levelSection());
 
-		connect(row, &ModelSelectorRow::levelChosen, m_menu,
+		dshRegister(
+			QStringLiteral("ModelSelector.level.%1").arg(level.id),
+			row, &ModelSelectorRow::levelChosen, m_menu,
 			[this](const QString& levelId) {
 				m_menu->accept();
 				chooseLevel(levelId);

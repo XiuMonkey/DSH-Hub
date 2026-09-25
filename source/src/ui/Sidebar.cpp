@@ -2,6 +2,7 @@
 #include "ui/LayoutUtils.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/util/CommonRegistry.h"
+#include "core/ConnectionManager.h"
 #include "core/HostExports.h"
 
 #include "network/DshApiClient.h"
@@ -158,7 +159,9 @@ SessionButton::SessionButton(const QString& sessionId,
 	setMinimumHeight(32);
 	setCursor(Qt::PointingHandCursor);
 
-	connect(this, &QPushButton::clicked, this, &SessionButton::handleClicked);
+	dshRegister(
+		QStringLiteral("Sidebar.sessionBtn.%1").arg(reinterpret_cast<quintptr>(this)),
+		this, qOverload<bool>(&QPushButton::clicked), this, &SessionButton::handleClicked);
 
 	updateElidedText();
 }
@@ -225,6 +228,7 @@ void SessionButton::contextMenuEvent(QContextMenuEvent* event)
 	menu.adjustSize();
 	menu.move(event->globalPos());
 
+	// 菜单是栈上临时对象，不进登记表
 	connect(deleteAction, &QPushButton::clicked, this, [this, &menu]() {
 		emit deleteRequested(m_sessionId);
 		menu.accept();
@@ -373,14 +377,16 @@ WorkspaceList::WorkspaceGroup* WorkspaceList::createWorkspaceGroup(const QString
 	group->header = new WorkspaceButton(title, group->container);
 	group->layout->addWidget(group->header);
 
-	connect(group->header, &QPushButton::toggled, this, [this, group](bool checked) {
-		group->expanded = checked;
-		group->header->setExpanded(checked);
-		for (SessionButton* button : group->buttons)
-			button->setVisible(checked);
+	dshRegister("Sidebar.002",
+		group->header, qOverload<bool>(&QPushButton::toggled), this, [this, group](bool checked) {
+			group->expanded = checked;
+			group->header->setExpanded(checked);
+			for (SessionButton* button : group->buttons)
+				button->setVisible(checked);
 		});
-	connect(group->header, &WorkspaceButton::addSessionRequested, this, [this, group]() {
-		emit createSessionInWorkspaceRequested(group->workspaceId);
+	dshRegister("Sidebar.003",
+		group->header, &WorkspaceButton::addSessionRequested, this, [this, group]() {
+			emit createSessionInWorkspaceRequested(group->workspaceId);
 		});
 
 	m_layout->insertWidget(m_layout->count() - 1, group->container);
@@ -434,12 +440,14 @@ void WorkspaceList::addSessionButton(const QString& sessionId, const QString& ti
 	WorkspaceGroup* group = groupFor(m_catalog.workspaceFor(sessionId));
 
 	auto* button = new SessionButton(sessionId, title, group->container);
-	connect(button, &SessionButton::sessionClicked, this, [this, sessionId]() {
-		setCurrentSession(sessionId);
-		emit sessionSelected(sessionId);
+	dshRegister("Sidebar.004",
+		button, &SessionButton::sessionClicked, this, [this, sessionId]() {
+			setCurrentSession(sessionId);
+			emit sessionSelected(sessionId);
 		});
-	connect(button, &SessionButton::deleteRequested, this, [this](const QString& sid) {
-		emit deleteSessionRequested(sid);
+	dshRegister("Sidebar.005",
+		button, &SessionButton::deleteRequested, this, [this](const QString& sid) {
+			emit deleteSessionRequested(sid);
 		});
 
 	group->layout->addWidget(button);
@@ -555,24 +563,26 @@ Sidebar::Sidebar(QWidget* parent)
 
 	m_layout->addLayout(bottomRow);
 
-	connect(m_clearButton, &QPushButton::clicked,
-		this, &Sidebar::clearRequested);
-	connect(m_newWorkspaceButton, &QPushButton::clicked,
-		this, &Sidebar::newWorkspaceRequested);
-	connect(m_settingsButton, &QPushButton::clicked,
-		this, &Sidebar::settingsRequested);
-	connect(m_pluginsButton, &QPushButton::clicked,
-		this, &Sidebar::pluginsRequested);
-	connect(m_themeButton, &QPushButton::clicked,
-		this, &Sidebar::themeToggleRequested);
-	connect(m_extensionButton, &QPushButton::clicked,
-		this, &Sidebar::extensionsRequested);
+	dshRegister("Sidebar.006",
+		m_clearButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::clearRequested);
+	dshRegister("Sidebar.007",
+		m_newWorkspaceButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::newWorkspaceRequested);
+	dshRegister("Sidebar.008",
+		m_settingsButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::settingsRequested);
+	dshRegister("Sidebar.009",
+		m_pluginsButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::pluginsRequested);
+	dshRegister("Sidebar.010",
+		m_themeButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::themeToggleRequested);
+	dshRegister("Sidebar.011",
+		m_extensionButton, qOverload<bool>(&QPushButton::clicked), this, &Sidebar::extensionsRequested);
 
-	connect(m_workspaceList, &WorkspaceList::sessionSelected,
-		this, &Sidebar::sessionSelected);
-	connect(m_workspaceList, &WorkspaceList::createSessionInWorkspaceRequested,
+	dshRegister("Sidebar.012",
+		m_workspaceList, &WorkspaceList::sessionSelected, this, &Sidebar::sessionSelected);
+	dshRegister("Sidebar.013",
+		m_workspaceList, &WorkspaceList::createSessionInWorkspaceRequested,
 		this, &Sidebar::createSessionInWorkspaceRequested);
-	connect(m_workspaceList, &WorkspaceList::deleteSessionRequested,
+	dshRegister("Sidebar.014",
+		m_workspaceList, &WorkspaceList::deleteSessionRequested,
 		this, &Sidebar::deleteSessionRequested);
 
 	// 登记到全局注册表：插件可用 C 导出 DshHubHostRegistryFind 按 index 取到本对象。

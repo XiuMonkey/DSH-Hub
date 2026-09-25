@@ -5,6 +5,7 @@
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
 #include "common/util/CommonRegistry.h"
+#include "core/ConnectionManager.h"
 #include "core/HostExports.h"
 
 #include <QAbstractButton>
@@ -253,9 +254,11 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 		if (!tip.isEmpty())
 			box->setToolTip(tip);
 
-		connect(box, &QCheckBox::toggled, this, [this, index](bool checked) {
-			refreshMeta();
-			emit toolVisibilityChanged(m_name, m_toolNames.at(index), checked);
+		dshRegister(
+			QStringLiteral("TopBar.tool.%1.%2").arg(m_name).arg(index),
+			box, qOverload<bool>(&QCheckBox::toggled), this, [this, index](bool checked) {
+				refreshMeta();
+				emit toolVisibilityChanged(m_name, m_toolNames.at(index), checked);
 			});
 
 		m_boxes.append(box);
@@ -270,11 +273,13 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 	m_groupToggle = new CapsuleSwitchRow(m_body);
 	m_groupToggle->setObjectName(QStringLiteral("toolsFilterGroupToggle"));
 	m_groupToggle->setChecked(m_groupHidden);
-	connect(m_groupToggle, &QAbstractButton::toggled, this, [this](bool collapsed) {
-		m_groupHidden = collapsed;
-		refreshMeta();            // 表头「配置里整组隐藏」后缀跟上
-		applyGroupHiddenVisuals(); // 文案 + 各行勾选框可用性
-		emit groupHiddenChanged(m_name, collapsed);
+	dshRegister(
+		QStringLiteral("TopBar.group.%1").arg(m_name),
+		m_groupToggle, qOverload<bool>(&QAbstractButton::toggled), this, [this](bool collapsed) {
+			m_groupHidden = collapsed;
+			refreshMeta();            // 表头「配置里整组隐藏」后缀跟上
+			applyGroupHiddenVisuals(); // 文案 + 各行勾选框可用性
+			emit groupHiddenChanged(m_name, collapsed);
 		});
 	bodyLayout->addSpacing(4);
 	bodyLayout->addWidget(m_groupToggle);
@@ -285,8 +290,10 @@ ToolsFilterDirectoryEntry::ToolsFilterDirectoryEntry(const ToolFilterDirectory& 
 	applyGroupHiddenVisuals();
 	setExpanded(true);
 
-	connect(m_header, &QPushButton::clicked, this, [this]() {
-		setExpanded(!isExpanded());
+	dshRegister(
+		QStringLiteral("TopBar.header.%1").arg(m_name),
+		m_header, qOverload<bool>(&QPushButton::clicked), this, [this]() {
+			setExpanded(!isExpanded());
 		});
 }
 
@@ -413,9 +420,12 @@ ToolsFilterPopup::ToolsFilterPopup(QWidget* parent)
 
 	setContent(content);
 
-	connect(m_showAllButton, &QPushButton::clicked, this, [this]() { setAllVisible(true); });
-	connect(m_hideAllButton, &QPushButton::clicked, this, [this]() { setAllVisible(false); });
-	connect(m_refreshButton, &QPushButton::clicked, this, [this]() { emit refreshRequested(); });
+	dshRegister("TopBar.001",
+		m_showAllButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { setAllVisible(true); });
+	dshRegister("TopBar.002",
+		m_hideAllButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { setAllVisible(false); });
+	dshRegister("TopBar.003",
+		m_refreshButton, qOverload<bool>(&QPushButton::clicked), this, [this]() { emit refreshRequested(); });
 
 	retranslateStaticText();
 	updateStatus();
@@ -495,6 +505,7 @@ void ToolsFilterPopup::rebuild()
 		// 先摆好展开状态再接线：setExpanded() 会发信号，接线在前等于自己写回自己
 		entry->setExpanded(!m_collapsed.contains(directory.name));
 
+		// entry 每次 rebuild 都重建，序号不唯一，不进登记表
 		connect(entry, &ToolsFilterDirectoryEntry::expandedChanged,
 			this, &ToolsFilterPopup::onDirectoryExpandedChanged);
 		connect(entry, &ToolsFilterDirectoryEntry::toolVisibilityChanged,
@@ -680,7 +691,8 @@ TopBar::TopBar(QWidget* parent)
 	m_toolsButton = new ToolsFilterButton(this);
 	m_layout->addWidget(m_toolsButton);
 
-	connect(m_toolsButton, &QPushButton::clicked, this, &TopBar::openToolsFilter);
+	dshRegister("TopBar.004",
+		m_toolsButton, qOverload<bool>(&QPushButton::clicked), this, &TopBar::openToolsFilter);
 
 	setTitle(QString());
 	retranslateUi();
@@ -793,8 +805,10 @@ void TopBar::openToolsFilter()
 	// 紧贴弹窗 show()（见 WindowFrame::showOverlayWithPopup）。
 	if (!m_toolsPopup) {
 		m_toolsPopup = new ToolsFilterPopup(host);
-		connect(m_toolsPopup, &PopupWindow::closed, this, &TopBar::closeToolsFilter);
-		connect(m_toolsPopup, &ToolsFilterPopup::refreshRequested, this, [this]() { loadTools(true); });
+		dshRegister("TopBar.005",
+			m_toolsPopup, &PopupWindow::closed, this, &TopBar::closeToolsFilter);
+		dshRegister("TopBar.006",
+			m_toolsPopup, &ToolsFilterPopup::refreshRequested, this, [this]() { loadTools(true); });
 	}
 
 	// 铺遮罩 + 居中 + 显示：背靠背完成，两者落在同一帧

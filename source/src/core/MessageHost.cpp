@@ -23,6 +23,7 @@
 #include "common/session/SessionCommands.h"
 #include "ui/SmoothWheelScroller.h"
 #include "ui/SpinnerWidget.h"
+#include "core/ConnectionManager.h"
 #include "common/util/Logger.h"
 
 #include <QGraphicsOpacityEffect>
@@ -57,7 +58,8 @@ MessageHost::MessageHost(DshApiClient* api,
 	m_streamTimer = new QTimer(this);
 	m_streamTimer->setInterval(50);
 	m_streamTimer->setSingleShot(true);
-	connect(m_streamTimer, &QTimer::timeout, this, &MessageHost::flushStreamingFrame);
+	dshRegister("MessageHost.001",
+		m_streamTimer, &QTimer::timeout, this, &MessageHost::flushStreamingFrame);
 
 	// 滚轮平滑：Qt 默认一格滚轮是一次同步 setValue（实测 60px 无过渡帧），观感是跳格。
 	// 这里接管聊天区视口上的滚轮并做补间；它同时提供 isAnimating()，供"跟随底部"
@@ -66,25 +68,29 @@ MessageHost::MessageHost(DshApiClient* api,
 		m_wheelScroller = new SmoothWheelScroller(m_scrollArea);
 		// 用户往上滚 = 想看更早的内容：立刻关掉跟随。这个信号是同步发出的，
 		// 而此刻滚动条通常还贴着底部（补间还没走第一步），所以必须靠信号而不是位置。
-		connect(m_wheelScroller, &SmoothWheelScroller::userScrolledAway, this, [this]() {
-			m_followBottom = false;
+		dshRegister("MessageHost.002",
+			m_wheelScroller, &SmoothWheelScroller::userScrolledAway, this, [this]() {
+				m_followBottom = false;
 			});
 
 		// 反过来：只要位置真的到了底部（用户滚回来、拖到底、或我们把它钉到底），
 		// 跟随就自动恢复——用户不需要再"做点什么"才能让流式输出重新跟上。
 		if (QScrollBar* bar = m_scrollArea->verticalScrollBar()) {
-			connect(bar, &QScrollBar::valueChanged, this, [this](int value) {
-				QScrollBar* current = m_scrollArea ? m_scrollArea->verticalScrollBar() : nullptr;
-				if (current && value >= current->maximum())
-					m_followBottom = true;
+			dshRegister("MessageHost.003",
+				bar, qOverload<int>(&QScrollBar::valueChanged), this, [this](int value) {
+					QScrollBar* current = m_scrollArea ? m_scrollArea->verticalScrollBar() : nullptr;
+					if (current && value >= current->maximum())
+						m_followBottom = true;
 				});
 		}
 	}
 
 	// 输入区的发送/中止随输入区一起归这里管
 	if (m_chatInput) {
-		connect(m_chatInput, &ChatInputWidget::sendRequested, this, &MessageHost::onSendClicked);
-		connect(m_chatInput, &ChatInputWidget::stopRequested, this, &MessageHost::onStopRequested);
+		dshRegister("MessageHost.004",
+			m_chatInput, &ChatInputWidget::sendRequested, this, &MessageHost::onSendClicked);
+		dshRegister("MessageHost.005",
+			m_chatInput, &ChatInputWidget::stopRequested, this, &MessageHost::onStopRequested);
 	}
 	// 一上来就持有一个空列表：这样所有"往当前列表写东西"的调用点都不必再判空
 	m_messages = new MessageQuery;
@@ -93,26 +99,32 @@ MessageHost::MessageHost(DshApiClient* api,
 	m_loader = new HistoryLoader(api, m_messages, m_layout, &m_history, m_scrollArea, this);
 
 	// loader 的信号全部在这里落地——DSHHub 不再需要知道分页与构建的细节
-	connect(m_loader, &HistoryLoader::firstHistoryArrived, this, [this]() {
-		emit contentReady();
+	dshRegister("MessageHost.006",
+		m_loader, &HistoryLoader::firstHistoryArrived, this, [this]() {
+			emit contentReady();
 		});
-	connect(m_loader, &HistoryLoader::loadMoreButtonVisibleChanged,
+	dshRegister("MessageHost.007",
+		m_loader, &HistoryLoader::loadMoreButtonVisibleChanged,
 		this, &MessageHost::setLoadMoreVisible);
-	connect(m_loader, &HistoryLoader::historyError, this,
+	dshRegister("MessageHost.008",
+		m_loader, &HistoryLoader::historyError, this,
 		[this](const QString& code, const QString& message) {
 			addSystemMessage(QStringLiteral("History error: %1 %2").arg(code, message));
 			// 出错也要收掉"载入中"提示：内容不会再来了，不能一直盖着
 			hideLoading();
 		});
-	connect(m_loader, &HistoryLoader::incrementalBuildReady,
+	dshRegister("MessageHost.009",
+		m_loader, &HistoryLoader::incrementalBuildReady,
 		this, &MessageHost::swapInBuilt);
-	connect(m_loader, &HistoryLoader::noMoreHistory, this, [this]() {
-		// 弹“没有更多了”toast；按钮保持原样不隐藏不改文案，
-		// 避免 hide/显隐造成整列消息重排重绘。
-		showNoMoreToast();
+	dshRegister("MessageHost.010",
+		m_loader, &HistoryLoader::noMoreHistory, this, [this]() {
+			// 弹“没有更多了”toast；按钮保持原样不隐藏不改文案，
+			// 避免 hide/显隐造成整列消息重排重绘。
+			showNoMoreToast();
 		});
 	if (m_loadMoreButton)
-		connect(m_loadMoreButton, &QPushButton::clicked, m_loader, &HistoryLoader::loadMore);
+		dshRegister("MessageHost.011",
+			m_loadMoreButton, qOverload<bool>(&QPushButton::clicked), m_loader, &HistoryLoader::loadMore);
 }
 
 MessageHost::~MessageHost()
@@ -549,6 +561,7 @@ void MessageHost::showNoMoreToast()
 	fadeIn->setDuration(180);
 	fadeIn->setStartValue(0.0);
 	fadeIn->setEndValue(1.0);
+	// 动画对象随播放自毁，不进登记表
 	connect(fadeIn, &QPropertyAnimation::finished, this, [this]() {
 		QTimer::singleShot(1200, this, [this]() {
 			if (!m_toastLabel)
@@ -567,8 +580,8 @@ void MessageHost::showNoMoreToast()
 					m_toastLabel->hide();
 				});
 			fadeOut->start(QAbstractAnimation::DeleteWhenStopped);
-			});
 		});
+	});
 	fadeIn->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
@@ -626,9 +639,10 @@ void MessageHost::showLoading()
 
 		m_loadingWatchdog = new QTimer(this);
 		m_loadingWatchdog->setSingleShot(true);
-		connect(m_loadingWatchdog, &QTimer::timeout, this, [this]() {
-			qWarning().noquote() << "[MessageHost] loading overlay watchdog fired (a hide was missed?)";
-			hideLoading();
+		dshRegister("MessageHost.012",
+			m_loadingWatchdog, &QTimer::timeout, this, [this]() {
+				qWarning().noquote() << "[MessageHost] loading overlay watchdog fired (a hide was missed?)";
+				hideLoading();
 			});
 	}
 
@@ -966,8 +980,10 @@ void MessageHost::handleMuxFrame(const QJsonObject& frame)
 		if (panel) {
 			m_interactionPanels.append(panel);
 			scrollToBottomNow();
-			connect(panel, &QObject::destroyed, this, [this, panel]() {
-				m_interactionPanels.removeAll(panel);
+			dshRegister(
+				QStringLiteral("MessageHost.panel.%1").arg(reinterpret_cast<quintptr>(panel)),
+				panel, qOverload<QObject*>(&QObject::destroyed), this, [this, panel]() {
+					m_interactionPanels.removeAll(panel);
 				});
 		}
 		else if (current()) {
@@ -979,8 +995,10 @@ void MessageHost::handleMuxFrame(const QJsonObject& frame)
 		if (panel) {
 			m_interactionPanels.append(panel);
 			scrollToBottomNow();
-			connect(panel, &QObject::destroyed, this, [this, panel]() {
-				m_interactionPanels.removeAll(panel);
+			dshRegister(
+				QStringLiteral("MessageHost.panel.%1").arg(reinterpret_cast<quintptr>(panel)),
+				panel, qOverload<QObject*>(&QObject::destroyed), this, [this, panel]() {
+					m_interactionPanels.removeAll(panel);
 				});
 		}
 		else if (current()) {
