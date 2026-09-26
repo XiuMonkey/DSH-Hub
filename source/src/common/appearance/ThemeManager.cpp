@@ -388,32 +388,6 @@ void ThemeManager::applyToWindow(QWidget* window)
 	window->setStyleSheet(m_qss);
 }
 
-void ThemeManager::ExternalApplyToWindow(QWidget* window)
-{
-	// VirtualTheme 的实现只转发：插件与宿主必须走同一条路，别加额外语义
-	applyToWindow(window);
-}
-
-bool ThemeManager::ExternalReloadStyles()
-{
-	// 未 init 时没有可信的样式目录，reload() 只会把缓存刷成 qrc 兜底的那份并换掉生效镜像
-	if (m_stylesDir.isEmpty()) {
-		qWarning().noquote() << "[Theme] ExternalReloadStyles before init, refused";
-		return false;
-	}
-
-	// 插件先覆盖 <exe>/styles/*.qss 再调这里；reload() 不重建窗口，构造期固化的东西（如 logo）不跟着变
-	reload();
-
-	// 空样式表 = 一份都没读到，如实回给插件
-	if (m_qss.isEmpty()) {
-		qWarning().noquote() << "[Theme] ExternalReloadStyles composed an empty stylesheet;"
-			" nothing was readable under:" << m_stylesDir;
-		return false;
-	}
-	return true;
-}
-
 void ThemeManager::reload()
 {
 	buildAllCaches();

@@ -157,7 +157,13 @@ public:
 	// obj->qt_metacast(IID) 或接口虚函数 vtable：⚠️ 别改成 dynamic_cast（Itanium ABI 下跨模块静默
 	// 返回 nullptr），也别 qobject_cast<TopBar*>（要 TopBar::staticMetaObject，宿主 exe 的外部符号
 	// 且零导出 ⇒ 插件 DLL 链接期 LNK2019）
-	QHBoxLayout* GetLayout() override;
+	// 指针只保证在顶栏存活期间有效，插哪里、要不要 show 由调用方决定。顺序为「标题 | stretch |
+	// 已挂的外部控件 | 工具按钮」；工具按钮贴最右是系统约定，想插在它左侧请自行用 indexOf 定位，
+	// 直接 addWidget 会把它挤离右边缘
+	QHBoxLayout* GetLayout() override
+	{
+		return m_layout;
+	}
 
 protected:
 	// 语言切换后：占位标题“未命名会话”要跟着换

@@ -654,14 +654,6 @@ TopBar::~TopBar()
 	CommonRegistry::instance().Destroy(DshHostIndex::kTopBar, this);
 }
 
-QHBoxLayout* TopBar::GetLayout()
-{
-	// 布局原样交出去：顶栏只保证指针在存活期间有效，插哪里、要不要 show 由调用方决定。
-	// 顺序为「标题 | stretch | 已挂的外部控件 | 工具按钮」；工具按钮贴最右是系统约定，
-	// 想插在它左侧请自行用 indexOf 定位，直接 addWidget 会把它挤离右边缘。
-	return m_layout;
-}
-
 void TopBar::setTitle(const QString& title)
 {
 	m_title = title;

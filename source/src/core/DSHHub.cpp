@@ -368,6 +368,11 @@ void DSHHub::registerHostObjects()
 	// ⚠️ 切主题会换掉 m_api ⇒ 插件每次 attachHost() 都要重新 findObject + cast
 	CommonRegistry::instance().AddToRegistry(DshHostIndex::kApiClient, m_api);
 
+	// 消息区宿主（VirtualMessageHost）：接管态下"正在载入会话"提示要由扩展收掉
+	// ⚠️ 与上面两条一样是覆盖语义，切主题时新窗口会顶掉旧登记
+	if (m_messageHost)
+		CommonRegistry::instance().AddToRegistry(DshHostIndex::kMessageHost, m_messageHost);
+
 	// ⚠️ 与 DllCaller 那条线不是一套：这里在 GUI 线程直接改宿主界面
 	const auto clientExtensions = ClientExtension::loadAll();
 	if (!clientExtensions.isEmpty()) {
@@ -510,6 +515,10 @@ DSHHub::~DSHHub()
 	// 切主题时新窗口已顶掉这条登记，旧窗口的注销会被拒绝
 	if (m_api)
 		CommonRegistry::instance().Destroy(DshHostIndex::kApiClient, m_api);
+
+	// 同上：m_messageHost 是本次窗口的对象，注销带身份校验
+	if (m_messageHost)
+		CommonRegistry::instance().Destroy(DshHostIndex::kMessageHost, m_messageHost);
 
 	// 先停线程池，避免 Worker 仍引用 this
 	if (m_toolPool) {
@@ -1189,22 +1198,4 @@ void DSHHub::handleTransportError(const QString& context, const QString& message
 		return;
 
 	m_messageHost->addSystemMessage(qtTrId("chat_transport_error_fmt").arg(context, message));
-}
-
-// VirtualWindow 实现：遮罩铺在宿主上、弹窗居中，两步背靠背
-// owner 用弹窗自身：遮罩按 owner 记名，show/hide 成对就不会串
-void DSHHub::ExternalShowOverlay(QWidget* popup)
-{
-	if (!popup)
-		return;
-
-	WindowFrame::showOverlayWithPopup(this, popup, popup);
-}
-
-void DSHHub::ExternalHideOverlay(QWidget* popup)
-{
-	if (!popup)
-		return;
-
-	WindowFrame::hideOverlay(this, popup);
 }

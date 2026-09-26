@@ -4,6 +4,7 @@
 // UI 反馈）；滚动区 / 按钮 / 缓存 / 会话身份是跨会话存活的单例，只借用不拥有。
 
 #include "chat/CacheHistoryManager.h"
+#include "VirtualClass/VirtualCommon.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -25,14 +26,21 @@ class QVBoxLayout;
 class QWidget;
 class SmoothWheelScroller;
 
-class MessageHost : public QObject
+class MessageHost : public QObject, public VirtualMessageHost
 {
 	Q_OBJECT
+	Q_INTERFACES(VirtualMessageHost)
 
 public:
 	MessageHost(DshApiClient* api, CacheManager* cache, QScrollArea* scrollArea, QVBoxLayout* messagesLayout,
 		LoadMoreButton* loadMoreButton, QLabel* toastLabel, ChatInputWidget* chatInput, QObject* parent = nullptr);
 	~MessageHost() override;
+
+	// VirtualMessageHost：把"正在载入会话"那层提示的收放开放给扩展。
+	// ⚠️ 实现内联转发到下面的私有方法（接口必须全内联，插件独立编译才不会 LNK2019）；
+	//    插件侧只许 qobject_cast<VirtualMessageHost*>，转 MessageHost* 会撞 LNK2019。
+	void ExternalShowSessionLoading() override { showLoading(); }
+	void ExternalHideSessionLoading() override { hideLoading(); }
 
 	// 预取到达后的处置结果（DSHHub 据此决定要不要记"见过的最新 seq"）
 	enum class PrefetchOutcome

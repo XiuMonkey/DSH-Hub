@@ -2,7 +2,8 @@
 
 // 后端接管（API takeover）的两个公共接口：宿主实现接口一（挂在 DshApiClient 上），客户端扩展
 // 实现接口二（挂在插件根对象上）。接管时内置 DSH 进程被停掉，全部出站交给扩展负责，宿主 UI
-// 沿用现有渲染管线（一行不改）。
+// 沿用现有渲染管线（一行不改）。入站数据注入不在本文件 —— 见 VirtualClass/VirtualCommon.h 的
+// VirtualMain（DSHHub 实现，宿主侧转发到同名私有槽）。
 //
 // 四条 ABI 规则（misc/DESIGN_NOTES.zh-CN.md:27-30）：
 //   · 全内联、无 out-of-line 成员 —— 任何 out-of-line 成员都是真外部符号 ⇒ 插件 LNK2019。
@@ -14,8 +15,8 @@
 //
 // 通讯形态（见 misc/API_TAKEOVER_PLAN.zh-CN.md §2.6）：插件 → 宿主走接口一，插件经
 // DshHost::findObject(DshHostIndex::kApiClient) 取址后 qobject_cast；宿主 → 插件走接口二，
-// 宿主在 ClientExtension 装载时 cast 一次并登记到 kApiSink。入站数据注入不走接口，插件用
-// 字符串 QMetaObject::invokeMethod 调 DSHHub 的槽。
+// 宿主在 ClientExtension 装载时 cast 一次并登记到 kApiSink。入站数据注入走 VirtualMain：插件经
+// DshHost::findObject(DshHostIndex::kMainWindow) 取址后 qobject_cast。
 //
 // 出站请求：一元 RPC 汇成 (method, argsJson)，扩展用 CompleteCall / FailCall 回填成功回调该
 // 拿到的 value（不是 server-response 信封）；流控制只有 "$takeover/stream-open" 与

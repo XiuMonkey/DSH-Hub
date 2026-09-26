@@ -41,6 +41,11 @@ namespace DshHostIndex
 	// ⚠️ 切主题会换掉这个对象，插件必须在每次 attachHost() 里重新取（旧 QPointer 只会变空，不会变野）。
 	inline constexpr const char* kApiClient = "apiClient";
 	inline constexpr const char* kApiSink = "apiSink";
+	// 消息区宿主（MessageHost），随主窗口创建/销毁；插件转成 VirtualClass/VirtualCommon.h 的
+	// VirtualMessageHost* 来收掉"正在载入会话"那层提示（接管态下首屏历史是插件喂的，宿主自己
+	// 只会在缓存命中/历史出错时收，别的时候要等它 6 秒看门狗）。
+	// ⚠️ 切主题会换掉这个对象，插件每次用它都重新取（旧 QPointer 只会变空，不会变野）。
+	inline constexpr const char* kMessageHost = "messageHost";
 }
 
 namespace DshHost

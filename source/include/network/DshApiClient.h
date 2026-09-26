@@ -5,8 +5,10 @@
 // 逻辑流 id 必须唯一，重复会让服务端 close(1008) 关掉整条 mux。
 
 #include <QByteArray>
+#include <QDebug>
 #include <QHash>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QStringList>
@@ -17,10 +19,9 @@
 #include <functional>
 
 // 接管的两半接口：本类实现 VirtualApiHost（插件调宿主），扩展实现 VirtualApiSink。
-// ⚠️ 本类成员全在 .cpp，插件侧碰到这个类型就 LNK2019。
+// ⚠️ 插件侧只许经 VirtualApiHost 虚函数访问本类，别引用成员（宿主 exe 符号零导出，直接引用即 LNK2019）。
 #include "VirtualClass/VirtualApiTakeover.h"
 
-class QJsonDocument;
 class QNetworkAccessManager;
 class QNetworkReply;
 class QTimer;
@@ -65,12 +66,108 @@ public:
 	// 后端是否处于接管态（原始上报/提问应答的分流、DSHHub 的旁路开关都看它）
 	bool isTakenover() const { return m_takenover; }
 
-	// 插件调用宿主（插件 → 宿主）。幂等：拿不到扩展接收端时拒绝接管并记警告
-	void Takenover(bool on) override;
+	// VirtualApiHost 接口（插件调用宿主，插件 → 宿主）：三个方法的实现全内联在本头文件
+	// 幂等：拿不到扩展接收端时拒绝接管并记警告
+	void Takenover(bool on) override
+	{
+		// 放行的话接管态下所有出站都会石沉大海
+		if (on && !apiSink()) {
+			qWarning().noquote() << "[DshApi] 拒绝接管：没有客户端扩展实现 VirtualApiSink"
+				"（kApiSink 未登记或该扩展已被卸载）";
+			return;
+		}
+
+		const bool changed = (on != m_takenover);
+		m_takenover = on;
+		if (changed) {
+			if (on)
+				enterTakenoverState();
+			else
+				leaveTakenoverState();
+		}
+
+		// 宿主侧动作本就幂等，重复拨同一状态也照发一次
+		emit takeoverChanged(on);
+
+		qInfo().noquote() << "[DshApi] 后端接管" << (on ? "开启" : "关闭")
+			<< "changed=" << changed;
+	}
+
 	// 扩展回填成功结果（resultJson = 成功回调该拿到的 value）
-	void CompleteCall(const char* rpcId, const char* resultJson) override;
+	void CompleteCall(const char* rpcId, const char* resultJson) override
+	{
+		if (m_destroyed)
+			return;
+
+		const QString id = QString::fromUtf8(rpcId ? rpcId : "");
+		if (id.isEmpty()) {
+			qWarning().noquote() << "[DshApi] CompleteCall ignored: empty rpcId";
+			return;
+		}
+
+		const auto it = m_pending.constFind(id);
+		if (it == m_pending.constEnd()) {
+			// 正常情形之一：回填的是 fire-and-forget 的 rpcId，只是警告
+			qWarning().noquote() << "[DshApi] CompleteCall: 不认识的 rpcId（重复回填 / 流控制的 id）:"
+				<< id;
+			return;
+		}
+
+		PendingCall pending = it.value();
+		m_pending.erase(it);
+		if (!pending.takeover)
+			qWarning().noquote() << "[DshApi] CompleteCall 命中一条非接管态的请求: path=" << pending.path;
+
+		QJsonParseError parseError{};
+		const QByteArray json = QByteArray(resultJson ? resultJson : "");
+		QJsonDocument doc = QJsonDocument::fromJson(json, &parseError);
+		// 包了数组的回退（取值时要拆掉那一层）
+		bool unwrapScalar = false;
+		if (parseError.error != QJsonParseError::NoError) {
+			// 顶层只接受对象/数组，而成功值可以是裸标量：包一层数组再取回唯一元素
+			parseError = QJsonParseError{};
+			const QJsonDocument wrapped = QJsonDocument::fromJson(QByteArray("[") + json + QByteArray("]"), &parseError);
+			if (parseError.error != QJsonParseError::NoError) {
+				qWarning().noquote() << "[DshApi] CompleteCall: resultJson 不是合法 JSON rpcId=" << id
+					<< "error=" << parseError.errorString();
+				if (pending.onError)
+					pending.onError(RpcError{ QStringLiteral("takenover-bad-result"),
+						parseError.errorString() });
+				return;
+			}
+			doc = wrapped;
+			unwrapScalar = true;
+		}
+
+		// 不区分三种回调语义，照存进去的那个喂
+		const QJsonValue value = unwrapScalar ? doc.array().at(0)
+			: doc.isArray() ? QJsonValue(doc.array())
+			: doc.isObject() ? QJsonValue(doc.object())
+			: QJsonValue();
+
+		qInfo().noquote() << "[DshApi] 接管态回填 path=" << pending.path << "rpcId=" << id;
+		if (pending.onSuccess)
+			pending.onSuccess(value);
+	}
+
 	// 扩展回填失败（code / message 原样进 RpcError）
-	void FailCall(const char* rpcId, const char* code, const char* message) override;
+	void FailCall(const char* rpcId, const char* code, const char* message) override
+	{
+		if (m_destroyed)
+			return;
+
+		const QString id = QString::fromUtf8(rpcId ? rpcId : "");
+		if (id.isEmpty()) {
+			qWarning().noquote() << "[DshApi] FailCall ignored: empty rpcId";
+			return;
+		}
+
+		QString errorCode = QString::fromUtf8(code ? code : "");
+		if (errorCode.isEmpty())
+			errorCode = QStringLiteral("takenover-error");
+
+		failPending(id, errorCode, QString::fromUtf8(message ? message : ""));
+	}
 
 	// 一元 RPC：payload 是本端点的 args 内容（本类包一层 {"args": …}）；endpoint 用斜杠（"session/list"），
 	// 返回裸数组的端点改用 callMethodValue

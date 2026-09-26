@@ -1,6 +1,6 @@
 #pragma once
 
-// 主窗口：窗口 / 侧栏 / 输入区接线，并实现客户端扩展的 VirtualWindow 与 VirtualShell 两个宿主接口。
+// 主窗口：窗口 / 侧栏 / 输入区接线，并实现客户端扩展的 VirtualMain 与 VirtualShell 两个宿主接口。
 
 #include <QJsonObject>
 #include <QJsonArray>
@@ -10,6 +10,7 @@
 // 客户端扩展的全内联虚接口；插件按 index 取到本对象再 qobject_cast
 #include "VirtualClass/VirtualCommon.h"
 #include "ExtensionSystem/UiStage.h"
+#include "common/appearance/WindowFrame.h"
 #include <QMainWindow>
 #include <QProcess>
 #include <QString>
@@ -42,10 +43,10 @@ class QVBoxLayout;
 class QScrollArea;
 class LoadMoreButton;
 
-class DSHHub : public QMainWindow, public VirtualWindow, public VirtualShell
+class DSHHub : public QMainWindow, public VirtualMain, public VirtualShell
 {
 	Q_OBJECT
-		Q_INTERFACES(VirtualWindow VirtualShell)
+	Q_INTERFACES(VirtualMain VirtualShell)
 
 public:
 	explicit DSHHub(QWidget* parent = nullptr, const QUrl& initialBaseUrl = QUrl(),
@@ -59,9 +60,23 @@ public:
 
 	QProcess* takeServerProcess();
 
-	// ⚠️ 插件侧只能 qobject_cast<VirtualWindow*>（转 DSHHub* 撞 LNK2019，dynamic_cast 跨模块静默返回 nullptr）
-	void ExternalShowOverlay(QWidget* popup) override;
-	void ExternalHideOverlay(QWidget* popup) override;
+	// VirtualMain 接口：遮罩铺在宿主上、弹窗居中；逻辑全在 WindowFrame.cpp，本类只做转发
+	// ⚠️ 插件侧只能 qobject_cast<VirtualMain*>（转 DSHHub* 撞 LNK2019，dynamic_cast 跨模块静默返回 nullptr）
+	// owner 用弹窗自身：遮罩按 owner 记名，show/hide 成对就不会串
+	void ExternalShowOverlay(QWidget* popup) override
+	{
+		if (!popup)
+			return;
+
+		WindowFrame::showOverlayWithPopup(this, popup, popup);
+	}
+	void ExternalHideOverlay(QWidget* popup) override
+	{
+		if (!popup)
+			return;
+
+		WindowFrame::hideOverlay(this, popup);
+	}
 
 	// VirtualShell 接口（架空原 UI）：逻辑全在 UiStage.cpp，本类只做转发
 	QWidget* ExternalAcquireStage(const char* owner) override
@@ -79,6 +94,43 @@ public:
 	void ExternalSetCaptionBand(int top, int height) override
 	{
 		UiStage::setCaptionBand(this, top, height);
+	}
+
+	// VirtualMain 的入站注入面（后端接管专用）：全部转发到下面那批同名私有槽，槽不对外
+	void HandleConnected() override { handleConnected(); }
+	void ForwardMuxFrame(const QJsonObject& frame) override { forwardMuxFrame(frame); }
+	void HandleTransportError(const QString& context, const QString& message) override
+	{
+		handleTransportError(context, message);
+	}
+	void HandleSessionSnapshot(const QString& sessionId, int cursor, const QJsonArray& records,
+		bool hasMore) override
+	{
+		handleSessionSnapshot(sessionId, cursor, records, hasMore);
+	}
+	void HandleSessionProjections(const QString& sessionId, int asOfSeq, const QJsonObject& values) override
+	{
+		handleSessionProjections(sessionId, asOfSeq, values);
+	}
+	void HandleSessionControlBaseline(const QJsonObject& projectionsBySession) override
+	{
+		handleSessionControlBaseline(projectionsBySession);
+	}
+	void HandleSessionProjectionChanged(const QString& sessionId, const QString& key,
+		const QJsonValue& value, int seq) override
+	{
+		handleSessionProjectionChanged(sessionId, key, value, seq);
+	}
+	void HandleWorkspaceSnapshot(const QJsonArray& items, const QJsonArray& archivedSessionIds) override
+	{
+		handleWorkspaceSnapshot(items, archivedSessionIds);
+	}
+	void HandleWorkspaceUpserted(const QJsonObject& workspace) override { handleWorkspaceUpserted(workspace); }
+	void HandleWorkspaceRemoved(const QString& workspaceId) override { handleWorkspaceRemoved(workspaceId); }
+	void HandleWorkspaceReordered(const QStringList& workspaceIds) override { handleWorkspaceReordered(workspaceIds); }
+	void HandleWorkspaceArchiveChanged(const QJsonArray& archivedSessionIds) override
+	{
+		handleWorkspaceArchiveChanged(archivedSessionIds);
 	}
 
 signals:

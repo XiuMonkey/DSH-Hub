@@ -331,14 +331,20 @@ WorkspaceList::WorkspaceGroup* WorkspaceList::createWorkspaceGroup(const QString
 	group->header = new WorkspaceButton(title, group->container);
 	group->layout->addWidget(group->header);
 
-	dshRegister("Sidebar.002", group->header, qOverload<bool>(&QPushButton::toggled), this,
+	// ⚠️ 同上：这两个索引也必须逐分组唯一，否则**只有最后一个工作区的展开/折叠与"＋新建会话"**
+	//    还能用（RegisterConnection 会先断掉同名的旧连接）。索引带上 workspaceId；
+	//    未分组组（workspaceId 为空）用一个固定后缀，它全局只有一份。
+	const QString groupKey = workspaceId.isEmpty() ? QStringLiteral("default") : workspaceId;
+	dshRegister(QStringLiteral("Sidebar.002.%1").arg(groupKey),
+		group->header, qOverload<bool>(&QPushButton::toggled), this,
 		[this, group](bool checked) {
 			group->expanded = checked;
 			group->header->setExpanded(checked);
 			for (SessionButton* button : group->buttons)
 				button->setVisible(checked);
 		});
-	dshRegister("Sidebar.003", group->header, &WorkspaceButton::addSessionRequested, this,
+	dshRegister(QStringLiteral("Sidebar.003.%1").arg(groupKey),
+		group->header, &WorkspaceButton::addSessionRequested, this,
 		[this, group]() {
 			emit createSessionInWorkspaceRequested(group->workspaceId);
 		});
@@ -394,12 +400,19 @@ void WorkspaceList::addSessionButton(const QString& sessionId, const QString& ti
 	WorkspaceGroup* group = groupFor(m_catalog.workspaceFor(sessionId));
 
 	auto* button = new SessionButton(sessionId, title, group->container);
-	dshRegister("Sidebar.004", button, &SessionButton::sessionClicked, this,
+	// ⚠️ 索引必须**逐对象唯一**：dshRegister 走 ConnectionManager::RegisterConnection，而它会先
+	//    `PublicRemoveConnection(index)` 再 connect —— 同一个索引用第二次就把上一次的连接断掉。
+	//    这里历史上是每个按钮都用 "Sidebar.004"/"Sidebar.005"，结果**只有最后加进来的那个会话按钮**
+	//    还连着信号：点其它会话会变灰（setCurrentSession 在按钮自己的 clicked 里）却永远不切换，
+	//    右键删除也一起失效。故索引带上 sessionId。
+	const QString clickIndex = QStringLiteral("Sidebar.004.%1").arg(sessionId);
+	const QString deleteIndex = QStringLiteral("Sidebar.005.%1").arg(sessionId);
+	dshRegister(clickIndex, button, &SessionButton::sessionClicked, this,
 		[this, sessionId]() {
 			setCurrentSession(sessionId);
 			emit sessionSelected(sessionId);
 		});
-	dshRegister("Sidebar.005", button, &SessionButton::deleteRequested, this,
+	dshRegister(deleteIndex, button, &SessionButton::deleteRequested, this,
 		[this](const QString& sid) {
 			emit deleteSessionRequested(sid);
 		});
