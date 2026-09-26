@@ -2,13 +2,11 @@
 
 // 信号槽登记表：按 index 管理 connect，支持取消 / 挂起 / 接管 / 重连。
 // QObject 必须是第一个基类（moc 假定首个基类即 QObject 基类）。
-// 文末的 dshRegister 是宿主的内部短接入口；插件侧的新增订阅走 ProtectedRegisterConnection。
+// 文末的 dshRegister 是宿主的内部短接入口。
 //
-// 匿名性：宿主侧的信号与槽默认**不对外**。插件能拿到的是 QObject*（经 kSidebar 之类 index），
-// 而 QObject 元对象里含**全部**信号 —— 所以任何"插件自己指定 signal 去 connect"的入口都等于
-// 把整套信号面暴露出去（拿到 kSidebar 就能连它任意信号，宿主无从区分哪一个被准了）。
-// 因此 RegisterConnection 不上虚接口（见 VirtualCommon.h 的注释），只在宿主内部用；
-// 插件要新增订阅只有一条路：ProtectedRegisterConnection，由它按白名单放行。
+// 匿名性：插件的 QObject* 元对象里含全部信号，任何"插件自定 signal 去 connect"的入口
+// 都等于把宿主的整套信号面交出去。所以 RegisterConnection 只在宿主内部用，
+// 插件侧新增订阅只有一条路：ProtectedRegisterConnection，由它按白名单放行。
 
 #include "VirtualClass/VirtualCommon.h"
 
@@ -19,27 +17,17 @@
 #include <QObject>
 #include <QString>
 #include <algorithm>
-#include <vector>
 #include <utility>
+#include <vector>
 
 class ConnectionManager : public QObject, public VirtualConnectionManager
 {
 	Q_OBJECT
 	Q_INTERFACES(VirtualConnectionManager)
 
-	// -----------------------------------------------------------------------
-	// 插件被允许新增订阅的**信号白名单**（QMetaObject 规范化签名，硬编码）。
-	// 三个来源：Sidebar::clearRequested（清空会话是纯本地操作，协议上看不见）、
-	// DSHHub::aboutToClose（宿主关窗，扩展靠它自救）、DshApiClient::takeoverChanged（接管态变化）。
-	//
-	// ⚠️ 加条目 = 公开一个信号，等于对外承诺它的名字稳定 —— 改宿主信号名必须同步改这里，
-	//    否则 ProtectedRegisterConnection 拒绝（会记一行警告，不再无声）。
-	// ⚠️ 表里存的是**信号签名串**，不是 index —— index 由调用方自起名，拿它来比会让整张表
-	//    形同"全部拒绝"（踩过：插件订阅静默消失）。
-	// ⚠️ 别把"常量要放类外"当普适规则：非 static 成员 + 花括号初始化 moc 解析正常（实测）；
-	//    真正会让 moc 在下一个 `signals` 关键字处报 "Parse error at signals" 的是
-	//    `static const char* const x[] = {...}` 这类数组。
-	// -----------------------------------------------------------------------
+	// 插件被允许新增订阅的信号白名单（QMetaObject 规范化签名）：Sidebar::clearRequested、
+	// DSHHub::aboutToClose、DshApiClient::takeoverChanged。
+	// ⚠️ 加条目 = 承诺该信号名稳定；存的是签名串不是 index（拿 index 比会全拒，踩过）。
 	std::vector<QByteArray> m_publicSignals = {
 		QByteArrayLiteral("2clearRequested()"),
 		QByteArrayLiteral("2aboutToClose()"),
@@ -50,17 +38,12 @@ public:
 	static ConnectionManager& instance();
 	~ConnectionManager() override;
 
-	// 插件侧的新增订阅入口：签名与宿主内部的 RegisterConnection 一致，但**先查白名单** ——
-	// signal 不在 m_publicSignals 里就拒绝（不注册、不连接，只在宿主日志里留一行警告）。
-	// ⚠️ 查的是 signal 本身，与 index 无关：index 是调用方自起的登记键，只用来事后取消订阅。
-	// ⚠️ signal 是原生签名串（"2clearRequested()"），QMetaObject::connect 的查找规则，
-	//    不能用 SIGNAL() 宏之外的花样（它展开出来本来就是这种串）。
-	// ⚠️ 只挡住"信号名"，挡不住"拿宿主的 sender" —— 见文件头对匿名性的说明。
-	void ProtectedRegisterConnection(QString index, const QObject* sender, QByteArray signal,const QObject* receiver, const char* slot) override
+	// 插件侧的新增订阅入口：signal 不在白名单就拒绝并记一行警告（不静默），在则转内部登记。
+	// signal 是原生签名串（"2clearRequested()"），与白名单同一种串；index 只用来事后取消订阅。
+	void ProtectedRegisterConnection(QString index, const QObject* sender, QByteArray signal, const QObject* receiver, const char* slot) override
 	{
 		if (std::find(m_publicSignals.begin(), m_publicSignals.end(), signal) == m_publicSignals.end()) {
-			qWarning("ProtectedRegisterConnection(%s): 信号 %s 未公开，已拒绝",
-				qPrintable(index), signal.constData());
+			qWarning("ProtectedRegisterConnection(%s): 信号 %s 未公开，已拒绝", qPrintable(index), signal.constData());
 			return;
 		}
 		RegisterConnection(index, sender, signal, receiver, slot);
@@ -75,19 +58,19 @@ public:
 		HandleMap.insert(index, handle);
 	}
 	template <typename Func>
-	void RegisterConnection(QString index, const QObject* sender, QByteArray signal,const QObject* receiver, Func slot)
+	void RegisterConnection(QString index, const QObject* sender, QByteArray signal, const QObject* receiver, Func slot)
 	{
 		PublicRemoveConnection(index);
 		const auto handle = QObject::connect(sender, signal, receiver, slot);
-		ConnectionRegistry.insert(index, { const_cast<QObject*>(sender),const_cast<QObject*>(receiver), signal, "Lambda" });
+		ConnectionRegistry.insert(index, { const_cast<QObject*>(sender), const_cast<QObject*>(receiver), signal, "Lambda" });
 		HandleMap.insert(index, handle);
 	}
 	template <typename Sender, typename Signal, typename Func>
-	void RegisterConnection(QString index, const Sender* sender, Signal signal,const QObject* receiver, Func slot)
+	void RegisterConnection(QString index, const Sender* sender, Signal signal, const QObject* receiver, Func slot)
 	{
 		PublicRemoveConnection(index);
 		const auto handle = QObject::connect(sender, signal, receiver, slot);
-		ConnectionRegistry.insert(index, { const_cast<Sender*>(sender),const_cast<QObject*>(receiver),QMetaMethod::fromSignal<Signal>(signal).methodSignature(), "Lambda" });
+		ConnectionRegistry.insert(index, { const_cast<Sender*>(sender), const_cast<QObject*>(receiver), QMetaMethod::fromSignal<Signal>(signal).methodSignature(), "Lambda" });
 		HandleMap.insert(index, handle);
 	}
 	void PublicRemoveConnection(QString index) override
@@ -106,8 +89,7 @@ public:
 				QObject::disconnect(found2.value());
 		}
 		else if (hasEntry) {
-			QObject::disconnect(found1.value().Sender, found1.value().mSignal, found1.value().Receiver,
-				found1.value().mSlot);
+			QObject::disconnect(found1.value().Sender, found1.value().mSignal, found1.value().Receiver, found1.value().mSlot);
 		}
 		if (hasEntry)
 		{
@@ -135,8 +117,7 @@ public:
 				QObject::disconnect(found2.value());
 		}
 		else {
-			QObject::disconnect(found1.value().Sender, found1.value().mSignal, found1.value().Receiver,
-				found1.value().mSlot);
+			QObject::disconnect(found1.value().Sender, found1.value().mSignal, found1.value().Receiver, found1.value().mSlot);
 		}
 	}
 
@@ -166,7 +147,7 @@ public:
 			return;
 		}
 		SuspendConnection(index);
-		RegisterConnection(index, { found.value().Sender,receiver,found.value().mSignal,slot });
+		RegisterConnection(index, { found.value().Sender, receiver, found.value().mSignal, slot });
 	}
 
 private:

@@ -34,9 +34,8 @@ namespace DshHostIndex
 	inline constexpr const char* kTopBar = "topbar";
 	// 样式表管理单例（ThemeManager），init() 末尾登记；插件转成 VirtualTheme* 调 ExternalApplyToWindow / ExternalReloadStyles。
 	inline constexpr const char* kThemeManager = "themeManager";
-	// 信号槽登记表单例（ConnectionManager），启动期登记；插件转成 VirtualConnectionManager* 后
-	// 只能做**匿名接管**（TakeoverConnection）与**白名单内的新增订阅**（ProtectedRegisterConnection）
-	// —— 宿主内部的 RegisterConnection / PublicRemoveConnection 等不在插件接口上。
+	// 信号槽登记表单例（ConnectionManager），启动期登记；插件只能匿名接管（TakeoverConnection）
+	// 或订阅白名单内信号（ProtectedRegisterConnection），宿主内部的 RegisterConnection 不在其上。
 	inline constexpr const char* kConnectionManager = "connectionManager";
 	// DSH API 客户端（DshApiClient），随主窗口创建/销毁；后端接管的宿主侧接口就在它上面 —— 插件转成
 	// VirtualClass/VirtualApiTakeover.h 的 VirtualApiHost* 调 Takenover / CompleteCall / FailCall。

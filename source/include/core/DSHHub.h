@@ -50,8 +50,7 @@ class DSHHub : public QMainWindow, public VirtualMain, public VirtualShell
 	Q_INTERFACES(VirtualMain VirtualShell)
 
 public:
-	explicit DSHHub(QWidget* parent = nullptr, const QUrl& initialBaseUrl = QUrl(),
-		QProcess* initialServerProcess = nullptr);
+	explicit DSHHub(QWidget* parent = nullptr, const QUrl& initialBaseUrl = QUrl(), QProcess* initialServerProcess = nullptr);
 	~DSHHub() override;
 	QUrl baseUrl() const;
 	// 重建主窗口时必须用它，否则新窗口换不到 cookie 会 401
@@ -104,8 +103,7 @@ public:
 	{
 		handleTransportError(context, message);
 	}
-	void HandleSessionSnapshot(const QString& sessionId, int cursor, const QJsonArray& records,
-		bool hasMore) override
+	void HandleSessionSnapshot(const QString& sessionId, int cursor, const QJsonArray& records, bool hasMore) override
 	{
 		handleSessionSnapshot(sessionId, cursor, records, hasMore);
 	}
@@ -117,8 +115,7 @@ public:
 	{
 		handleSessionControlBaseline(projectionsBySession);
 	}
-	void HandleSessionProjectionChanged(const QString& sessionId, const QString& key,
-		const QJsonValue& value, int seq) override
+	void HandleSessionProjectionChanged(const QString& sessionId, const QString& key, const QJsonValue& value, int seq) override
 	{
 		handleSessionProjectionChanged(sessionId, key, value, seq);
 	}
@@ -136,9 +133,7 @@ public:
 
 signals:
 	void initializationComplete();
-	// 主窗口关闭前广播一次（在真正 close 之前）：宿主实测有"窗口关了、进程不退、也不调
-	// detachHost()"的情形，扩展靠它自救（停子进程、复位接管）。它是信号白名单里的公开信号
-	// （ConnectionManager.h 的 "2aboutToClose()"），插件经 ProtectedRegisterConnection 订阅。
+	// 主窗口真正 close 之前广播一次：宿主有不退进程也不调 detachHost() 的情形，扩展靠它自救
 	void aboutToClose();
 
 private slots:

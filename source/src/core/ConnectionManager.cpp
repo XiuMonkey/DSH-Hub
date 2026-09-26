@@ -16,7 +16,7 @@ ConnectionManager::~ConnectionManager() = default;
 
 void ConnectionManager::PrivateRemoveConnection(ConnectionGroup group)
 {
-	QObject::disconnect(group.Sender,group.mSignal,group.Receiver,group.mSlot);
+	QObject::disconnect(group.Sender, group.mSignal, group.Receiver, group.mSlot);
 	for (auto it = ConnectionRegistry.begin(); it != ConnectionRegistry.end(); ++it)
 	{
 		if (it.value().mSignal==group.mSignal &&

@@ -46,12 +46,10 @@ public:
 	virtual void HandleTransportError(const QString& context, const QString& message) = 0;
 
 	// 会话：follow 快照（首屏历史 + 游标）、快照自带的投影（小灰字）、control baseline、实时投影帧
-	virtual void HandleSessionSnapshot(const QString& sessionId, int cursor, const QJsonArray& records,
-		bool hasMore) = 0;
+	virtual void HandleSessionSnapshot(const QString& sessionId, int cursor, const QJsonArray& records, bool hasMore) = 0;
 	virtual void HandleSessionProjections(const QString& sessionId, int asOfSeq, const QJsonObject& values) = 0;
 	virtual void HandleSessionControlBaseline(const QJsonObject& projectionsBySession) = 0;
-	virtual void HandleSessionProjectionChanged(const QString& sessionId, const QString& key,
-		const QJsonValue& value, int seq) = 0;
+	virtual void HandleSessionProjectionChanged(const QString& sessionId, const QString& key, const QJsonValue& value, int seq) = 0;
 
 	// 工作区：baseline（清单 + 归档集合）与四个增量帧；order / archived 都是整体替换
 	virtual void HandleWorkspaceSnapshot(const QJsonArray& items, const QJsonArray& archivedSessionIds) = 0;
@@ -82,13 +80,8 @@ public:
 };
 
 // 信号槽登记表（插件可经 kConnectionManager 取到后 qobject_cast）。
-//
-// ⚠️ 宿主侧信号与槽**默认匿名**：插件不需要（也拿不到）信号名，只凭 index 就能把接收端换成
-//    自己的 —— 那是 TakeoverConnection，匿名接管机制的本体。
-// ⚠️ 这里**刻意没有 RegisterConnection**：它要求调用方自己提供 sender + signal，等于把
-//    "连宿主任意信号"的能力交出去（拿到 kSidebar 就能连它全部信号，且无从区分哪一个被准了）。
-//    插件要**新增订阅**（而非接管已有连接）只有下面这一条路：ProtectedRegisterConnection，
-//    由宿主侧按**信号白名单**校验 signal —— 不在名单里的静默拒绝。
+// 接管走 TakeoverConnection（匿名，只凭 index）；新增订阅走 ProtectedRegisterConnection（白名单），
+// 刻意不上 RegisterConnection —— 它要求调用方自供 sender + signal，等于交出宿主全部信号面。
 class VirtualConnectionManager {
 public:
 	struct ConnectionGroup {
@@ -100,16 +93,11 @@ public:
 	virtual ~VirtualConnectionManager() = default;
 	virtual void PublicRemoveConnection(QString mIndex) = 0;
 	virtual void SuspendConnection(QString mIndex) = 0;
-	virtual void TakeoverConnection(QString mIndex, QObject* mObject, QByteArray mSlot) =0;
-	virtual void Reconnect(QString mIndex)=0;
+	virtual void TakeoverConnection(QString mIndex, QObject* mObject, QByteArray mSlot) = 0;
+	virtual void Reconnect(QString mIndex) = 0;
 
-	// 新增订阅一个宿主**公开**的信号：宿主侧先查白名单（ConnectionManager.h 的 m_publicSignals），
-	// signal 不在名单里就拒绝（不注册、不连接，只在宿主日志里留一行警告 —— 不静默）。
-	// ⚠️ 比对的是 signal 本身；index 由调用方自起名（建议带扩展名前缀），只用于事后取消订阅。
-	// ⚠️ signal 是原生签名串（"2clearRequested()"），按 QMetaObject 的查找规则；
-	//    白名单里存的也是同一种串，改了宿主信号名必须同步改名单。
-	virtual void ProtectedRegisterConnection(QString index, const QObject* sender, QByteArray signal,
-		const QObject* receiver, const char* slot) = 0;
+	// 新增订阅宿主公开信号：signal 是原生签名串（"2clearRequested()"），不在白名单会被宿主拒绝
+	virtual void ProtectedRegisterConnection(QString index, const QObject* sender, QByteArray signal, const QObject* receiver, const char* slot) = 0;
 
 	// ⚠️ 以后只许在末尾追加。
 };

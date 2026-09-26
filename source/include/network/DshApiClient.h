@@ -130,10 +130,9 @@ public:
 			if (parseError.error != QJsonParseError::NoError) {
 				qWarning().noquote() << "[DshApi] CompleteCall: resultJson 不是合法 JSON rpcId=" << id
 					<< "error=" << parseError.errorString();
-				if (pending.onError)
-					pending.onError(RpcError{ QStringLiteral("takenover-bad-result"),
-						parseError.errorString() });
-				return;
+			if (pending.onError)
+				pending.onError(RpcError{ QStringLiteral("takenover-bad-result"), parseError.errorString() });
+			return;
 			}
 			doc = wrapped;
 			unwrapScalar = true;
@@ -169,9 +168,7 @@ public:
 		failPending(id, errorCode, QString::fromUtf8(message ? message : ""));
 	}
 
-	// 接管态查询：Takenover(bool) 没有回执，插件靠这一条确认自己那一次请求有没有被接受
-	// （被拒 = 注册表里没有实现 VirtualApiSink 的扩展）。实成员函数 isTakenover() 早就有了，
-	// 这里只是把它搬到接口上。
+	// 接管态查询：Takenover(bool) 无回执，插件靠它确认请求有没有被接受（即 isTakenover 的接口版）
 	bool IsTakenover() const override
 	{
 		return isTakenover();
@@ -179,19 +176,13 @@ public:
 
 	// 一元 RPC：payload 是本端点的 args 内容（本类包一层 {"args": …}）；endpoint 用斜杠（"session/list"），
 	// 返回裸数组的端点改用 callMethodValue
-	void callMethod(const QString& method, const QJsonObject& payload = {},
-		std::function<void(const QJsonObject& value)> onSuccess = {},
-		std::function<void(const RpcError& error)> onError = {});
+	void callMethod(const QString& method, const QJsonObject& payload = {}, std::function<void(const QJsonObject& value)> onSuccess = {}, std::function<void(const RpcError& error)> onError = {});
 
 	// 同 callMethod，但成功回调拿裸 JSON 值
-	void callMethodValue(const QString& method, const QJsonObject& payload,
-		std::function<void(const QJsonValue& value)> onSuccess,
-		std::function<void(const RpcError& error)> onError = {});
+	void callMethodValue(const QString& method, const QJsonObject& payload, std::function<void(const QJsonValue& value)> onSuccess, std::function<void(const RpcError& error)> onError = {});
 
 	// 应答 mux 上的审批/提问帧：rpcId 用帧里的，value 形如 {sessionId, approvalId, outcome}
-	void respond(const QString& rpcId, const QJsonObject& value,
-		std::function<void(const QJsonObject& receipt)> onSuccess = {},
-		std::function<void(const RpcError& error)> onError = {});
+	void respond(const QString& rpcId, const QJsonObject& value, std::function<void(const QJsonObject& receipt)> onSuccess = {}, std::function<void(const RpcError& error)> onError = {});
 
 signals:
 	// ⚠️ 宿主内部信号：DSHHub 靠它停掉内置 DSH 进程、关掉三条 DSH 专属旁路；插件 ↔ 宿主不走信号
@@ -258,9 +249,7 @@ private:
 	// 把请求交给扩展；返回 false = 无接收端，调用方应当场把这条请求失败掉
 	bool sendToSink(const QString& rpcId, const QString& method, const QJsonObject& args);
 	// 接管路径的一元 RPC 入口：回调留在 m_pending（std::function 不是 metatype，不能随接口/信号传出去）
-	void dispatchTakeoverCall(const QString& rpcId, const QString& method, const QJsonObject& args,
-		std::function<void(const QJsonValue&)> onSuccess,
-		std::function<void(const RpcError&)> onError);
+	void dispatchTakeoverCall(const QString& rpcId, const QString& method, const QJsonObject& args, std::function<void(const QJsonValue&)> onSuccess, std::function<void(const RpcError&)> onError);
 	// 按 rpcId 取出挂着的一条请求并用错误收尾；不在表里返回 false
 	bool failPending(const QString& rpcId, const QString& code, const QString& message);
 	// 交还后端时把所有挂着的接管请求失败掉
@@ -272,9 +261,7 @@ private:
 	void leaveTakenoverState();
 
 	QUrl makeUrl(const QString& path) const;
-	void post(const QString& path, const QJsonObject& body,
-		std::function<void(const QJsonValue& value)> onSuccess,
-		std::function<void(const RpcError& error)> onError);
+	void post(const QString& path, const QJsonObject& body, std::function<void(const QJsonValue& value)> onSuccess, std::function<void(const RpcError& error)> onError);
 	// 用启动令牌换认证 cookie：GET /?token=<令牌> → 303 + Set-Cookie，之后所有 /api 请求与
 	// WebSocket 握手都必须带上，否则一律 401；成功后自动 openStreams()
 	void startAuthHandshake();
