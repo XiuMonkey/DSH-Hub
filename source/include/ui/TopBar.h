@@ -153,13 +153,10 @@ public:
 	// 窗口缩放或移动后由 DSHHub 统一调：遮罩重新铺满 + 工具过滤窗口重新居中
 	void syncOverlayToHost();
 
-	// 交出顶栏横向布局（不转移所有权；调用方插进去的控件随后归顶栏所有）。跨 DLL 只能走
-	// obj->qt_metacast(IID) 或接口虚函数 vtable：⚠️ 别改成 dynamic_cast（Itanium ABI 下跨模块静默
-	// 返回 nullptr），也别 qobject_cast<TopBar*>（要 TopBar::staticMetaObject，宿主 exe 的外部符号
-	// 且零导出 ⇒ 插件 DLL 链接期 LNK2019）
-	// 指针只保证在顶栏存活期间有效，插哪里、要不要 show 由调用方决定。顺序为「标题 | stretch |
-	// 已挂的外部控件 | 工具按钮」；工具按钮贴最右是系统约定，想插在它左侧请自行用 indexOf 定位，
-	// 直接 addWidget 会把它挤离右边缘
+	// 交出顶栏横向布局（不转移所有权，插入的控件随后归顶栏所有）。跨 DLL 只能走 qt_metacast(IID)
+	// 或接口虚函数：别用 dynamic_cast（跨模块静默 nullptr）或 qobject_cast<TopBar*>（宿主符号零导出，
+	// 插件 LNK2019）。指针只在顶栏存活期间有效；顺序为「标题 | stretch | 外部控件 | 工具按钮」，
+	// 工具按钮贴最右是系统约定，插左侧自行 indexOf 定位，直接 addWidget 会把它挤离右边缘
 	QHBoxLayout* GetLayout() override
 	{
 		return m_layout;

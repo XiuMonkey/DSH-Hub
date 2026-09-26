@@ -19,7 +19,7 @@
 #include <functional>
 
 // 接管的两半接口：本类实现 VirtualApiHost（插件调宿主），扩展实现 VirtualApiSink。
-// ⚠️ 插件侧只许经 VirtualApiHost 虚函数访问本类，别引用成员（宿主 exe 符号零导出，直接引用即 LNK2019）。
+// 插件侧只许经 VirtualApiHost 虚函数访问本类，别引用成员（宿主 exe 符号零导出，直接引用即 LNK2019）。
 #include "VirtualClass/VirtualApiTakeover.h"
 
 class QNetworkAccessManager;
@@ -32,7 +32,7 @@ class QWebSocket;
 class DshApiClient : public QObject, public VirtualApiHost
 {
 	Q_OBJECT
-	// ⚠️ 不能漏：qobject_cast<VirtualApiHost*> 只认这里列出的 IID，漏了就永远 cast 出 nullptr 且不报错
+	// 不能漏：qobject_cast<VirtualApiHost*> 只认这里列出的 IID，漏了就永远 cast 出 nullptr 且不报错
 	Q_INTERFACES(VirtualApiHost)
 
 public:
@@ -185,7 +185,7 @@ public:
 	void respond(const QString& rpcId, const QJsonObject& value, std::function<void(const QJsonObject& receipt)> onSuccess = {}, std::function<void(const RpcError& error)> onError = {});
 
 signals:
-	// ⚠️ 宿主内部信号：DSHHub 靠它停掉内置 DSH 进程、关掉三条 DSH 专属旁路；插件 ↔ 宿主不走信号
+	// 宿主内部信号：DSHHub 靠它停掉内置 DSH 进程、关掉三条 DSH 专属旁路；插件 ↔ 宿主不走信号
 	void takeoverChanged(bool takenover);
 	void connected();
 	// 兼容旧消费者：把 0.1.5 的新帧翻译成旧形状再发出
@@ -237,7 +237,7 @@ private:
 		QByteArray m_body;
 	};
 
-	// ⚠️ 接管路径的回填不走这里：它查的是 m_parsing，而接管条目只登记在 m_pending —— 复用它只会命中
+	// 接管路径的回填不走这里：它查的是 m_parsing，而接管条目只登记在 m_pending —— 复用它只会命中
 	// "stale parsed response" 分支，静默丢掉回调
 	void handleParsedResponse(const QString& rpcId, const QJsonDocument& doc);
 
@@ -284,7 +284,7 @@ private:
 
 	void emitSessionEventFrame(const QString& sessionId, const QJsonObject& event);
 	void scheduleReconnect();
-	// ⚠️ 每次 open 都必须唯一；服务端遇重复 id 会 close(1008) 关掉整条 mux
+	// 每次 open 都必须唯一；服务端遇重复 id 会 close(1008) 关掉整条 mux
 	QString nextStreamId(const QString& prefix);
 
 	void flushAuthQueue();

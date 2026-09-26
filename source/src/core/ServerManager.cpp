@@ -172,7 +172,7 @@ namespace
 		"llm-deepseek:\n"
 		"  models: []\n";
 
-	// ⚠️ 文件作用域静态而非成员：ServerManager 每窗口一份、切主题会新建，用成员的话切主题后的
+	// 文件作用域静态而非成员：ServerManager 每窗口一份、切主题会新建，用成员的话切主题后的
 	// start() 会把内置进程重新拉起（见 DshApiClient::Takenover）
 	bool g_backendTakenover = false;
 }
@@ -196,7 +196,7 @@ void ServerManager::start(const QUrl& initialBaseUrl, QProcess* initialServerPro
 	m_dshHome = appDir + QStringLiteral("/resources/server/harness");
 
 	// 接管态：不启动内置 DSH 服务端（已被扩展取代）
-	// ⚠️ 必须在 m_dshHome 赋值之后：Settings / PluginsManager 要用 dshHome，提前 return 会踩空
+	// 必须在 m_dshHome 赋值之后：Settings / PluginsManager 要用 dshHome，提前 return 会踩空
 	if (g_backendTakenover) {
 		// 接管后仍被移交本窗口的进程一并停掉，否则会留下没人管的内置服务端
 		if (initialServerProcess) {
@@ -258,7 +258,7 @@ void ServerManager::publishBaseUrl(const QUrl& url)
 }
 
 // 接管时停掉内置 DSH 进程（不用 takeProcess()，那是移交下一个窗口）
-// ⚠️ 幂等：未 spawn / 启动中 / 已退出 / 已停过四种切断点都必须当成功并清干净指针
+// 幂等：未 spawn / 启动中 / 已退出 / 已停过四种切断点都必须当成功并清干净指针
 void ServerManager::stopForTakeover()
 {
 	setTakenover(true);

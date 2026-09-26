@@ -166,7 +166,7 @@ QTextBrowser* AgentMessageUnit::proseHost()
 
 void AgentMessageUnit::fitProseView(QTextBrowser* view)
 {
-	// ⚠️ 新建视图布局前宽度仍是 Qt 默认 100px，必须先校正宽度再 setFixedHeight，
+	// 新建视图布局前宽度仍是 Qt 默认 100px，必须先校正宽度再 setFixedHeight，
 	// 否则按窄宽算出的高度会瞬间撑高气泡（流式抖动的来源）
 	const QMargins margins = m_partsLayout->contentsMargins();
 	const int contentWidth = qMax(1, width() - margins.left() - margins.right());

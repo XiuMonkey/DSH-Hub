@@ -187,7 +187,7 @@ namespace WindowFrame
 		switch (msg->message) {
 		case WM_NCCALCSIZE:
 			if (msg->wParam == TRUE) {
-				// 返回 0：客户区 = 整个窗口。⚠️ 这个等式必须"永远"成立：最大化时若把客户区钉到
+				// 返回 0：客户区 = 整个窗口。这个等式必须"永远"成立：最大化时若把客户区钉到
 				// 工作区，Qt 的重绘目标就落到可视区之外、窗口表面再也不更新
 				*result = 0;
 				return true;

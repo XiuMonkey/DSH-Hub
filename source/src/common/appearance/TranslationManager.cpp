@@ -209,7 +209,7 @@ namespace Translation
 			fallback.name = QStringLiteral("中文");
 		languages.append(fallback);
 
-		// 候选语言 = qrc 内置包 ∪ 外部 translations/ 里的 .qm。⚠️ 内置包必须一起算：它们是本次 init()
+		// 候选语言 = qrc 内置包 ∪ 外部 translations/ 里的 .qm。内置包必须一起算：它们是本次 init()
 		// 刚释放到外部目录的，而 Windows 的目录项更新有延迟，紧接着 entryList 可能还看不到，只扫外部
 		// 就会"首次启动时英文不在列表、重启才出现"（qrc 是内存数据，无此问题）；parseAvailableLanguages 去重
 		QStringList candidates;

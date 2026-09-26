@@ -14,7 +14,7 @@ public:
 	virtual QHBoxLayout* GetLayout() = 0;
 };
 
-// ⚠️ 虚方法只许在末尾追加：vtable 槽位 = 声明顺序，插件 DLL 独立编译，插中间会让旧插件调错位置
+// 虚方法只许在末尾追加：vtable 槽位 = 声明顺序，插件 DLL 独立编译，插中间会让旧插件调错位置
 class VirtualTheme {
 public:
 	virtual ~VirtualTheme() = default;
@@ -28,17 +28,15 @@ class VirtualMain {
 public:
 	virtual ~VirtualMain() = default;
 
-	// 铺遮罩 + 居中显示，两步背靠背；⚠️ 调用前 popup 尺寸必须已定好
+	// 铺遮罩 + 居中显示，两步背靠背；调用前 popup 尺寸必须已定好
 	virtual void ExternalShowOverlay(QWidget* popup) = 0;
 
 	// 收遮罩，须与 ExternalShowOverlay 成对：遮罩只留一层，最后一个 release 才真隐藏
 	virtual void ExternalHideOverlay(QWidget* popup) = 0;
 
-	// 入站数据注入（后端接管专用）：以下 12 个是 DshApiClient 同名信号的替代入口 —— 正常路径由信号
-	// 驱动，接管后信号没人发，扩展改调这里。宿主侧实现就是转发到 DSHHub 的同名私有槽，槽保持
-	// private，本接口是入站数据的唯一入口。
-	// ⚠️ 必须在 GUI 线程同步调用（宿主直接改界面控件，没有排队）；实现里别做耗时的事。
-	// ⚠️ 以后只许在末尾追加 —— 方法名与签名一发布就是 ABI，改一个字老插件调错槽位。
+	// 入站数据注入（后端接管专用）：12 个方法是 DshApiClient 同名信号的替代入口 —— 正常路径由信号
+	// 驱动，接管后信号没人发，扩展改调这里；宿主实现转发到 DSHHub 同名私有槽，槽保持 private。
+	// 必须在 GUI 线程同步调用；以后只许在末尾追加（方法名与签名一发布就是 ABI）。
 
 	// 连接与传输：让 UI 认为已连接、一帧 mux 消息（会话事件 / 审批 / 提问，入站主力）、传输层错误
 	virtual void HandleConnected() = 0;
@@ -60,16 +58,16 @@ public:
 };
 
 // 架空原 UI：把宿主整个客户区让给扩展自绘；原生控件树不销毁，还台即恢复
-// ⚠️ 虚方法只许末尾追加；⚠️ 全内联、不派生 QObject，否则插件链接期 LNK2019
+// 虚方法只许末尾追加；全内联、不派生 QObject，否则插件链接期 LNK2019
 class VirtualShell
 {
 public:
 	virtual ~VirtualShell() = default;
 
-	// 抢台，owner 必须是扩展安装目录名；⚠️ 只能写在 attachHost() 里（切主题会重调）
+	// 抢台，owner 必须是扩展安装目录名；只能写在 attachHost() 里（切主题会重调）
 	virtual QWidget* ExternalAcquireStage(const char* owner) = 0;
 
-	// 还台，owner 不匹配一律拒绝；⚠️ 调用方须同步删干净自己挂在舞台里的控件
+	// 还台，owner 不匹配一律拒绝；调用方须同步删干净自己挂在舞台里的控件
 	virtual bool ExternalReleaseStage(const char* owner) = 0;
 
 	// 当前是否有人在架空着
@@ -99,13 +97,11 @@ public:
 	// 新增订阅宿主公开信号：signal 是原生签名串（"2clearRequested()"），不在白名单会被宿主拒绝
 	virtual void ProtectedRegisterConnection(QString index, const QObject* sender, QByteArray signal, const QObject* receiver, const char* slot) = 0;
 
-	// ⚠️ 以后只许在末尾追加。
+	// 以后只许在末尾追加。
 };
 
-// 消息区宿主接口：扩展灌完历史/事件后，负责把"正在载入会话"这层提示的收放讲清楚。
-// 为什么需要它：宿主侧只有"控件缓存命中"与"历史出错"两条路会收这层提示，而**接管态下
-// 首屏历史是扩展喂的**（follow 快照成功那条路只 emit contentReady，收的是启动遮罩）——
-// 不替宿主收，它就只能等自己 6 秒的看门狗兜底（日志里的 loading overlay watchdog fired）。
+// 消息区宿主接口：把"正在载入会话"这层提示的收放讲清楚。宿主只有"控件缓存命中"与"历史出错"
+// 两条路会收这层提示，而接管态首屏历史是扩展喂的（只 emit contentReady），不替宿主收就得等它 6 秒看门狗。
 class VirtualMessageHost {
 public:
 	virtual ~VirtualMessageHost() = default;

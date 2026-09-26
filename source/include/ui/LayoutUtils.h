@@ -15,7 +15,7 @@ namespace LayoutUtils
 	// 三档差异都是有意保留的，别合并
 	enum class ClearMode
 	{
-		// ⚠️ 重建后马上 show() 必须用这档，否则旧控件仍会跟着显示
+		// 重建后马上 show() 必须用这档，否则旧控件仍会跟着显示
 		DetachNow,
 		// 只 deleteLater，可见性由调用方负责
 		DeferOnly,
@@ -40,7 +40,7 @@ namespace LayoutUtils
 		}
 	}
 
-	// ⚠️ 滚动条在基类构造时已建，那时 objectName 未设、匹配结果被缓存，故须手动 repolish
+	// 滚动条在基类构造时已建，那时 objectName 未设、匹配结果被缓存，故须手动 repolish
 	inline QScrollArea* makeThemedScrollArea(QWidget* parent, const QString& objectName)
 	{
 		auto* area = new QScrollArea(parent);

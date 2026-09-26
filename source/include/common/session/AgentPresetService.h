@@ -82,7 +82,7 @@ namespace AgentPresetService
 	void fetch(DshApiClient* api, const std::function<void(const QVector<AgentPreset>& presets)>& onLoaded,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);
 
-	// ⚠️ 服务端不校验 id 存在，presetId 必须来自 agentPresets/list 名单，否则新建会话 not-found
+	// 服务端不校验 id 存在，presetId 必须来自 agentPresets/list 名单，否则新建会话 not-found
 	void persistDefault(DshApiClient* api, const QString& presetId,
 		const std::function<void(const QString& presetId)>& onSaved,
 		const std::function<void(const DshApiClient::RpcError& error)>& onError);

@@ -35,7 +35,7 @@ void PluginMarketClient::setBaseUrl(const QUrl& url)
 }
 
 // 由 baseUrl 拼出接口地址：只借它的 scheme/host/port，path 重设、query 与 fragment 清掉。
-// ⚠️ 不能用 `QUrl(base.toString(QUrl::RemovePath) + path)`：带令牌的 baseUrl 会把接口地址当成 token 的值、
+// 不能用 `QUrl(base.toString(QUrl::RemovePath) + path)`：带令牌的 baseUrl 会把接口地址当成 token 的值、
 // 请求落到 `GET /`（无 cookie → 401；有 cookie → 303 到 index.html，HTML 被当 JSON，市场显示"0 个插件"）。
 QUrl PluginMarketClient::endpointUrl(const QString& path) const
 {

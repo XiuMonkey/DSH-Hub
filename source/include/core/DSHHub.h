@@ -61,7 +61,7 @@ public:
 	QProcess* takeServerProcess();
 
 	// VirtualMain 接口：遮罩铺在宿主上、弹窗居中；逻辑全在 WindowFrame.cpp，本类只做转发
-	// ⚠️ 插件侧只能 qobject_cast<VirtualMain*>（转 DSHHub* 撞 LNK2019，dynamic_cast 跨模块静默返回 nullptr）
+	// 插件侧只能 qobject_cast<VirtualMain*>（转 DSHHub* 撞 LNK2019，dynamic_cast 跨模块静默返回 nullptr）
 	// owner 用弹窗自身：遮罩按 owner 记名，show/hide 成对就不会串
 	void ExternalShowOverlay(QWidget* popup) override
 	{

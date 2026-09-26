@@ -24,7 +24,7 @@ namespace
 
 	constexpr int kLogoTextGap = 8;
 
-	// ⚠️ 字形必须走 QStringLiteral：多字节 UTF-8 声明成 const char[] 再经 QLatin1String() 会渲染成乱码
+	// 字形必须走 QStringLiteral：多字节 UTF-8 声明成 const char[] 再经 QLatin1String() 会渲染成乱码
 	QString minimizeGlyph() { return QStringLiteral("−"); }
 	QString maximizeGlyph() { return QStringLiteral("□"); }
 	QString restoreGlyph() { return QStringLiteral("❐"); }

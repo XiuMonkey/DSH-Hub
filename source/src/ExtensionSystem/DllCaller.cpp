@@ -172,7 +172,7 @@ bool DllCaller::removeExtension(const QString& name)
 			drop.append(it.key());
 	}
 	for (const QString& key : drop) {
-		// ⚠️ 顺序：先等在途调用归零、再摘掉条目；反过来在途调用的 libraryForPath() 查不到条目，
+		// 顺序：先等在途调用归零、再摘掉条目；反过来在途调用的 libraryForPath() 查不到条目，
 		// 重新加载同一 DLL 拿到新 runMutex，串行保证失效
 		LoadedLibrary* entry = m_librariesByPath.value(key);
 		if (!entry)
@@ -345,7 +345,7 @@ bool DllCaller::callTool(const QString& tool, const QJsonObject& args, QJsonObje
 			}
 		}
 
-		// ⚠️ 必须先释放 runMutex、再递减 inFlight：卸载方等到归零会连 runMutex 一起 delete 该
+		// 必须先释放 runMutex、再递减 inFlight：卸载方等到归零会连 runMutex 一起 delete 该
 		// LoadedLibrary，否则 ~QMutexLocker 会 unlock 已 delete 的 QMutex
 		{
 			QMutexLocker stateLock(&m_mutex);

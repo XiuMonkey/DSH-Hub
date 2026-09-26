@@ -46,7 +46,7 @@ namespace
 			u8(0x48); u8(0x8B); u8(0xDA);
 		}
 
-		// ⚠️ 栈帧调整必须用 imm32（48 81 EC id），不能改回 imm8（48 83 EC ib）：imm8 是符号扩展的，
+		// 栈帧调整必须用 imm32（48 81 EC id），不能改回 imm8（48 83 EC ib）：imm8 是符号扩展的，
 		// stackAlloc 在 15/16 参数时正好是 128，编码成 0x80 会被当成 -128，栈参数被写到 rsp 之上
 		void subRspImm32(std::uint32_t v)
 		{
@@ -224,7 +224,7 @@ namespace Thunk
 			return false;
 		}
 
-		// ⚠️ 不要在这里再赋值 m_codeSize：它由 emitMachineCode() 末尾设置，否则长度会被覆盖成 0
+		// 不要在这里再赋值 m_codeSize：它由 emitMachineCode() 末尾设置，否则长度会被覆盖成 0
 		FlushInstructionCache(GetCurrentProcess(), m_code, m_codeSize);
 		return true;
 	}

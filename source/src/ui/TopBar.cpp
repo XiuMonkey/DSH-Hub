@@ -431,7 +431,7 @@ void ToolsFilterPopup::applyCatalog(const ToolFilterCatalog& catalog)
 	}
 
 	// 新会话默认全折叠：把本次目录名记进"收起"集，用户随后的展开/收起照常记录，重开窗口不丢。
-	// ⚠️ 判断"新会话"不能用 m_sessionId —— loadTools 成功路径会先 setContext() 把它覆盖成本会话，
+	// 判断"新会话"不能用 m_sessionId —— loadTools 成功路径会先 setContext() 把它覆盖成本会话，
 	// 再比较永远相等（"换会话清空"从未生效的原因），所以单独记一个已播种的会话号。
 	if (m_collapsedSeedSession != catalog.sessionId) {
 		m_collapsed.clear();
@@ -730,7 +730,7 @@ void TopBar::loadTools(bool pushToPopup)
 // 接管后那个服务端已经不在了，留着只会显示失败。
 void TopBar::setToolsFilterEnabled(bool enabled)
 {
-	// ⚠️ 别拿 isVisible() 当"当前是否已隐藏"判重：窗口还没 show() 时子控件一律 false（切主题重建
+	// 别拿 isVisible() 当"当前是否已隐藏"判重：窗口还没 show() 时子控件一律 false（切主题重建
 	// 窗口 + 插件重新接管正好走这条时序），会漏掉这次 setVisible(false)。直接设，重复调用无副作用。
 	if (m_toolsButton)
 		m_toolsButton->setVisible(enabled);

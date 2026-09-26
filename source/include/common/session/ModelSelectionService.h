@@ -29,7 +29,7 @@ struct ReasoningMetadata
 	QString defaultLevelId; // 默认档位，可空
 };
 
-// ⚠️ 兜底四档（off/low/high/max）返回静态引用：currentLevel() 的指针地址必须稳定
+// 兜底四档（off/low/high/max）返回静态引用：currentLevel() 的指针地址必须稳定
 inline const QVector<ReasoningLevel>& fallbackReasoningLevels()
 {
 	static const QVector<ReasoningLevel> levels = [] {
@@ -271,7 +271,7 @@ struct ServerModelView
 struct CredentialStatus
 {
 	QString ref;
-	// ⚠️ false 时不能当成只读（可能只是还没查到）
+	// false 时不能当成只读（可能只是还没查到）
 	bool known = false;
 	bool configured = false;
 	bool writable = false;

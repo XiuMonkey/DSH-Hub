@@ -38,11 +38,11 @@ public:
 
 	void reload();
 
-	// ⚠️ 未 init（qss 为空）时直接返回：setStyleSheet("") 会清掉窗口上已有的样式
+	// 未 init（qss 为空）时直接返回：setStyleSheet("") 会清掉窗口上已有的样式
 	void applyToWindow(QWidget* window);
 
 	// VirtualTheme 接口：只转发到上面的 applyToWindow / reload，插件与宿主必须走同一条路，别加额外语义
-	// ⚠️ 插件侧只能 qobject_cast<VirtualTheme*>（跨模块 dynamic_cast 返回 nullptr）；接口只能增不能改
+	// 插件侧只能 qobject_cast<VirtualTheme*>（跨模块 dynamic_cast 返回 nullptr）；接口只能增不能改
 	void ExternalApplyToWindow(QWidget* window) override
 	{
 		applyToWindow(window);
@@ -57,7 +57,7 @@ public:
 		}
 
 		// 插件先覆盖 <exe>/styles/*.qss 再调这里；重合成两套、换 QPalette 并挂回所有顶层窗口，
-		// ⚠️ 但不重建窗口 —— 构造期固化的东西（如 logo）不跟着变
+		// 但不重建窗口 —— 构造期固化的东西（如 logo）不跟着变
 		reload();
 
 		// 空样式表 = 一份都没读到，如实回给插件
@@ -84,7 +84,7 @@ public:
 	QString inputBg() const;
 	QString accent() const;
 
-	// ⚠️ 滚动条在基类构造里首次解析规则，那时 objectName 还没设；之后再设名字也不会触发重匹配
+	// 滚动条在基类构造里首次解析规则，那时 objectName 还没设；之后再设名字也不会触发重匹配
 	void repolishScrollArea(QWidget* widget);
 
 	// 用户显式选定主题的唯一入口：过渡弹窗 + 建新主窗口 + 写进 AppearanceSetting.json

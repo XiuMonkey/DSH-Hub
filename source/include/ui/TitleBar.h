@@ -1,7 +1,7 @@
 #pragma once
 
 // 自绘标题栏（只画，不做决定）：按钮只发"意图"信号，动作由 common/WindowFrame 落地，外观走 QSS。
-// ⚠️ objectName 固定 windowTitleBar；窗口按钮带动态属性 dshWindowControl=true，命中测试须排除。
+// objectName 固定 windowTitleBar；窗口按钮带动态属性 dshWindowControl=true，命中测试须排除。
 
 #include <QWidget>
 

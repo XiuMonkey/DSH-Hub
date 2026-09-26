@@ -40,7 +40,7 @@ protected:
 	void setPopupHost(QWidget* host) { m_popupHost = host; }
 
 	// 交给宿主之前的准备：默认什么都不做。子类在这里异步取数据。
-	// ⚠️ 由 openHosted() 在 show() 之后调用 —— 理由见 PopupWindow.cpp 里那一段。
+	// 由 openHosted() 在 show() 之后调用 —— 理由见 PopupWindow.cpp 里那一段。
 	virtual void refreshOnOpen() {}
 
 private:

@@ -22,10 +22,10 @@ namespace CardShadow
 	// 浮层档：对齐原版 --dsw-shadow-lv3；只有浮层算共用档位
 	inline Spec level3() { return Spec{ 24, 8, 14 }; }
 
-	// 四周需预留的留白；⚠️ 不对称，dy > 0 时下侧留得多
+	// 四周需预留的留白；不对称，dy > 0 时下侧留得多
 	QMargins padding(const Spec& spec);
 
-	// ⚠️ 必须用它：色板的 rgba(...) QColor 字符串构造不认 → 无效色 → 阴影不画且不报错
+	// 必须用它：色板的 rgba(...) QColor 字符串构造不认 → 无效色 → 阴影不画且不报错
 	QColor parseColor(const QString& text);
 
 	// cardRect 须已按 padding() 内缩，阴影画在它之外的空白；padOverride 四边 >= 0 才算给了

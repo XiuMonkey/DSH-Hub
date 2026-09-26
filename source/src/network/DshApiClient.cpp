@@ -454,7 +454,7 @@ void DshApiClient::respond(const QString& rpcId, const QJsonObject& value,
 	std::function<void(const QJsonObject& receipt)> onSuccess,
 	std::function<void(const RpcError& error)> onError)
 {
-	// ⚠️ 接管态必须绕过：接管后 m_clientId 恒空，应答会被吞掉
+	// 接管态必须绕过：接管后 m_clientId 恒空，应答会被吞掉
 	if (!m_takenover && m_clientId.isEmpty()) {
 		qWarning().noquote() << "[DshApi] respond ignored: $events stream not ready";
 		if (onError) {
@@ -496,7 +496,7 @@ void DshApiClient::post(const QString& path, const QJsonObject& body,
 	std::function<void(const QJsonValue& value)> onSuccess,
 	std::function<void(const RpcError& error)> onError)
 {
-	// ⚠️ 接管态分流写在这里：callMethod / callMethodValue / respond 都汇到本函数
+	// 接管态分流写在这里：callMethod / callMethodValue / respond 都汇到本函数
 	// 位置必须在认证队列之前，否则会排进 m_authQueue 等永不来的握手
 	if (m_takenover) {
 		const QJsonObject payload = body.value(QStringLiteral("payload")).toObject();
@@ -583,7 +583,7 @@ void DshApiClient::onReplyFinished()
 }
 
 // 主线程：拆 result 信封并调回调。
-// ⚠️ 接管路径的回填不走这里（它只登记在 m_pending），复用会静默丢回调
+// 接管路径的回填不走这里（它只登记在 m_pending），复用会静默丢回调
 void DshApiClient::handleParsedResponse(const QString& rpcId, const QJsonDocument& doc)
 {
 	if (m_destroyed)
@@ -641,7 +641,7 @@ bool DshApiClient::sendToSink(const QString& rpcId, const QString& method, const
 	const QByteArray argsUtf8 = QJsonDocument(args).toJson(QJsonDocument::Compact);
 
 	qInfo().noquote() << "[DshApi] 接管态出站 ->" << method << "rpcId=" << rpcId;
-	// ⚠️ 三个指针只在本次调用期间有效，扩展要自己拷贝
+	// 三个指针只在本次调用期间有效，扩展要自己拷贝
 	sink->OnOutboundRequest(rpcIdUtf8.constData(), methodUtf8.constData(), argsUtf8.constData());
 	return true;
 }
@@ -683,7 +683,7 @@ bool DshApiClient::failPending(const QString& rpcId, const QString& code, const 
 	PendingCall pending = it.value();
 	m_pending.erase(it);
 
-	// ⚠️ 接管路径没有 HTTP 那道 m_destroyed 检查，更可能"已析构而回调才到"
+	// 接管路径没有 HTTP 那道 m_destroyed 检查，更可能"已析构而回调才到"
 	if (m_destroyed)
 		return true;
 
@@ -728,7 +728,7 @@ void DshApiClient::sweepTakeoverTimeouts()
 }
 
 // 进入接管态的一次性收尾：把内置 DSH 那边已经开始的事全部作废。
-// ⚠️ 接管到来时内置服务端已起来过：baseUrlReady / 认证握手 / 开流可能都已发生
+// 接管到来时内置服务端已起来过：baseUrlReady / 认证握手 / 开流可能都已发生
 void DshApiClient::enterTakenoverState()
 {
 	// ① 认证握手：判废在途那一代，清掉 cookie 与在途标记
@@ -764,7 +764,7 @@ void DshApiClient::enterTakenoverState()
 		m_takeoverSweep->start();
 }
 
-// ⚠️ 刻意不重启内置 DSH：要不要拉回来由用户决定
+// 刻意不重启内置 DSH：要不要拉回来由用户决定
 void DshApiClient::leaveTakenoverState()
 {
 	if (m_takeoverSweep)

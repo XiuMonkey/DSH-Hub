@@ -195,7 +195,7 @@ public:
 	void clearAllSessions(const QString& dshHome, const std::function<void()>& onCleared,
 		const std::function<void()>& onCreateNew);
 
-	// ⚠️ 只管市场那一颗按钮：扩展管理（extensionsRequested）是扩展的装载通道，接管时绝不能跟着关
+	// 只管市场那一颗按钮：扩展管理（extensionsRequested）是扩展的装载通道，接管时绝不能跟着关
 	void setPluginsEntryEnabled(bool enabled);
 
 signals:

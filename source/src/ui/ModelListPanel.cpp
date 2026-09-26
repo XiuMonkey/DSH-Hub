@@ -275,7 +275,7 @@ void ModelListEntry::addDetailRow(QVBoxLayout* layout, QWidget* parent, const QS
 	layout->addWidget(row);
 }
 
-// 成员行右键菜单。⚠️ 不用 QMenu：Windows 上圆角外会留直角背景
+// 成员行右键菜单。不用 QMenu：Windows 上圆角外会留直角背景
 
 class ModelListPanel::ContextMenu : public QDialog
 {
@@ -310,7 +310,7 @@ public:
 		remove->setObjectName(QStringLiteral("modelListContextAction"));
 		remove->setFlat(true);
 		remove->setCursor(Qt::PointingHandCursor);
-		// ⚠️ 行不参与焦点链，否则 Windows 会关掉弹层
+		// 行不参与焦点链，否则 Windows 会关掉弹层
 		remove->setFocusPolicy(Qt::NoFocus);
 		remove->setMinimumHeight(30);
 		remove->setEnabled(canRemove);
@@ -395,7 +395,7 @@ public:
 			row->setObjectName(QStringLiteral("modelListFetchOption"));
 			row->setFlat(true);
 			row->setCursor(Qt::PointingHandCursor);
-			// ⚠️ 行不参与焦点链，否则 Windows 会关掉弹层
+			// 行不参与焦点链，否则 Windows 会关掉弹层
 			row->setFocusPolicy(Qt::NoFocus);
 			row->setMinimumHeight(kMenuOptionMinHeight);
 			row->setToolTip(discoveredTooltip(model));
@@ -407,7 +407,7 @@ public:
 			m_rows->addWidget(row);
 		}
 
-		// ⚠️ 不能拿布局 sizeHint：show() 前量出的高度不作数
+		// 不能拿布局 sizeHint：show() 前量出的高度不作数
 		const int ceiling = qMax(kMenuMinListHeight, maxHeight);
 		m_listHeight = qBound(kMenuMinListHeight, contentHeight(), ceiling);
 		m_scroll->setFixedHeight(m_listHeight);
@@ -484,7 +484,7 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	m_notice->hide();
 
 	m_scroll = LayoutUtils::makeThemedScrollArea(this, QStringLiteral("modelListScroll"));
-	// ⚠️ 不按内容设固定高度，否则会把窗口最小高度顶大
+	// 不按内容设固定高度，否则会把窗口最小高度顶大
 	m_scroll->setMinimumHeight(kMinListHeight);
 
 	m_listContent = new QWidget(m_scroll);
@@ -506,7 +506,7 @@ ModelListPanel::ModelListPanel(DshApiClient* api, QWidget* parent)
 	buildForm(m_listContent);
 	contentLayout->addWidget(m_form);
 
-	// ⚠️ 末尾弹性空白必须留，否则表单多一行少一行就会整张上下挪
+	// 末尾弹性空白必须留，否则表单多一行少一行就会整张上下挪
 	contentLayout->addStretch(1);
 
 	m_scroll->setWidget(m_listContent);
@@ -762,7 +762,7 @@ void ModelListPanel::buildForm(QWidget* parent)
 	m_routeHint->setObjectName(QStringLiteral("modelListRouteHint"));
 	layout->addWidget(m_routeHint);
 
-	// ⚠️ 反馈行高度固定，变高会让整张表单连字段一起挪
+	// 反馈行高度固定，变高会让整张表单连字段一起挪
 	m_feedback = new QLabel(m_form);
 	m_feedback->setWordWrap(true);
 	m_feedback->setObjectName(QStringLiteral("modelListFeedback"));
@@ -875,7 +875,7 @@ void ModelListPanel::removeModel(const QString& provider, const QString& modelId
 		return;
 	}
 
-	// ⚠️ 复制一份供异步回调：原值指向 m_view 内部，刷新后失效
+	// 复制一份供异步回调：原值指向 m_view 内部，刷新后失效
 	const ConfigurableProvider providerCopy = *entry;
 	const SettingsNamespace nsCopy = *ns;
 	const QString settingsNs = providerCopy.settingsNs;
@@ -1132,7 +1132,7 @@ void ModelListPanel::refreshCredentialRowText()
 	if (!m_apiKeyRefLabel)
 		return;
 
-	// ⚠️ 只有 known 才能下只读结论：writable 默认 false
+	// 只有 known 才能下只读结论：writable 默认 false
 	const bool readOnly = m_credential.known && !m_credential.writable;
 
 	QString state;
@@ -1275,7 +1275,7 @@ void ModelListPanel::fetchModels()
 			qWarning().noquote() << QStringLiteral("[ModelList] llm/discoverModels failed:")
 				<< providerId << error.code << error.message;
 
-			// ⚠️ 只回本地化短句，英文原文挂到该行悬停提示里
+			// 只回本地化短句，英文原文挂到该行悬停提示里
 			const QString raw = qtTrId("model_fetch_failed_fmt").arg(error.code, error.message);
 			const bool unsupported =
 				error.message.contains(QStringLiteral("no model discovery is registered"));
@@ -1311,7 +1311,7 @@ void ModelListPanel::showFetchedMenu(const QVector<DiscoveredModel>& models)
 
 	m_fetchedMenu->build(models, m_idEdit->width(), maxListHeight);
 
-	// ⚠️ 纵横都夹进屏幕，否则系统会把弹层挪回来、看起来跳一下
+	// 纵横都夹进屏幕，否则系统会把弹层挪回来、看起来跳一下
 	const QPoint inputTopLeft = m_idEdit->mapToGlobal(QPoint(0, 0));
 	const int menuHeight = m_fetchedMenu->height();
 
@@ -1417,7 +1417,7 @@ void ModelListPanel::submitForm()
 		m_submitButton->setEnabled(false);
 	setFeedback(apiKey.isEmpty() ? qtTrId("model_writing") : qtTrId("model_writing_credential"));
 
-	// ⚠️ 复制一份供异步回调：原值指向 m_view 内部，刷新会失效
+	// 复制一份供异步回调：原值指向 m_view 内部，刷新会失效
 	const ConfigurableProvider providerCopy = *provider;
 	const SettingsNamespace nsCopy = *ns;
 
@@ -1426,7 +1426,7 @@ void ModelListPanel::submitForm()
 		return;
 	}
 
-	// ⚠️ 先凭据后模型：key 写失败就不能落模型
+	// 先凭据后模型：key 写失败就不能落模型
 	QPointer<ModelListPanel> self(this);
 	const QString ref = request.apiKeyRef;
 

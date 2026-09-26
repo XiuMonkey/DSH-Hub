@@ -49,7 +49,7 @@ namespace
 
 void DSHHub::buildUi()
 {
-	// ⚠️ 高 DPI 小屏（2560x1600 @200% => 逻辑仅 1280x800）上任何写死的宽/高都会让窗口超出屏幕、
+	// 高 DPI 小屏（2560x1600 @200% => 逻辑仅 1280x800）上任何写死的宽/高都会让窗口超出屏幕、
 	// 输入卡片首当其冲被裁掉，所以一律以可用桌面为上限
 	const QRect available = screen()
 		? screen()->availableGeometry()
@@ -61,7 +61,7 @@ void DSHHub::buildUi()
 
 	const int windowInner = windowWidth - 2 * kWindowMargin;
 
-	// ⚠️ 会话列宽只从窗口内宽里扣侧栏本体、不扣阴影留白，否则输入卡片与消息列会整体变窄
+	// 会话列宽只从窗口内宽里扣侧栏本体、不扣阴影留白，否则输入卡片与消息列会整体变窄
 	const int columnWidth = qMax(kMinConversationColumnWidth, windowInner - kSidebarWidth);
 
 	// 侧栏有阴影外壳，内容块比 windowInner 宽出阴影那部分；多出的宽度从窗口留白里出
@@ -175,7 +175,7 @@ void DSHHub::buildUi()
 	auto* topBarShadow = new ShadowPanel(QStringLiteral("shadow"), kTopBarShadow, rightColumn);
 	topBarShadow->setRadius(kTopBarShadow.radius);	// 与 #topBar 的 QSS 圆角一致，阴影形状才对得上
 	topBarShadow->setCard(m_topBar);
-	// 上留白置 0 让卡片上沿与侧栏齐平；⚠️ 上留白为 0 意味着卡片上方的阴影不会被画出来
+	// 上留白置 0 让卡片上沿与侧栏齐平；上留白为 0 意味着卡片上方的阴影不会被画出来
 	topBarShadow->setPadding(QMargins(topBarShadowPad.left(), 0, topBarShadowPad.right(),
 		kTopBarShadowGap));
 

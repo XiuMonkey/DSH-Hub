@@ -67,7 +67,7 @@ DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialSer
 	registerHostObjects();
 }
 
-// ⚠️ 必须第一步：无边框标志只能在原生窗口创建之前设
+// 必须第一步：无边框标志只能在原生窗口创建之前设
 void DSHHub::installWindowShell()
 {
 	// 标题栏与边框全自绘，窗口本体透明
@@ -81,7 +81,7 @@ void DSHHub::installWindowShell()
 	setAttribute(Qt::WA_DeleteOnClose);
 }
 
-// ⚠️ spawn 要最前：Node 启动 0.9~1.6s，提前起才能与后续步骤并行；start() 同步填充 dshHome
+// spawn 要最前：Node 启动 0.9~1.6s，提前起才能与后续步骤并行；start() 同步填充 dshHome
 void DSHHub::installServer(const QUrl& initialBaseUrl, QProcess* initialServerProcess)
 {
 	m_serverManager = new ServerManager(this);
@@ -259,7 +259,7 @@ void DSHHub::installApiWiring()
 		});
 }
 
-// ⚠️ 只关这三条旁路，绝不碰"扩展管理"：接管要靠它把扩展装进来
+// 只关这三条旁路，绝不碰"扩展管理"：接管要靠它把扩展装进来
 void DSHHub::applyTakeoverBypasses(bool takenover)
 {
 	// ① 顶栏工具过滤：走 /api/tools-filter，服务 DSH 服务端那套工具清单
@@ -278,10 +278,10 @@ void DSHHub::applyTakeoverBypasses(bool takenover)
 		<< QStringLiteral("（工具过滤/插件市场入口已按态切换；扩展管理照旧）");
 }
 
-// ⚠️ 必须排在 installWindowShell / buildUi 之后（要用它们建好的滚动区与布局）
+// 必须排在 installWindowShell / buildUi 之后（要用它们建好的滚动区与布局）
 void DSHHub::installMessageWiring()
 {
-	// ⚠️ parent 传 nullptr：挂成子对象会先删控件树再删 MessageQuery，clear() 二次释放，
+	// parent 传 nullptr：挂成子对象会先删控件树再删 MessageQuery，clear() 二次释放，
 	// 故改由 ~DSHHub 显式删除
 	m_messageHost = new MessageHost(m_api, &m_cacheManager, m_scrollArea, m_messagesLayout,
 		m_loadMoreButton, m_toastLabel, m_chatInput, nullptr);
@@ -324,7 +324,7 @@ void DSHHub::installMessageWiring()
 		});
 }
 
-// ⚠️ 必须排在 installServer 之后：构造要用 dshHome
+// 必须排在 installServer 之后：构造要用 dshHome
 void DSHHub::installSettingsAndPlugins()
 {
 	// 常驻设置系统：自管窗口开关 / 遮罩 / 居中，这里只接线一次
@@ -359,22 +359,22 @@ void DSHHub::installSettingsAndPlugins()
 	}
 }
 
-// ⚠️ 装载客户端扩展必须最后：窗口、顶栏 / 侧栏都建好且已登记之后
+// 装载客户端扩展必须最后：窗口、顶栏 / 侧栏都建好且已登记之后
 void DSHHub::registerHostObjects()
 {
 	// 登记是覆盖语义，侧栏 / 顶栏各自在自己构造函数里登记
 	CommonRegistry::instance().AddToRegistry(DshHostIndex::kMainWindow, this);
 
 	// 客户端扩展靠它拿后端接管接口（VirtualApiHost）
-	// ⚠️ 切主题会换掉 m_api ⇒ 插件每次 attachHost() 都要重新 findObject + cast
+	// 切主题会换掉 m_api ⇒ 插件每次 attachHost() 都要重新 findObject + cast
 	CommonRegistry::instance().AddToRegistry(DshHostIndex::kApiClient, m_api);
 
 	// 消息区宿主（VirtualMessageHost）：接管态下"正在载入会话"提示要由扩展收掉
-	// ⚠️ 与上面两条一样是覆盖语义，切主题时新窗口会顶掉旧登记
+	// 与上面两条一样是覆盖语义，切主题时新窗口会顶掉旧登记
 	if (m_messageHost)
 		CommonRegistry::instance().AddToRegistry(DshHostIndex::kMessageHost, m_messageHost);
 
-	// ⚠️ 与 DllCaller 那条线不是一套：这里在 GUI 线程直接改宿主界面
+	// 与 DllCaller 那条线不是一套：这里在 GUI 线程直接改宿主界面
 	const auto clientExtensions = ClientExtension::loadAll();
 	if (!clientExtensions.isEmpty()) {
 		qInfo().noquote() << QStringLiteral("[DSH Hub] client extensions:")

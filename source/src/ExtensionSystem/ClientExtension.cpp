@@ -98,7 +98,7 @@ namespace ClientExtension
 				return false;
 			}
 
-			// ⚠️ 顺序别改回一句 QPluginLoader(dllPath)：构造函数会带上 PreventUnloadHint，而
+			// 顺序别改回一句 QPluginLoader(dllPath)：构造函数会带上 PreventUnloadHint，而
 			// setLoadHints() 只在尚未关联文件时才生效，故必须先构造空的、清 hint、再 setFileName
 			auto* loader = new QPluginLoader(QCoreApplication::instance());
 			loader->setLoadHints(QLibrary::LoadHints());
@@ -132,7 +132,7 @@ namespace ClientExtension
 				return false; // loader 留在 qApp 下，随进程一起走
 			}
 
-			// 可选能力：只登记、不装载判定，拒绝发生在 Takenover(true) 时。⚠️ 插件侧必须在根对象
+			// 可选能力：只登记、不装载判定，拒绝发生在 Takenover(true) 时。插件侧必须在根对象
 			// 上写 `Q_INTERFACES(DshHostPlugin VirtualApiSink)`，否则 cast 永远是 nullptr
 			if (qobject_cast<VirtualApiSink*>(root)) {
 				CommonRegistry::instance().AddToRegistry(DshHostIndex::kApiSink, root);
@@ -212,7 +212,7 @@ namespace ClientExtension
 				qInfo("[ClientExtension] remove: detach+unload %s -> %s", qPrintable(name),
 					unloaded ? "ok" : "failed (loader refused)");
 
-				// ⚠️ 卸载成功必须把"已装载"记录一起摘掉：实例已销毁、dll 也解映射，名字不再代表活着
+				// 卸载成功必须把"已装载"记录一起摘掉：实例已销毁、dll 也解映射，名字不再代表活着
 				// 的东西；否则"移除 → 再安装"会走"重新 attach"分支却找不到 loader，扩展按钮不出来
 				if (unloaded)
 					g_loadedNames.removeAll(name);

@@ -19,7 +19,7 @@ public:
 	void start(const QUrl& initialBaseUrl = QUrl(), QProcess* initialServerProcess = nullptr);
 	void restart();
 
-	// 后端接管：停掉内置进程并置接管标记；⚠️ 幂等，重复接管是常态
+	// 后端接管：停掉内置进程并置接管标记；幂等，重复接管是常态
 	void stopForTakeover();
 
 	// 接管态跨窗口存活，故标记做进程级静态；接管态下 start()/restart() 为 no-op
@@ -31,7 +31,7 @@ public:
 	QString dshHome() const;
 	bool isRestarting() const;
 
-	// 出厂 settings.yaml：只在缺失时写；⚠️ 必须写空 models: []，缺该键适配器会退回自带目录
+	// 出厂 settings.yaml：只在缺失时写；必须写空 models: []，缺该键适配器会退回自带目录
 	static bool ensureFactorySettings(const QString& dshHome);
 
 signals:
@@ -42,7 +42,7 @@ signals:
 
 private:
 	void startBundledServer();
-	// ⚠️ m_restarting 须先于 emit 落地，否则重启后界面一直转圈
+	// m_restarting 须先于 emit 落地，否则重启后界面一直转圈
 	void publishBaseUrl(const QUrl& url);
 	// 台账记 revision：只首次装，源码变了才重装
 	void ensureBuiltinPlugins(const QString& profileDir);

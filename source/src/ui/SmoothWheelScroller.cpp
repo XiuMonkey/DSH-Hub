@@ -111,7 +111,7 @@ bool SmoothWheelScroller::handleWheel(QWheelEvent* event)
 	const QPoint angleDelta = event->angleDelta();
 	double delta = 0.0;
 	if (!pixelDelta.isNull()) {
-		// ⚠️ Qt 滚动区只认 angleDelta，只有我们这里才真正生效
+		// Qt 滚动区只认 angleDelta，只有我们这里才真正生效
 		delta = -pixelDelta.y();
 	}
 	else if (angleDelta.y() != 0) {

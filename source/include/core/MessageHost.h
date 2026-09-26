@@ -37,8 +37,8 @@ public:
 	~MessageHost() override;
 
 	// VirtualMessageHost：把"正在载入会话"那层提示的收放开放给扩展。
-	// ⚠️ 实现内联转发到下面的私有方法（接口必须全内联，插件独立编译才不会 LNK2019）；
-	//    插件侧只许 qobject_cast<VirtualMessageHost*>，转 MessageHost* 会撞 LNK2019。
+	// 实现内联转发到下面的私有方法（接口必须全内联，插件独立编译才不会 LNK2019）；
+	// 插件侧只许 qobject_cast<VirtualMessageHost*>，转 MessageHost* 会撞 LNK2019。
 	void ExternalShowSessionLoading() override { showLoading(); }
 	void ExternalHideSessionLoading() override { hideLoading(); }
 

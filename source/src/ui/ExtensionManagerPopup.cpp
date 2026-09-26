@@ -229,7 +229,7 @@ void ExtensionManagerPopup::removeSelected()
 	}
 
 	if (isClientExtension) {
-		// ⚠️ 已装载插件进程内卸载不了，要重启才彻底消失
+		// 已装载插件进程内卸载不了，要重启才彻底消失
 		QString removeError;
 		const bool removed = ClientExtension::remove(name, &removeError);
 		populateList();
