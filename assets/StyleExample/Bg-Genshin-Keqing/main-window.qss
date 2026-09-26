@@ -1,0 +1,91 @@
+/* ==========================================================================
+ * main-window.qss — 主窗口外壳与自绘标题栏
+ *
+ * 归属：DSHHub.cpp（#dshhubCentral / #dshHubWindow）、WindowFrame.cpp、TitleBar.cpp
+ * 约定：一个界面/表面只出现在一个文件里；别的板块的样式不要写进来。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换），规则里不写色值。
+ * ========================================================================== */
+/* 主窗口中央容器（整棵工作区子树的背景与默认文字色）。
+ * 它同时充当“自绘窗口边框”：主窗口是无边框 + 透明窗口
+ * （Qt::FramelessWindowHint + WA_TranslucentBackground，见 DSHHub 构造函数），
+ * 圆角之外什么都不画，于是圆角与 1px 描边就是窗口真实的外轮廓。
+ * 内容区（侧边栏/对话列）左右各留 24px、下侧留 9px 白边，不会盖住圆角。 */
+#dshhubCentral {
+    /* 壁纸版：底色 = 主题蒙版色，壁纸是一张带 alpha 的 PNG 叠在它上面。
+     * Qt 的绘制顺序是 background-color -> border-image（实测），所以蒙版只能靠
+     * 壁纸自身的 alpha 透出来；换成不透明的壁纸会把底色整片盖住。
+     * 主题切换时蒙版色跟着换：light 用白色提亮，dark 用深灰压暗。 */
+    background-color: {{wallpaperMask}};
+    border-image: url({{wallpaperPath}}) 0 0 0 0 stretch stretch;
+    color: {{textPrimary}};
+    border: 1px solid {{windowBorder}};
+    border-radius: 12px;
+}
+
+/* 最大化/全屏时窗口贴屏幕边缘：圆角与描边会露出底色，这里切掉
+ * （WindowFrame::applyFrameStyle 负责切换该动态属性） */
+#dshhubCentral[maximized="true"] {
+    border: none;
+    border-radius: 0px;
+}
+
+/* 无边框主窗口本体：自身不画任何东西，可见面完全交给 #dshhubCentral */
+QMainWindow#dshHubWindow {
+    background: transparent;
+    border: none;
+}
+
+/* ===== 自绘标题栏（TitleBar.cpp）=====
+ * 标题栏本体与图标只提供底板；右侧三个窗口按钮是普通 QPushButton，
+ * 外观（形状 / 底色 / 悬停 / 按下 / 字形颜色 / 字体）全部在这里，
+ * C++ 侧只负责换字形（最大化 ↔ 还原）与发意图信号。
+ * 规则前缀 #windowTitleBar + 控件 id 用于压过下面的通用 QPushButton
+ * (:hover/:pressed) 规则 —— 否则按钮会拿到通用按钮底色。 */
+#windowTitleBar {
+    background: transparent;
+}
+#windowTitleBar QPushButton#windowMinButton,
+#windowTitleBar QPushButton#windowMaxButton,
+#windowTitleBar QPushButton#windowCloseButton {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+    margin: 0;
+    color: {{textSecondary}};
+    /* 字形来自符号字体（−/□/❐/✕），缺失时回退主题字体 */
+    font-family: "Segoe UI Symbol", "Microsoft YaHei UI";
+    font-size: 12px;
+}
+#windowTitleBar QPushButton#windowMinButton:hover,
+#windowTitleBar QPushButton#windowMaxButton:hover {
+    background: {{captionHoverBg}};
+    color: {{textPrimary}};
+}
+#windowTitleBar QPushButton#windowMinButton:pressed,
+#windowTitleBar QPushButton#windowMaxButton:pressed {
+    background: {{activeBg}};
+    color: {{textPrimary}};
+}
+#windowTitleBar QPushButton#windowCloseButton:hover {
+    background: {{dangerButtonBg}};
+    color: {{textOnAccent}};
+}
+#windowTitleBar QPushButton#windowCloseButton:pressed {
+    background: {{danger}};
+    color: {{textOnAccent}};
+}
+#windowTitleLogo {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 13px;
+    font-weight: 600;
+}
+/* 图标右侧的产品名 + 版本（TitleBar.cpp 里 objectName = windowTitleText）。
+ * 字号与字重跟上面的图标兜底文字保持一致，换主题时不跳字。 */
+#windowTitleText {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 13px;
+    font-weight: 600;
+}

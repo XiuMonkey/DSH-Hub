@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  被合并进 exe 自身 manifest 的片段：声明对私有程序集 dependence 的依赖。
+  没有这一段，exe 就不会去 dependence\ 里找 DLL。
+
+  接线方式（两边都要）：
+    - vcxproj : <Manifest><AdditionalManifestFiles>...;%(AdditionalManifestFiles)</AdditionalManifestFiles></Manifest>
+    - CMake   : target_link_options(... PRIVATE "/MANIFESTINPUT:<本文件>")
+
+  ⚠️ 这里的 name/version 必须与 source/dependence.manifest 的 assemblyIdentity 完全一致。
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="dependence" version="1.0.0.0" processorArchitecture="amd64" />
+    </dependentAssembly>
+  </dependency>
+</assembly>

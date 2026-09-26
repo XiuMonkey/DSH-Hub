@@ -1,0 +1,11 @@
+{
+  "name": "ToolsFilterPlugin",
+  "version": "1.2.0",
+  "type": "module",
+  "main": "index.js",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-system-prompt": "*"
+  }
+}

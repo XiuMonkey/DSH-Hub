@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="src\chat\AgentMessageUnit.cpp" />
+    <ClCompile Include="src\chat\CodeBlockView.cpp" />
+    <ClCompile Include="src\common\appearance\TopBarTools.cpp" />
+    <ClCompile Include="src\ui\LoadMoreButton.cpp" />
+    <ClCompile Include="src\ui\ChatInputWidget.cpp" />
+    <ClCompile Include="src\ui\Main.cpp" />
+    <ClCompile Include="src\ui\Sidebar.cpp" />
+    <ClCompile Include="src\ui\SmoothWheelScroller.cpp" />
+    <ClCompile Include="src\chat\UserMessageUnit.cpp" />
+    <ClCompile Include="src\network\DshApiClient.cpp" />
+    <ClCompile Include="src\network\DshEventParser.cpp" />
+    <ClCompile Include="src\core\DSHHub.cpp" />
+    <ClCompile Include="src\core\MessageHost.cpp" />
+    <ClCompile Include="src\core\ServerManager.cpp" />
+    <ClCompile Include="src\core\main.cpp" />
+    <ClCompile Include="src\core\HostExports.cpp" />
+    <ClCompile Include="src\chat\MessageQuery.cpp" />
+    <ClCompile Include="src\chat\SystemMessageUnit.cpp" />
+    <ClCompile Include="src\common\util\CodeHighlighter.cpp" />
+    <ClCompile Include="src\common\util\CommonRegistry.cpp" />
+    <ClCompile Include="src\common\util\MarkdownPreprocess.cpp" />
+    <ClCompile Include="src\common\appearance\InteractionHandler.cpp" />
+    <ClCompile Include="src\common\session\SessionCatalog.cpp" />
+    <ClCompile Include="src\common\session\SessionService.cpp" />
+    <ClCompile Include="src\common\settings\SettingsStore.cpp" />
+    <ClCompile Include="src\common\settings\ClientSettings.cpp" />
+    <ClCompile Include="src\common\session\AgentPresetService.cpp" />
+    <ClCompile Include="src\common\extension\PluginMarketClient.cpp" />
+    <ClCompile Include="src\common\extension\PluginMarketModel.cpp" />
+    <ClCompile Include="src\common\extension\PluginMarketInstaller.cpp" />
+    <ClCompile Include="src\common\extension\ExtensionRegistry.cpp" />
+    <ClCompile Include="src\common\extension\ExtensionInstallTask.cpp" />
+    <ClCompile Include="src\common\session\ModelSelectionService.cpp" />
+    <ClCompile Include="src\common\appearance\TranslationManager.cpp" />
+    <ClCompile Include="src\ui\TranslationUi.cpp" />
+    <ClCompile Include="src\ui\StatusPopupWindow.cpp" />
+    <ClCompile Include="src\ui\ModelSelector.cpp" />
+    <ClCompile Include="src\ui\ModelListPanel.cpp" />
+    <ClCompile Include="src\ui\SpinnerWidget.cpp" />
+    <ClCompile Include="src\ui\TopBar.cpp" />
+    <ClCompile Include="src\ui\TitleBar.cpp" />
+    <ClCompile Include="src\common\appearance\WindowFrame.cpp" />
+    <ClCompile Include="src\chat\CacheHistoryManager.cpp" />
+    <ClCompile Include="src\network\SessionPrefetcher.cpp" />
+    <ClCompile Include="src\ui\PopupWindow.cpp" />
+    <ClCompile Include="src\ui\Tooltip.cpp" />
+    <ClCompile Include="src\ui\Settings.cpp" />
+    <ClCompile Include="src\common\appearance\ThemeManager.cpp" />
+    <ClCompile Include="src\common\appearance\CardShadow.cpp" />
+    <ClCompile Include="src\ui\ShadowPanel.cpp" />
+    <ClCompile Include="src\common\util\Logger.cpp" />
+    <ClCompile Include="src\ui\PluginsManager.cpp" />
+    <ClCompile Include="src\ui\ExtensionManagerPopup.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DshNamedPipeBridge.cpp" />
+    <ClCompile Include="src\ExtensionSystem\DllCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ComCaller.cpp" />
+    <ClCompile Include="src\ExtensionSystem\Thunk.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ExtensionLoader.cpp" />
+    <ClCompile Include="src\ExtensionSystem\ClientExtension.cpp" />
+    <ClCompile Include="src\ExtensionSystem\UiStage.cpp" />
+    <ClCompile Include="src\core\ConnectionManager.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtTranslation Include="..\assets\translations\dshhub_en.ts" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\network\DshEventParser.h" />
+    <ClInclude Include="include\ExtensionSystem\ExtensionLoader.h" />
+    <ClInclude Include="include\ExtensionSystem\DllCaller.h" />
+    <ClInclude Include="include\ExtensionSystem\ComCaller.h" />
+    <ClInclude Include="include\ExtensionSystem\Thunk.h" />
+    <ClInclude Include="include\ExtensionSystem\ClientExtension.h" />
+    <ClInclude Include="include\chat\SystemMessageUnit.h" />
+    <ClInclude Include="include\common\util\CodeHighlighter.h" />
+    <ClInclude Include="include\common\appearance\InteractionHandler.h" />
+    <ClInclude Include="include\chat\CacheHistoryManager.h" />
+    <ClInclude Include="include\common\appearance\CardShadow.h" />
+    <ClInclude Include="include\common\appearance\TopBarTools.h" />
+    <ClInclude Include="include\VirtualClass\VirtualCommon.h" />
+    <ClInclude Include="include\VirtualClass\VirtualApiTakeover.h" />
+    <ClInclude Include="include\core\HostExports.h" />
+    <ClInclude Include="include\core\DshHostPlugin.h" />
+    <ClInclude Include="include\common\appearance\WindowFrame.h" />
+    <ClInclude Include="include\common\util\Logger.h" />
+    <ClInclude Include="include\common\session\SessionCatalog.h" />
+    <ClInclude Include="include\common\session\SessionService.h" />
+    <ClInclude Include="include\common\settings\SettingsStore.h" />
+    <ClInclude Include="include\ui\Tooltip.h" />
+    <ClInclude Include="include\common\settings\ClientSettings.h" />
+    <ClInclude Include="include\common\session\AgentPresetService.h" />
+    <ClInclude Include="include\common\extension\PluginMarketModel.h" />
+    <ClInclude Include="include\common\extension\ExtensionRegistry.h" />
+    <ClInclude Include="include\common\extension\ExtensionInstallTask.h" />
+    <ClInclude Include="include\common\session\ModelSelectionService.h" />
+    <ClInclude Include="include\ExtensionSystem\UiStage.h" />
+    <ClInclude Include="include\ui\LayoutUtils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\assets\resources\DSH Hub.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtMoc Include="include\core\DSHHub.h" />
+    <QtMoc Include="include\core\MessageHost.h" />
+    <QtMoc Include="include\ui\SmoothWheelScroller.h" />
+    <QtMoc Include="include\core\ServerManager.h" />
+    <QtMoc Include="include\ui\Sidebar.h" />
+    <QtMoc Include="include\common\util\CommonRegistry.h" />
+    <QtMoc Include="include\ui\LoadMoreButton.h" />
+    <QtMoc Include="include\network\DshApiClient.h" />
+    <QtMoc Include="include\ExtensionSystem\DshNamedPipeBridge.h" />
+    <QtMoc Include="include\network\SessionPrefetcher.h" />
+    <QtMoc Include="include\chat\MessageQuery.h" />
+    <QtMoc Include="include\ui\SpinnerWidget.h" />
+    <QtMoc Include="include\ui\TopBar.h" />
+    <QtMoc Include="include\ui\TitleBar.h" />
+    <QtMoc Include="include\ui\PopupWindow.h" />
+    <QtMoc Include="include\ui\Settings.h" />
+    <QtMoc Include="include\ui\PluginsManager.h" />
+    <QtMoc Include="include\ui\ExtensionManagerPopup.h" />
+    <QtMoc Include="include\ui\ChatInputWidget.h" />
+    <QtMoc Include="include\ui\StatusPopupWindow.h" />
+    <QtMoc Include="include\common\extension\PluginMarketClient.h" />
+    <QtMoc Include="include\common\extension\PluginMarketInstaller.h" />
+    <QtMoc Include="include\ui\ModelSelector.h" />
+    <QtMoc Include="include\ui\ModelListPanel.h" />
+    <QtMoc Include="include\ui\ShadowPanel.h" />
+    <QtMoc Include="include\chat\UserMessageUnit.h" />
+    <QtMoc Include="include\chat\AgentMessageUnit.h" />
+    <QtMoc Include="include\common\appearance\ThemeManager.h" />
+    <QtMoc Include="include\common\appearance\TranslationManager.h" />
+    <QtMoc Include="include\core\ConnectionManager.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtRcc Include="..\assets\resources\DSHHub.qrc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\assets\resources\highlight_rules.json" />
+    <None Include="..\assets\resources\DSH-Hub-Logo-Tiny@2x.png" />
+    <None Include="..\assets\resources\DSH-Hub-Logo-Tiny-Dark@2x.png" />
+    <None Include="..\assets\resources\DSH-Hub-Icon.png" />
+    <None Include="..\assets\resources\DSH Hub.ico" />
+  </ItemGroup>
+</Project>

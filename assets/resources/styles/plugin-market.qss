@@ -1,0 +1,214 @@
+/* ==========================================================================
+ * plugin-market.qss — 插件市场窗口（PluginsManager）
+ *
+ * 归属：src/ui/PluginsManager.cpp
+ * 约定：扩展管理窗口的样式在 extension-manager.qss，别混进来。
+ *       规则必须带父级 objectName 作用域，等价还原原控件级 setStyleSheet 的子树影响范围。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
+ * ========================================================================== */
+
+/* ===== PluginsManager.cpp ===== */
+/* 市场页顶部搜索框（m_searchEdit） */
+#pluginSearchEdit {
+    background: {{inputBg}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+#pluginSearchEdit:focus {
+    background: {{panelBg}};
+    border-color: {{accent}};
+}
+
+/* ===== PluginsManager.cpp ===== */
+/* 顶部工具栏“刷新 / 重启服务”按钮（refreshButton / m_restartButton） */
+#pluginRefreshButton,
+#pluginRestartButton {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+}
+#pluginRefreshButton:hover,
+#pluginRestartButton:hover {
+    background: {{border}};
+}
+
+/* ===== PluginsManager.cpp ===== */
+/* 市场/已安装页签（m_tabs） */
+QTabWidget#pluginTabs::pane {
+    border: 1px solid {{border}};
+    border-radius: 12px;
+    background: {{panelBg}};
+}
+#pluginTabs QTabBar::tab {
+    background: transparent;
+    color: {{textSecondary}};
+    padding: 8px 18px;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+}
+#pluginTabs QTabBar::tab:selected {
+    background: {{activeBg}};
+    color: {{textPrimary}};
+    font-weight: 600;
+}
+
+/* ===== PluginsManager.cpp ===== */
+/* 插件市场滚动区（m_marketScroll：透明底 + 细滚动条） */
+#pluginMarketScroll {
+    background: transparent;
+}
+#pluginMarketScroll > QWidget > QWidget {
+    background: transparent;
+}
+/* 滚动条外观来自 scrollbars.qss 的全局规则（以前每个滚动区各抄一份） */
+/* 分页标签（m_pageLabel） */
+#pluginPageLabel {
+    color: {{textSecondary}};
+    font-size: 12px;
+    background: transparent;
+}
+
+/* ===== PluginsManager.cpp ===== */
+/* 分页按钮“上一页 / 下一页”（m_prevButton / m_nextButton） */
+#pluginPrevPageButton,
+#pluginNextPageButton {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+    border: none;
+    border-radius: 10px;
+    padding: 6px 14px;
+    font-size: 12px;
+}
+#pluginPrevPageButton:hover,
+#pluginNextPageButton:hover {
+    background: {{border}};
+}
+#pluginPrevPageButton:disabled,
+#pluginNextPageButton:disabled {
+    color: {{scrollbarHover}};
+    background: {{inputBg}};
+}
+
+/* ===== PluginsManager.cpp ===== */
+/* 已安装插件滚动区（m_installedScroll：透明底 + 细滚动条） */
+#pluginInstalledScroll {
+    background: transparent;
+}
+#pluginInstalledScroll > QWidget > QWidget {
+    background: transparent;
+}
+/* 滚动条外观来自 scrollbars.qss 的全局规则 */
+
+/* ===== PluginsManager.cpp ===== */
+/* 安装进度条（m_progressBar，渐变块） */
+#pluginProgressBar {
+    background: {{inputBg}};
+    border: none;
+    border-radius: 4px;
+}
+#pluginProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {{accent}},
+        stop:0.5 {{accentHover}},
+        stop:1 {{accent}});
+    border-radius: 4px;
+}
+
+/* ===== PluginsManager.cpp ===== */
+/* 状态栏文字（m_statusLabel） */
+#pluginStatusLabel {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+
+/* ===== PluginsManager.cpp ===== */
+/* 插件市场卡片（createMarketCard 生成的 QFrame#pluginCard） */
+#pluginMarketContainer #pluginCard {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+}
+#pluginMarketContainer #pluginCard:hover {
+    border-color: {{accent}};
+    background: {{inputBg}};
+}
+/* 卡片内：插件名 */
+#pluginCardNameLabel {
+    background: transparent;
+    color: {{textPrimary}};
+    font-size: 14px;
+    font-weight: 600;
+}
+/* 卡片内：分类标签 */
+#pluginCardCategoryLabel {
+    background: {{tagBg}};
+    color: {{accent}};
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+}
+/* 卡片内：描述（仅市场卡有） */
+#pluginCardDescLabel {
+    background: transparent;
+    color: {{textSecondary}};
+    font-size: 12px;
+}
+/* 卡片内：“安装”按钮（仅市场卡有） */
+#pluginCardInstallButton {
+    background: {{primaryButtonBg}};
+    color: {{primaryButtonText}};
+    border: none;
+    border-radius: 10px;
+    padding: 8px 18px;
+    font-size: 13px;
+}
+#pluginCardInstallButton:hover {
+    background: {{primaryButtonHover}};
+}
+#pluginCardInstallButton:pressed {
+    background: {{primaryButtonPressed}};
+}
+#pluginCardInstallButton:disabled {
+    background: {{primaryButtonDisabledBg}};
+    color: {{primaryButtonDisabledText}};
+}
+
+/* ===== PluginsManager.cpp ===== */
+/* 已安装插件卡片（createInstalledCard 生成的 QFrame#pluginCard，
+   与市场卡同名 pluginCard，靠父容器作用域区分；无 hover 高亮） */
+#pluginInstalledContainer #pluginCard {
+    background: {{panelBg}};
+    border: 1px solid {{border}};
+    border-radius: 12px;
+}
+/* 卡片内：“更新”按钮 */
+#pluginCardUpdateButton {
+    background: {{hoverBg}};
+    color: {{textPrimary}};
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 12px;
+}
+#pluginCardUpdateButton:hover {
+    background: {{border}};
+}
+/* 卡片内：“卸载”按钮（危险色） */
+#pluginCardUninstallButton {
+    background: {{dangerBg}};
+    color: {{danger}};
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 12px;
+}
+#pluginCardUninstallButton:hover {
+    background: {{dangerBg}};
+}

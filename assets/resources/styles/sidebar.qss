@@ -1,0 +1,147 @@
+/* ==========================================================================
+ * sidebar.qss — 会话侧边栏（工作区与会话列表、侧栏图标按钮）
+ *
+ * 归属：src/ui/Sidebar.cpp
+ * 约定：一个界面/表面只出现在一个文件里；别的板块的样式不要写进来。
+ * 颜色一律来自调色板 theme-<mode>.json（{{key}} 占位符，加载时替换）。
+ * ========================================================================== */
+
+/* ===== Sidebar.cpp ===== */
+/* SidebarLogo：Logo 自身透明背景（原构造内联样式） */
+#sidebarLogo {
+    background: transparent;
+}
+
+/* ===== Sidebar.cpp ===== */
+/* NewWorkspaceButton：新建工作区按钮（含 hover） */
+QPushButton#newWorkspaceButton {
+    background: {{primaryButtonBg}};
+    color: {{primaryButtonText}};
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+QPushButton#newWorkspaceButton:hover {
+    background: {{primaryButtonHover}};
+}
+QPushButton#newWorkspaceButton:pressed {
+    background: {{primaryButtonPressed}};
+}
+QPushButton#newWorkspaceButton:disabled {
+    background: {{primaryButtonDisabledBg}};
+    color: {{primaryButtonDisabledText}};
+}
+
+/* ===== Sidebar.cpp ===== */
+/* ClearSessionButton：清空会话按钮（含 hover） */
+QPushButton#clearSessionButton {
+    background: {{dangerButtonBg}};
+    color: {{textOnAccent}};
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+QPushButton#clearSessionButton:hover {
+    background: {{danger}};
+}
+
+/* ===== Sidebar.cpp ===== */
+/* SidebarSettingsButton：设置图标按钮（含 hover） */
+QPushButton#sidebarSettingsButton {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+}
+QPushButton#sidebarSettingsButton:hover {
+    background: {{hoverBg}};
+}
+
+/* ===== Sidebar.cpp ===== */
+/* SidebarPluginsButton：插件图标按钮（含 hover） */
+QPushButton#sidebarPluginsButton {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+}
+QPushButton#sidebarPluginsButton:hover {
+    background: {{hoverBg}};
+}
+
+/* ===== Sidebar.cpp ===== */
+/* SidebarThemeButton：主题切换图标按钮（含 hover） */
+QPushButton#sidebarThemeButton {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+}
+QPushButton#sidebarThemeButton:hover {
+    background: {{hoverBg}};
+}
+
+/* ===== Sidebar.cpp ===== */
+/* SidebarExtensionButton：扩展管理图标按钮（含 hover） */
+QPushButton#sidebarExtensionButton {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+}
+QPushButton#sidebarExtensionButton:hover {
+    background: {{hoverBg}};
+}
+
+/* ===== Sidebar.cpp ===== */
+/* WorkspaceButton：工作区折叠/展开标题按钮（含 hover） */
+QPushButton#workspaceButton {
+    background: {{hoverBg}};
+    border: none;
+    border-radius: 8px;
+    padding: 6px 26px 6px 10px;
+    color: {{textPrimary}};
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+}
+QPushButton#workspaceButton:hover {
+    background: {{activeBg}};
+    border-radius: 8px;
+}
+
+/* ===== Sidebar.cpp ===== */
+/* Sidebar 自身圆角底色；会话列表/工作区容器透明；
+ * 会话按钮的 hover/checked 由 QSS 伪类处理（非运行时的换肤调用） */
+#sidebar {
+    background: {{panelBg}};
+    border-radius: 12px;
+}
+/* 会话列表的滚动区：只负责滚动，不画自己的底色/边框，侧栏底色透出来。
+ * 滚动条外观来自 scrollbars.qss 的全局规则（不要在这里再抄一份）。 */
+#workspaceScrollArea {
+    background: transparent;
+    border: none;
+}
+#workspaceScrollArea > QWidget > QWidget {
+    background: transparent;
+}
+#workspaceList {
+    background: transparent;
+}
+#workspaceGroupContainer {
+    background: transparent;
+}
+QPushButton#sessionButton {
+    text-align: left;
+    padding: 0 10px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: {{textPrimary}};
+}
+QPushButton#sessionButton:hover {
+    background: {{activeBg}};
+}
+QPushButton#sessionButton:checked {
+    background: {{activeBg}};
+    color: {{textPrimary}};
+}

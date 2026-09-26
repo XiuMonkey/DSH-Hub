@@ -1,0 +1,44 @@
+# Visual Studio
+Count-Lines.ps1
+.vs/
+.workbuddy/
+DevLog/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Build output
+x64/
+ReleaseBuild/
+build/
+Debug/
+Release/
+DSH Hub/
+DSH Hub.Tests/
+assets/resources/server/
+test extension/
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.obj
+*.o
+*.log
+
+# Qt generated files
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# Compiled translation binaries (rebuild from translations/*.ts)
+assets/resources/translations/*.qm
+
+# Node runtime dependencies
+assets/resources/server/node_modules/
+assets/resources/server/node.exe
+
+build_smoke/
+
+# StyleExample 的整包 zip（185 MB，含壁纸）：不进仓库。要入库就删掉下面这行。
+assets/StyleExample/Bg-Genshin-Keqing.zip

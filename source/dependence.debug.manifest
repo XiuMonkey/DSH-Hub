@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  dependence 程序集的 **Debug 版**清单（部署到 <exe 目录>\dependence\dependence.manifest）。
+
+  与 Release 版的区别只有 <file> 列表：Debug 构建链接的是带 d 后缀的 Qt（Qt6Cored.dll …），
+  MSVC 的调试版 CRT（msvcp140d.dll 等）**不在 exe 目录里**（由 Visual Studio 的运行环境提供），
+  所以这里不列它们 —— 列了就会因文件缺失让整个程序集失效（SxS 硬失败）。
+
+  维护约定同 Release 版：加/换 DLL 必须同步改这里，且 version 要与 dependence.deps.manifest 一致。
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="dependence" version="1.0.0.0" processorArchitecture="amd64" />
+
+  <!-- Qt 运行库（Debug 版带 d 后缀） -->
+  <file name="Qt6Cored.dll" />
+  <file name="Qt6Guid.dll" />
+  <file name="Qt6Widgetsd.dll" />
+  <file name="Qt6Networkd.dll" />
+  <file name="Qt6WebSocketsd.dll" />
+</assembly>

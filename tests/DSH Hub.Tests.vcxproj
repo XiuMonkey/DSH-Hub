@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{E9C6D4A1-7B8C-4F2E-9D51-3A5B0C1D2E3F}</ProjectGuid>
+    <Keyword>QtVS_v304</Keyword>
+    <WindowsTargetPlatformVersion Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">10.0</WindowsTargetPlatformVersion>
+    <QtMsBuild Condition="'$(QtMsBuild)'=='' OR !Exists('$(QtMsBuild)\qt.targets')">$(MSBuildProjectDirectory)\QtMsBuild</QtMsBuild>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Condition="Exists('$(QtMsBuild)\qt_defaults.props')">
+    <Import Project="$(QtMsBuild)\qt_defaults.props" />
+  </ImportGroup>
+
+  <!-- 目录重组后 $(SolutionDir) 指向 source/，这里把输出钉回仓库根的 x64\，
+       免得 VS 的输出跟着解决方案搬进 source\x64\（多个脚本与既有习惯都按 <repo>\x64\ 走）。
+       不经解决方案直接编工程时 $(SolutionDir) 为空，"..\x64\" 相对工程目录仍是 <repo>\x64\。 -->
+  <PropertyGroup Label="OutputPaths">
+    <OutDir>$(SolutionDir)..\x64\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)DSH Hub.Tests\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'" Label="QtSettings">
+    <QtInstall>6.11.2_msvc2022_64</QtInstall>
+    <QtModules>core;gui;widgets;testlib;network;websockets</QtModules>
+    <QtBuildConfig>debug</QtBuildConfig>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'" Label="QtSettings">
+    <QtInstall>6.11.2_msvc2022_64</QtInstall>
+    <QtModules>core;gui;widgets;testlib;network;websockets</QtModules>
+    <QtBuildConfig>release</QtBuildConfig>
+  </PropertyGroup>
+  <Target Name="QtMsBuildNotFound" BeforeTargets="CustomBuild;ClCompile" Condition="!Exists('$(QtMsBuild)\qt.targets') or !Exists('$(QtMsBuild)\qt.props')">
+    <Message Importance="High" Text="QtMsBuild: could not locate qt.targets, qt.props; project may not build correctly." />
+  </Target>
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(QtMsBuild)\Qt.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(QtMsBuild)\Qt.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+
+  <!-- 让 exe 从 dependence\ 子目录解析 Qt / MSVC 运行库（私有程序集）。
+       Windows 的加载器默认**不搜索 exe 的子目录**，靠这一段声明才会去找；
+       DLL 清单在 source\dependence.manifest。加/换 DLL 时两处都要改。 -->
+  <ItemDefinitionGroup>
+    <Manifest>
+      <AdditionalManifestFiles>$(ProjectDir)..\source\dependence.deps.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
+    <!-- 每次构建后把运行库收进 dependence\：那个私有程序集要求「清单与 dll 必须同在」，
+         漏一个就是启动即失败（SxS），所以不能靠手工记得。缺 dll 时脚本只告警、不让构建失败。 -->
+    <PostBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)..\misc\tools\make-dependence.ps1" -Target "$(OutDir)." -Config $(Configuration)</Command>
+      <Message>把运行库收进 dependence\（私有程序集）</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>QT_NO_DEPRECATED_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\source\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>Disabled</Optimization>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>QT_NO_DEPRECATED_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\source\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <Optimization>Disabled</Optimization>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="UnitTestMain.cpp" />
+    <ClCompile Include="TestDshEventParser.cpp" />
+    <ClCompile Include="TestCodeHighlighter.cpp" />
+    <ClCompile Include="TestHistoryManager.cpp" />
+    <ClCompile Include="TestMarkdownPreprocess.cpp" />
+    <ClCompile Include="TestThunk.cpp" />
+    <ClCompile Include="TestSessionCatalog.cpp" />
+    <ClCompile Include="TestPluginMarketModel.cpp" />
+    <ClCompile Include="TestModelSelection.cpp" />
+    <ClCompile Include="TestDshApiClient.cpp" />
+    <ClCompile Include="TestSessionPrefetcher.cpp" />
+    <ClCompile Include="TestSettingsStore.cpp" />
+    <ClCompile Include="TestClientSettings.cpp" />
+    <ClCompile Include="TestLogger.cpp" />
+    <ClCompile Include="TestTranslationManager.cpp" />
+    <ClCompile Include="TestServerManager.cpp" />
+    <ClCompile Include="TestClientExtension.cpp" />
+    <ClCompile Include="..\source\src\ExtensionSystem\Thunk.cpp" />
+    <ClCompile Include="..\source\src\ExtensionSystem\DllCaller.cpp" />
+    <ClCompile Include="..\source\src\ExtensionSystem\ComCaller.cpp" />
+    <ClCompile Include="..\source\src\ExtensionSystem\ClientExtension.cpp" />
+    <ClCompile Include="..\source\src\ExtensionSystem\UiStage.cpp" />
+    <ClCompile Include="..\source\src\network\DshEventParser.cpp" />
+    <ClCompile Include="..\source\src\common\util\CodeHighlighter.cpp" />
+    <ClCompile Include="..\source\src\common\util\MarkdownPreprocess.cpp" />
+    <ClCompile Include="..\source\src\common\session\SessionCatalog.cpp" />
+    <ClCompile Include="..\source\src\common\extension\PluginMarketModel.cpp" />
+    <ClCompile Include="..\source\src\network\DshApiClient.cpp" />
+    <ClCompile Include="..\source\src\network\SessionPrefetcher.cpp" />
+    <ClCompile Include="..\source\src\common\settings\SettingsStore.cpp" />
+    <ClCompile Include="..\source\src\common\session\AgentPresetService.cpp" />
+    <ClCompile Include="..\source\src\common\settings\ClientSettings.cpp" />
+    <ClCompile Include="..\source\src\common\util\Logger.cpp" />
+    <ClCompile Include="..\source\src\common\appearance\TranslationManager.cpp" />
+    <ClCompile Include="..\source\src\ui\TranslationUi.cpp" />
+    <ClCompile Include="..\source\src\core\ServerManager.cpp" />
+    <!-- ServerManager.cpp 与 DshApiClient.cpp 都经 dshRegister 引用 ConnectionManager::instance()，必须一起编，否则 LNK2019 -->
+    <ClCompile Include="..\source\src\core\ConnectionManager.cpp" />
+    <!-- DshApiClient.cpp 按 kApiSink 从 CommonRegistry 取"后端接管的接收端"，必须一起编，否则 LNK2019 -->
+    <ClCompile Include="..\source\src\common\util\CommonRegistry.cpp" />
+    <ClCompile Include="..\source\src\common\extension\ExtensionRegistry.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <QtMoc Include="TestDshEventParser.h" />
+    <QtMoc Include="TestCodeHighlighter.h" />
+    <QtMoc Include="TestHistoryManager.h" />
+    <QtMoc Include="TestMarkdownPreprocess.h" />
+    <QtMoc Include="TestThunk.h" />
+    <QtMoc Include="TestSessionCatalog.h" />
+    <QtMoc Include="TestPluginMarketModel.h" />
+    <QtMoc Include="TestModelSelection.h" />
+    <QtMoc Include="TestDshApiClient.h" />
+    <QtMoc Include="TestSessionPrefetcher.h" />
+    <QtMoc Include="TestSettingsStore.h" />
+    <QtMoc Include="TestClientSettings.h" />
+    <QtMoc Include="TestLogger.h" />
+    <QtMoc Include="TestTranslationManager.h" />
+    <QtMoc Include="TestServerManager.h" />
+    <QtMoc Include="TestClientExtension.h" />
+    <QtMoc Include="..\source\include\network\DshApiClient.h" />
+    <QtMoc Include="..\source\include\core\ServerManager.h" />
+    <QtMoc Include="..\source\include\network\SessionPrefetcher.h" />
+    <QtMoc Include="..\source\include\common\appearance\TranslationManager.h" />
+    <QtMoc Include="..\source\include\common\util\CommonRegistry.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\source\include\ExtensionSystem\Thunk.h" />
+    <ClInclude Include="..\source\include\ExtensionSystem\DllCaller.h" />
+    <ClInclude Include="..\source\include\ExtensionSystem\ComCaller.h" />
+    <ClInclude Include="..\source\include\common\extension\ExtensionRegistry.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">
+    <Import Project="$(QtMsBuild)\qt.targets" />
+  </ImportGroup>
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
