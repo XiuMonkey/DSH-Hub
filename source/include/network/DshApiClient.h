@@ -66,7 +66,7 @@ public:
 	// 后端是否处于接管态（原始上报/提问应答的分流、DSHHub 的旁路开关都看它）
 	bool isTakenover() const { return m_takenover; }
 
-	// VirtualApiHost 接口（插件调用宿主，插件 → 宿主）：三个方法的实现全内联在本头文件
+	// VirtualApiHost 接口（插件调用宿主，插件 → 宿主）：方法实现全内联在本头文件
 	// 幂等：拿不到扩展接收端时拒绝接管并记警告
 	void Takenover(bool on) override
 	{
@@ -167,6 +167,14 @@ public:
 			errorCode = QStringLiteral("takenover-error");
 
 		failPending(id, errorCode, QString::fromUtf8(message ? message : ""));
+	}
+
+	// 接管态查询：Takenover(bool) 没有回执，插件靠这一条确认自己那一次请求有没有被接受
+	// （被拒 = 注册表里没有实现 VirtualApiSink 的扩展）。实成员函数 isTakenover() 早就有了，
+	// 这里只是把它搬到接口上。
+	bool IsTakenover() const override
+	{
+		return isTakenover();
 	}
 
 	// 一元 RPC：payload 是本端点的 args 内容（本类包一层 {"args": …}）；endpoint 用斜杠（"session/list"），

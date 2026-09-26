@@ -5,7 +5,7 @@
 
 #include <utility>
 
-// VirtualConnectionManager 的五个接口方法全部内联在 ConnectionManager.h，本文件只留单例、析构与两个内部删除助手
+// VirtualConnectionManager 的六个接口方法全部内联在 ConnectionManager.h，本文件只留单例、析构与两个内部删除助手
 ConnectionManager& ConnectionManager::instance()
 {
 	static ConnectionManager* const inst = new ConnectionManager();

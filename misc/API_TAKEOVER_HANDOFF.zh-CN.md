@@ -55,6 +55,7 @@ public:
     virtual void CompleteCall(const char* rpcId, const char* resultJson) = 0;   // D3 回填成功
     virtual void FailCall(const char* rpcId, const char* code,
                           const char* message) = 0;                       // D3 回填失败
+    virtual bool IsTakenover() const = 0;   // 后追加（末尾）：接管回执，DshApiClient 内联转 isTakenover()
     // ⚠️ 以后只许在末尾追加
 };
 Q_DECLARE_INTERFACE(VirtualApiHost, "com.DSH_HUB.VirtualApiHost/1.0")
@@ -92,6 +93,12 @@ Q_DECLARE_INTERFACE(VirtualApiSink, "com.DSH_HUB.VirtualApiSink/1.0")
 - 切主题会重建窗口、换掉 `m_api` ⇒ **插件在每次 `attachHost()` 里重新取**（`DshHostPlugin.h:20-22` 已保证 `attachHost()` 会被多次调用）。`findObject` 返回 `QPointer`，旧指针只会变空、不会变野。
 
 ### 2.4 入站注入：复用宿主槽（D5=B）
+
+> **⚠️ 追记（2026-09-26，本节已过时，勿照此实现）**：D5=B 已被推翻。12 个入站点现在走公共虚接口
+> **`VirtualMain`**（`VirtualCommon.h:27-62` 的 `Handle*` 方法）+ 宿主内联转发（`DSHHub.h:99-134`），
+> 扩展侧 `kMainWindow` → `qobject_cast<VirtualMain*>` 调用。**字符串 `invokeMethod` 已全面废弃。**
+> 唯一"新增订阅宿主信号"的路径：`ProtectedRegisterConnection` + `ConnectionManager.h` 的
+> 硬编码白名单 `ConnectionManager::m_publicSignals`（⚠️ 比对的是 signal 签名串，不是调用方自起的 index）。
 
 插件用字符串 `invokeMethod` 调 `DSHHub` 的槽（当前都在 `private slots:`，**字符串 invokeMethod 不受访问级别限制**）：
 
@@ -201,7 +208,7 @@ call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 | 接管路径的回填不能复用 `handleParsedResponse`（它读 `m_parsing`） | `DshApiClient.cpp:586-590` |
 | 入站：12 个信号、15 处 `emit`；唯一的 `QWebSocket` | `DshApiClient.h:88-118`、`DshApiClient.cpp:49` |
 | 宿主注册表实际只登记 5 项，`DshApiClient` 不在其中 | `DSHHub.cpp:451`、`Sidebar.cpp:592`、`TopBar.cpp:702`、`ThemeManager.cpp:369`、`main.cpp:24` |
-| 可注入的槽（`private slots:`，invokeMethod 可调） | `source/include/core/DSHHub.h:93-133` |
+| 可注入的接口（**调这个**：`VirtualMain::HandleXxx`，宿主实现内联转发） | `source/include/VirtualClass/VirtualCommon.h:27-62`、`source/include/core/DSHHub.h:99-134` |
 | 插件装载 / `detachHost` 调用 / 不实现时不 unload | `ClientExtension.cpp:196-220` |
 | 客户端扩展目录：`<exe>/clientExtensions/<Name>/`（`DSHHUB_CLIENT_EXTENSION_DIR` 可覆盖） | `source/src/ExtensionSystem/ClientExtension.cpp:149-156` |
 | **装配顺序：服务端先起、插件后装** ⇒ 接管阻止不了启动，只能接管时停掉（D8=C） | `source/src/core/DSHHub.cpp:68-84`（`:181` 起服务端 / `:458` 装插件） |
@@ -244,7 +251,8 @@ call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 > 数组 / **裸标量**三种形态、`FailCall` 的 code 透传、不认识的 rpcId 只记日志、
 > `respond` 绕过 `m_clientId` 门槛且不带空 clientId、两条流控制通知（含 sessionId）、
 > 还台时挂着的请求以 `takenover-released` 收尾、还台后普通 DSH 路径恢复、重复 `Takenover(true)` 幂等。
-> **未覆盖**：真实 QPlugin DLL 装载路径、入站槽注入（`invokeMethod` 那 11 个槽）、
+> **未覆盖**：真实 QPlugin DLL 装载路径、入站注入（当时是 `invokeMethod` 那 11 个槽，
+> 现已改为 `VirtualMain::HandleXxx` 接口 —— 这批接口本身仍未纳入自动化测试）、
 > 停内置 DSH 进程与三条旁路的实际界面效果 —— 这些要么属于插件侧，要么要在真客户端里手工看。
 >
 > ⚠️ 冒烟测试抓出过一个真 bug（已修）：`CompleteCall` 的裸标量回退把值包进 `[]` 之后
@@ -277,7 +285,8 @@ call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\v
 > 现在的第一条建议变成：**读 `VirtualClass/VirtualApiTakeover.h` 的文件头**（出站下发形态与
 > 错误码词汇表都在那儿），然后按它写插件侧的接收端（根对象上 `Q_INTERFACES(DshHostPlugin
 > VirtualApiSink)`、`attachHost()` 里取 `kApiClient` 调 `Takenover(true)`、回填走
-> `CompleteCall`/`FailCall`、入站用字符串 `invokeMethod` 调 DSHHub 的槽）。
+> `CompleteCall`/`FailCall`、入站改调公共虚接口 `VirtualMain` 的 `HandleXxx`（**不再是字符串
+> invokeMethod**，见 §2.4 的追记））。
 > （下面是交接当时的原文，留档。）
 
 先把 **§2.6 的两个接口头文件**写出来（纯虚、全内联、两个 IID），编译通过即可 —— 它不依赖任何其他改动，且能立刻验证"接口形态 + 多继承"这套在本项目的构建里没问题。之后再动 `DshApiClient` 的分支。

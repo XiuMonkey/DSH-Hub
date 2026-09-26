@@ -3,26 +3,16 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QStringList>
+#include <qboxlayout.h>
 #include <qplugin.h>
-// ⚠️ 本头文件会被**只链 Qt Core 的**客户端扩展包含（插件刻意不依赖 Widgets），所以带 Widgets 的
-//    那部分（VirtualTopBar）按可用性条件编译：宿主进程里 QtWidgets 一定在，插件那边则整块不参与。
-//    只用 Qt Core 类型的接口（如 VirtualMain / VirtualMessageHost）两边行为完全一致。
-#if __has_include(<qboxlayout.h>)
-#  define DSHHUB_VIRTUALCOMMON_HAS_WIDGETS 1
-#  include <qboxlayout.h>
-#else
-#  define DSHHUB_VIRTUALCOMMON_HAS_WIDGETS 0
-#endif
 // 参数只按指针传递，前向声明就够 —— 宿主与插件各编一份，互不依赖对方 exe 里的符号
 class QWidget;
 
-#if DSHHUB_VIRTUALCOMMON_HAS_WIDGETS
 class VirtualTopBar {
 public:
 	virtual ~VirtualTopBar() = default;
 	virtual QHBoxLayout* GetLayout() = 0;
 };
-#endif
 
 // ⚠️ 虚方法只许在末尾追加：vtable 槽位 = 声明顺序，插件 DLL 独立编译，插中间会让旧插件调错位置
 class VirtualTheme {
@@ -91,6 +81,14 @@ public:
 	virtual void ExternalSetCaptionBand(int top, int height) = 0;
 };
 
+// 信号槽登记表（插件可经 kConnectionManager 取到后 qobject_cast）。
+//
+// ⚠️ 宿主侧信号与槽**默认匿名**：插件不需要（也拿不到）信号名，只凭 index 就能把接收端换成
+//    自己的 —— 那是 TakeoverConnection，匿名接管机制的本体。
+// ⚠️ 这里**刻意没有 RegisterConnection**：它要求调用方自己提供 sender + signal，等于把
+//    "连宿主任意信号"的能力交出去（拿到 kSidebar 就能连它全部信号，且无从区分哪一个被准了）。
+//    插件要**新增订阅**（而非接管已有连接）只有下面这一条路：ProtectedRegisterConnection，
+//    由宿主侧按**信号白名单**校验 signal —— 不在名单里的静默拒绝。
 class VirtualConnectionManager {
 public:
 	struct ConnectionGroup {
@@ -100,11 +98,20 @@ public:
 		QByteArray mSlot;
 	};
 	virtual ~VirtualConnectionManager() = default;
-	virtual void RegisterConnection(QString mIndex,ConnectionGroup mConnectionGroup)=0;
 	virtual void PublicRemoveConnection(QString mIndex) = 0;
 	virtual void SuspendConnection(QString mIndex) = 0;
 	virtual void TakeoverConnection(QString mIndex, QObject* mObject, QByteArray mSlot) =0;
 	virtual void Reconnect(QString mIndex)=0;
+
+	// 新增订阅一个宿主**公开**的信号：宿主侧先查白名单（ConnectionManager.h 的 m_publicSignals），
+	// signal 不在名单里就拒绝（不注册、不连接，只在宿主日志里留一行警告 —— 不静默）。
+	// ⚠️ 比对的是 signal 本身；index 由调用方自起名（建议带扩展名前缀），只用于事后取消订阅。
+	// ⚠️ signal 是原生签名串（"2clearRequested()"），按 QMetaObject 的查找规则；
+	//    白名单里存的也是同一种串，改了宿主信号名必须同步改名单。
+	virtual void ProtectedRegisterConnection(QString index, const QObject* sender, QByteArray signal,
+		const QObject* receiver, const char* slot) = 0;
+
+	// ⚠️ 以后只许在末尾追加。
 };
 
 // 消息区宿主接口：扩展灌完历史/事件后，负责把"正在载入会话"这层提示的收放讲清楚。
@@ -125,8 +132,6 @@ public:
 Q_DECLARE_INTERFACE(VirtualShell, "com.DSH_HUB.VirtualShell/1.0")
 Q_DECLARE_INTERFACE(VirtualMain, "com.DSH_HUB.VirtualWindow/1.0")
 Q_DECLARE_INTERFACE(VirtualConnectionManager, "com.DSH_HUB.VirtualConnectionManager/1.0")
-#if DSHHUB_VIRTUALCOMMON_HAS_WIDGETS
 Q_DECLARE_INTERFACE(VirtualTopBar, "com.DSH_HUB.VirtualCommon/1.0")
-#endif
 Q_DECLARE_INTERFACE(VirtualTheme, "com.DSH_HUB.VirtualTheme/1.0")
 Q_DECLARE_INTERFACE(VirtualMessageHost, "com.DSH_HUB.VirtualMessageHost/1.0")

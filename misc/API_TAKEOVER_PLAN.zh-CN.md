@@ -135,7 +135,7 @@ if (m_serverProcess && m_serverProcess->state() != QProcess::NotRunning) {
 
 | 方法 | 签名 | 作用 |
 |---|---|---|
-| 接管开关 | `void Takenover(bool)` | D1=A + D0=A |
+| 接管开关 | `void Takenover(bool)` | D1=A + D0=A；**后追加** `bool IsTakenover() const` 回执（末尾，`DshApiClient` 内联转 `isTakenover()`），调用方可自查成败 |
 | 回填成功 | `void CompleteCall(const char* rpcId, const char* resultJson)` | D3 |
 | 回填失败 | `void FailCall(const char* rpcId, const char* code, const char* message)` | D3 |
 
@@ -155,6 +155,14 @@ if (m_serverProcess && m_serverProcess->state() != QProcess::NotRunning) {
 - ✅ **装载时即可判定插件有没有实现接收端**：cast 得 nullptr → 当场拒绝接管 / 报错。
 
 ### 入站注入：复用宿主槽（D5 = B）
+
+> **⚠️ 追记（2026-09-26，本节已过时，勿照此实现）**：D5=B 的"字符串 `invokeMethod` 调私有槽"
+> **已被推翻**。12 个入站点现在走公共虚接口 **`VirtualMain`**（`source/include/VirtualClass/VirtualCommon.h:27-62`
+> 的 `Handle*` 方法），宿主实现内联在 `source/include/core/DSHHub.h:99-134`（一句转发到同名私有槽），
+> 扩展侧经 `kMainWindow` → `qobject_cast<VirtualMain*>` 调用（`DshHostBridge.cpp` 的 `mainHost()`）。
+> 唯一的"新增订阅宿主信号"路径是 `ProtectedRegisterConnection` + `ConnectionManager.h` 的硬编码
+> 白名单 `ConnectionManager::m_publicSignals`。**下半节保留为历史决策记录，不要照它写代码。**
+> ⚠️ 白名单比对的是 signal 签名串，不是调用方自起的 index（搞混会让白名单整个失效）。
 
 插件**不通过接口**注入数据，而是用字符串 `QMetaObject::invokeMethod` 调 `DSHHub` 的槽。这些槽当前都在 `private slots:`（`source/include/core/DSHHub.h:93-133`）——**字符串 invokeMethod 不受访问级别限制**。
 

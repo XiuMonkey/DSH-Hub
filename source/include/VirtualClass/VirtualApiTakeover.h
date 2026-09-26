@@ -22,7 +22,7 @@
 // 拿到的 value（不是 server-response 信封）；流控制只有 "$takeover/stream-open" 与
 // "$takeover/stream-cancel" 两条，都是 fire-and-forget。
 // ⚠️ 开始喂数据的时机是 Takenover(true)：接管后 baseUrl 为空、宿主不再调 openStreams()，
-//    那 8 个出站方法里没有一个"后端已就绪"的回执。
+//    那 8 个出站方法里没有一个"后端已就绪"的回执 —— 唯一的自检口是接着读一次 IsTakenover()。
 // ⚠️ 回填不认识的 rpcId（重复回填 / fire-and-forget 的 id）只记一条日志。
 //
 // 回填错误码：已核实宿主上层没有任何一处比较 error.code，全部拼进用户可见文本，扩展自定即可。
@@ -53,6 +53,13 @@ public:
 	// 回填失败：code / message 原样进 RpcError（上层只拼文本、不比较 code）；code 为空时宿主
 	// 用 takenover-error 兜底。调用方没提供 onError 时只记日志。
 	virtual void FailCall(const char* rpcId, const char* code, const char* message) = 0;
+
+	// 宿主当前是否处于接管态。Takenover(bool) 返回 void ⇒ 没有回执（宿主只在"注册表里没有
+	// 实现接口二的扩展"和"不在 GUI 线程"两种情形拒绝，且只记 qWarning），本函数是调用方
+	// 唯一的自检口：调完 Takenover(true) 再读一次，为 false 就是被拒了，别继续往下走。
+	// ⚠️ 它只报"有没有被接管"，**不区分是谁**（宿主不记 owner）；要察觉"被别的扩展顶掉"，
+	//    另订阅 DshApiClient::takeoverChanged(bool)（已在信号白名单里）。
+	virtual bool IsTakenover() const = 0;
 
 	// ⚠️ 以后只许在末尾追加。
 };

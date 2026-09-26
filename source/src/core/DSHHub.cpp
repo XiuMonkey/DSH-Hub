@@ -29,6 +29,7 @@
 #include "chat/MessageQuery.h"
 
 #include <QCoreApplication>
+#include <QCloseEvent>
 #include <QMoveEvent>
 #include <QShowEvent>
 #include <QDebug>
@@ -422,6 +423,13 @@ void DSHHub::changeEvent(QEvent* event)
 	QMainWindow::changeEvent(event);
 	if (event->type() == QEvent::WindowStateChange)
 		syncWindowFrameStyle();
+}
+
+void DSHHub::closeEvent(QCloseEvent* event)
+{
+	// 先广播再真正关：扩展可能要在这之后才等到 detachHost()，而宿主实测有不退、也不调它的情形
+	emit aboutToClose();
+	QMainWindow::closeEvent(event);
 }
 
 // 判定与顺序都在 WindowFrame::applyFrameStyle

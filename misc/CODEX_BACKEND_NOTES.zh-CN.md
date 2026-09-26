@@ -1,7 +1,6 @@
 # Codex 后端：本会话改动、踩坑与未完成工作（记录）
 
-> **这份文件是什么**：本会话（"让 DSH Hub 用 Codex 当后端"）的改动清单、踩坑记录、以及**还没做完的事**。> 给下一位接手者/下一轮用；**要交给新会话的提示词见同目录的 `CODEX_BACKEND_HANDOFF.zh-CN.md`**。
-> 给下一位接手者/下一轮用；**要交给新会话的提示词见同目录的 `CODEX_BACKEND_HANDOFF.zh-CN.md`**。
+> **这份文件是什么**：本会话（"让 DSH Hub 用 Codex 当后端"）的改动清单、踩坑记录、以及**还没做完的事**。给下一位接手者/下一轮用；**要交给新会话的提示词见同目录的 `CODEX_BACKEND_HANDOFF.zh-CN.md`**。
 >
 > **先读这三份，再动代码**：
 > - `misc/API_TAKEOVER_PLAN.zh-CN.md` —— 宿主侧接管机制的完整方案与决策记录（D0–D8、§3 必写点、§5 已排除结论）
@@ -20,7 +19,7 @@
 | ② 扩展侧「Codex 后端」（仓库外） | ✅ 真客户端里跑通：装载 → 接管 → 会话列表（= codex threads）→ 新建会话 → 发提示 → 真 Codex 回合 → 流式回显 → 停止；`.ext` 已打包校验 |
 | 拦路虎（已解决） | 本机 **Codex 不走 Windows 系统代理**，导致每轮重试 121 秒；设 `HTTP(S)_PROXY` 后 **≈10 秒**（实测回合 `durationMs=9605`） |
 
-**没做完的不在"能不能接管"，而在**：宿主的注入槽还是私有契约、接管分支没有自动化测试、两个正式客户端（Release/Debug）还没用新源码重建、扩展的历史回放/审批/模型目录还没做。
+**没做完的不在"能不能接管"，而在**：接管分支没有自动化测试、两个正式客户端（Release/Debug）还没用新源码重建、单一 owner 校验缺失。（注入槽**已**从私有契约提到公共虚接口 `VirtualMain`，见 §8 追记——原第 ② 项已关闭。）
 
 ---
 
@@ -50,7 +49,7 @@
 |---|---|
 | `CodexAppServer.h/.cpp` | `codex app-server` 的行分隔 JSON-RPC 客户端（QProcess；请求/通知/服务端请求三分流；逐请求超时）。**`params` 即使为空也必须带**，否则服务端回 `-32600` |
 | `CodexBackendPlugin.h/.cpp` | 插件根对象：`DshHostPlugin` + `VirtualApiSink` 双接口、接管、出站分发（session/list·page·create·prompt·cancel·modelCatalog·settings·workspace…）、入站映射、`detachHost` 复位、**后端自动重启** |
-| `DshHostBridge.h/.cpp` | 入站注入（字符串 `invokeMethod` 调 DSHHub 的槽）；槽调用失败会记警告（宿主改槽名 → 不再静默） |
+| `DshHostBridge.h/.cpp` | 入站注入 → `qobject_cast<VirtualMain*>` 直调 `HandleXxx()`（**已无字符串 `invokeMethod`**）；宿主信号订阅只走 `protectedConnection()`（白名单，目前 `clearRequested`）；`hideSessionLoading()` 走 `VirtualMessageHost` |
 | `regulation.json5` | `Name: CodexBackend`、`Type: ClientExtension` |
 | `CMakeLists.txt`、`build.ps1`、`pack-ext.ps1` | 构建/部署/打包（`.ext` = `regulation.json5` + `main.dll`，条目名正斜杠）。⚠️ 两个 `.ps1` 必须保留 **UTF-8 BOM** |
 | `HOST_CONTRACT.zh-CN.md` | 宿主期望形状契约表（22KB，逐条 `文件:行号`） |
@@ -88,15 +87,15 @@
 | 项 | 为什么重要 | 建议做法 |
 |---|---|---|
 | **① 正式客户端还没重建** | `x64\Release`（2026/9/23）与 `x64\Debug` 都是**旧构建、没有接管机制**（无 `kApiClient`/`kApiSink`）⇒ 扩展装进去只会被当普通扩展装载、拿不到接口。当前只能跑 `build\windows-ninja\DSH Hub.exe` | 用 MSBuild（或 CMake）把当前源码重建到 `x64\Release` / `x64\Debug`；注意 `.vcxproj` 侧我加过文件清单但**从未用 MSBuild 构建验证过** |
-| **② 注入槽仍是私有契约** | 方案 §2.6 承诺"后续会把其中部分槽公开"。现在扩展靠**字符串 `invokeMethod`** 调 `DSHHub` 的 11 个私有槽 —— 宿主改名/改签名会**静默失效**（扩展侧现在会记警告，但功能就是没了） | 把这 11 个槽提升为 `public slots:`，或整理成正式清单 + 契约文档；至少加一条编译期/启动期自检 |
+| ~~**② 注入槽仍是私有契约**~~ **已关闭** | 12 个入站槽已全部提到公共虚接口 `VirtualMain`（`VirtualCommon.h:27-62`），宿主内联转发写在自己的头文件（`DSHHub.h:99-134`），扩展侧**零** `invokeMethod`；唯一需要"新增订阅"的 `Sidebar::clearRequested` 走 `ProtectedRegisterConnection` + 硬编码白名单 | 已实现。⚠️ 注意白名单比对的是 **signal 签名串**，不是调用方自起的 `index`——两者搞混会让白名单整个失效（踩过，2026-09-26 修） |
 | **③ 接管分支零自动化测试** | 209 个用例**全部只走未接管路径**（方案 §4.1 明确暂缓）；我改的分支只靠仓库外冒烟 + 手工验证 | 把那份仓库外冒烟（假 `VirtualApiSink` + 直接链 `.obj`）整理成 `tests/TestDshApiTakeover.cpp` 纳进测试目标；基线会变成 209+N |
-| **④ 单一 owner / 独占校验缺失** | 两个扩展同时接管时行为未定义（方案 §2.5-C 暂缓：owner 记名、拒绝时告知调用方）。`Takenover` 返回 `void`（D0=A）也让插件**无法知道接管成没成** | 需要时按方案 §4.2 的两条思路做（owner 记名 + "该 owner 是否仍装载"回落） |
+| **④ 单一 owner / 独占校验（部分补上）** | `Takenover` 返回 `void`（D0=A，已发布接口不能改签名），但已在 `VirtualApiHost` **末尾**追加 `virtual bool IsTakenover() const` 回执（`DshApiClient.h` 内联转发到实成员 `isTakenover()`），扩展 `Takenover(true)` 后能自查成败；`DshApiClient::takeoverChanged(bool)` 也进了白名单，扩展订阅它能察觉"被别的扩展顶掉"。**owner 记名 / 拒绝第二家**仍未做（方案 §4.2） | 完整独占仍需 owner 记名 + "该 owner 是否仍装载"回落 |
 | **⑤ 宿主不加卸载兜底**（已决定接受） | 插件实现了 `detachHost()` 却忘了复位 ⇒ 标志卡 true、所有 RPC 无响应、界面永久加载中 | 按决定不加。若日后要加，位置不能照 `UiStage::releaseForOwner`（它在成功路径之后），必须覆盖全部退出路径 |
 | **⑥ 工具过滤仍会在切会话时偷偷拉取** | 接管态下入口已隐藏，但 `TopBar::setSessionId` 仍会触发 `loadTools()` ⇒ 日志里 `[ToolsFilter] 读取工具目录失败 … 服务端地址还没就绪`（无害但吵） | 在"入口被关闭"时跳过这次拉取（`TopBar` 内加一个早退即可） |
 | **⑦ 构建系统的依赖修复（可选）** | 坑 #1 的根因在构建配置/环境，现在是"靠人记得整编" | 让 Ninja 认本地化前缀（如注入 `msvc_deps_prefix = 注意: 包含文件:`），或固定英文诊断（`VSLANG=1033` 实测**无效**） |
 | **⑧ CMake 构建目录不是可运行部署** | `build\windows-ninja` 缺 `resources/`；`platforms/`、`tls/`、`styles/`、`translations/` 是我手工从 `x64\Release` 拷进去的（不在仓库里，重建目录就没了） | CMakeLists 里那条"运行时资源尚未纳入构建"的注释就是这件事；要么补 `install()` 规则，要么继续用 MSBuild 产物做联调 |
 
-**优先级建议**：①（让扩展能装进正式客户端）> ②（避免静默失效）> ③（回归保护）> ⑥ > ④/⑤/⑦/⑧。
+**优先级建议**：①（让扩展能装进正式客户端）> ③（回归保护）> ⑥ > ④/⑤/⑦/⑧。（② 已关闭。）
 
 ---
 
@@ -171,7 +170,7 @@
 | 日志别把错误文本拼两遍 | `CodexAppServer` 出错时自己已记 `xxx failed: code=… message`，而 onError 的第二参就是**纯错误文本**；回调里再拼一遍会出两行怪日志。`thread/turns/list` 对"还没 materialize 的新会话"回 `-32600 not materialized yet`，那是**正常**情况（该回空历史），已降到 info |
 | **"正在载入会话"提示要宿主开接口给扩展收** | 宿主只在"缓存命中"（`MessageHost.cpp:289`）与"历史出错"（`:88-93`）时 `hideLoading()`；follow 快照**成功**那条路只 `emit contentReady`（`:83-85`，收的是启动遮罩），所以那层提示一直要等 6 秒看门狗 —— 日志里的 `loading overlay watchdog fired` 就是它。已在宿主侧开公共虚接口 `VirtualMessageHost`（`VirtualCommon.h` + `DshHostIndex::kMessageHost` + `MessageHost` 继承内联转发），扩展 `DshBridge::hideSessionLoading()` 直接调它，**不用字符串 invokeMethod** |
 | 宿主侧新增契约的位置（照抄这个模式） | 纯虚类写在 `source/include/VirtualClass/VirtualCommon.h` + `Q_DECLARE_INTERFACE`；对应类继承 + `Q_INTERFACES(...)`，实现**内联写在自己的头文件里**（转发到私有槽）；登记名加在 `source/include/core/HostExports.h` 的 `DshHostIndex`；`DSHHub::registerHostObjects()` 登记、`~DSHHub` 带身份校验注销 |
-| ⚠️ `VirtualCommon.h` 的 Widgets 依赖 | 它原来无条件 include `<qboxlayout.h>`，而扩展**只链 Qt Core** ⇒ 那块已改成 `#if __has_include(<qboxlayout.h>)` 条件编译（`VirtualTopBar` 连带它的 IID）。改这个头文件时别忘了这条，否则扩展编不过或被迫拖进 QtWidgets |
+| ⚠️ `VirtualCommon.h` 的 Widgets 依赖（**已是无条件包含，勿再改回条件编译**） | 该头无条件 `#include <qboxlayout.h>`（`VirtualTopBar` 用）。中间曾试过 `#if __has_include(<qboxlayout.h>)` 条件编译以让插件只链 Qt Core，**已按决策改回无条件**：扩展侧 CMake 相应加了 `Qt6::Widgets`。实测链接器会把未被调用的 Widgets 丢掉（`dumpbin /dependents build\codex_backend.dll` 仍只有 Qt6Core + CRT + KERNEL32）。代价：以后新写的 Core-only 插件会报 `C1083: 无法打开包括文件 qboxlayout.h` —— 必须链 Widgets 才能 include 这份头 |
 | 重试提示不能每条都弹 | codex 一轮会发**五条** `willRetry`（`Reconnecting... 1/5`…`5/5`，每条间隔约 16s）；宿主 `handleTransportError` 直接 `addSystemMessage`（`DSHHub.cpp:1185-1191`），所以扩展必须自己做到"一轮只提示一次" |
 | **⚠️ `dshRegister` 的 index 必须逐对象唯一** | `ConnectionManager::RegisterConnection` 会**先 `PublicRemoveConnection(index)`** 再 connect ⇒ 同一个 index 用第二次就把前一条连接断掉（不报错、不警告）。踩过：`Sidebar::addSessionButton` 每个会话按钮都用 `"Sidebar.004"/"Sidebar.005"`、`createWorkspaceGroup` 每个分组都用 `"Sidebar.002"/"Sidebar.003"` ⇒ **只有最后创建的那个**按钮/分组还连着信号（现象：点其它会话只变灰不切换、右键删除也失效）。已改成 `Sidebar.004.<sessionId>` 这类带 id 的索引 |
 | 删除会话要真归档 | `workspace/archiveSession` 回 `{"archivedSessionIds": []}` = "什么都没归档"，而宿主按这个集合过滤侧栏（`SessionCatalog::visibleSessions()` 跳过 archived）⇒ 会话下次刷新冒回来。正确做法：调 codex 的 `thread/archive{threadId}`（**持久**，实测归档后 `thread/list` 21→20、换进程仍在），回包给完整归档集合 |

@@ -20,6 +20,7 @@ class DshApiClient;
 class DshNamedPipeBridge;
 class DllCaller;
 class QByteArray;
+class QCloseEvent;
 class QEvent;
 class QLabel;
 class QLocalSocket;
@@ -135,6 +136,10 @@ public:
 
 signals:
 	void initializationComplete();
+	// 主窗口关闭前广播一次（在真正 close 之前）：宿主实测有"窗口关了、进程不退、也不调
+	// detachHost()"的情形，扩展靠它自救（停子进程、复位接管）。它是信号白名单里的公开信号
+	// （ConnectionManager.h 的 "2aboutToClose()"），插件经 ProtectedRegisterConnection 订阅。
+	void aboutToClose();
 
 private slots:
 	void onNewWorkspaceClicked();
@@ -176,6 +181,8 @@ private:
 	void moveEvent(QMoveEvent* event) override;
 	void showEvent(QShowEvent* event) override;
 	void changeEvent(QEvent* event) override;
+	// 只做一件事：广播 aboutToClose()（扩展自救的时机），然后转给基类
+	void closeEvent(QCloseEvent* event) override;
 	// 无边框窗口的原生消息全部转交 common/WindowFrame 判定
 	bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
 	void syncWindowFrameStyle();

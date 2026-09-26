@@ -21,7 +21,7 @@
 | ① 宿主侧「后端接管机制」 | ✅ 已实现、整编通过、基线未回归 | 宿主仓库 `source/` |
 | ② Codex 后端的客户端扩展 | ✅ 真客户端跑通：会话列表 → 新建会话 → 发提示 → 流式回显 → 停止 | 仓库外 `..\CodexBackendExtension\` |
 
-未完成的集中在四件事（详 §3）：**正式客户端还没重建**、**宿主注入槽还是私有契约**、**接管分支无自动化测试**、**扩展的历史/审批/模型目录还没做**。
+未完成的集中在三件事（详 §3）：**正式客户端还没重建**、**接管分支无自动化测试**、**扩展的历史/审批/模型目录还没做**。（原第 ② 项"宿主注入槽还是私有契约"**已关闭**——12 个入站槽已提到公共虚接口 `VirtualMain`。）
 
 ---
 
@@ -43,7 +43,7 @@
 - **两个接口 + 两个 IID（已发布，改 = 改 ABI，不要碰）**：`VirtualApiHost`（宿主 `DshApiClient` 实现：`Takenover`/`CompleteCall`/`FailCall`）、`VirtualApiSink`（扩展根对象实现：`OnOutboundRequest`）；全内联、独立头文件。
 - **出站分流**：`DshApiClient` 内按 `m_takenover` 分流；一元 RPC 的分流点统一在 **`post()` 顶部、认证队列之前**。
 - **回填**：只把 `rpcId` 交给扩展，回调留在宿主 `m_pending`；三种成功形态（对象/裸值/裸标量）由宿主按调用点决定。
-- **入站**：不走接口，走**字符串 `invokeMethod`** 调 `DSHHub` 的 11 个槽（清单见方案 §2.6）。
+- **入站**：走**公共虚接口** —— `findObject(kMainWindow)` → `qobject_cast<VirtualMain*>` → `HandleXxx()`（12 个方法，见 `VirtualCommon.h:27-62`，宿主内联转发在 `DSHHub.h:99-134`）。**不再有字符串 `invokeMethod`**（原方案 §2.6 的私有槽名清单已作废）。唯一需要"新增订阅"的宿主信号走 `ProtectedRegisterConnection` + 硬编码白名单。
 - **D6=B**：接管态 `baseUrl()`/`launchToken()` 空、`isConnected()` 恒 true。**D7=A**：宿主错误码统一 `takenover-` 前缀。
 - **三条 DSH 旁路**：工具过滤、插件市场入口**禁用**；"启动 DSH 进程"改成**接管时停掉 + 之后不启动/不重启**；**绝不动"扩展管理"**。
 - **扩展映射要点**：`session/list` 回 `{"items":[…]}`（不是顶层数组，每行必须 `projections.asOfSeq>0`）；`session/page` **必须应答**（空也收遮罩）；发提示**先 `thread/resume` 再 `turn/start`**；UI 起步靠扩展自己注入 `handleConnected()`。
@@ -62,18 +62,26 @@
 - 部署：`build.ps1 -Deploy "<客户端>\clientExtensions"`，或界面「扩展管理」装 `.ext`。
 - 验收：`logs\extension\info.log` 出现 `takeover requested` + `session/list -> N item(s)`，任务管理器多一个 `codex.exe`。
 
-**② 把注入槽从「私有契约」公开**
+**② 把注入槽从「私有契约」公开 —— ✅ 已完成（本项关闭）**
 
-> **状态：开了个头（数据面 11 个槽仍未公开）**。后续会话把**第一个**槽换成了正式契约：
-> `MessageHost::hideLoading` 不再靠字符串 `invokeMethod`，而是新增公共虚接口
-> `VirtualMessageHost`（`source/include/VirtualClass/VirtualCommon.h`）+ 登记名
-> `DshHostIndex::kMessageHost`（`HostExports.h`），`MessageHost` 继承它、内联转发到私有槽
-> （`source/include/core/MessageHost.h`），`DSHHub::registerHostObjects()` 登记。
-> 这个模式可以照抄到剩下那 11 个入站槽上（`misc/API_TAKEOVER_PLAN.zh-CN.md` §2.6）。
-> ⚠️ 注意 `VirtualCommon.h` 里带 Widgets 的那块（`VirtualTopBar`）现在是
-> `#if __has_include(<qboxlayout.h>)` 条件包含 —— 扩展只链 Qt Core，不能把 Widgets 拖进去。
+> **状态：12 个入站槽已全部公开，扩展侧零字符串 `invokeMethod`。**
+> `MessageHost::hideLoading` 走新增公共虚接口 `VirtualMessageHost`
+> （`source/include/VirtualClass/VirtualCommon.h`）+ 登记名 `DshHostIndex::kMessageHost`
+> （`HostExports.h`），`MessageHost` 继承它、内联转发到私有槽（`source/include/core/MessageHost.h`）。
+> 其余 12 个入站注入点走公共虚接口 **`VirtualMain`**（`VirtualCommon.h:27-62` 的 `Handle*` 方法），
+> 宿主实现内联在 `DSHHub.h:99-134`（每个方法一句转发到同名私有槽），
+> 扩展侧入口是 `DshHostBridge.cpp` 的 `mainHost()` → `qobject_cast<VirtualMain*>`。
+> 至此**方法名即 ABI，改名编译期就报错**，"静默失效"的通道被彻底掐掉。
+> 剩下那条"新增订阅宿主信号"的路走 `ProtectedRegisterConnection` + `ConnectionManager.h`
+> 类内的硬编码白名单 `ConnectionManager::m_publicSignals`（现公开三条：`"2clearRequested()"`、
+> `"2aboutToClose()"`（宿主关窗广播）、`"2takeoverChanged(bool)"`（接管态广播））；
+> ⚠️ 白名单比对的是 **signal 签名串**，不是调用方自起的 index（搞混会让白名单整个失效，踩过一次）。
+> ⚠️ 注意 `VirtualCommon.h` 里带 Widgets 的那块（`VirtualTopBar`）现在是**无条件**包含
+> `<qboxlayout.h>` —— 中间试过 `#if __has_include(...)`，已按决策撤销。扩展侧因此显式链
+> `Qt6::Widgets`（未被调用的部分会被链接器丢掉，导入表里不会出现 Qt6Widgets）；代价是
+> 新写的"只链 Qt Core"插件会报 `C1083: 无法打开包括文件 qboxlayout.h`。
 
-现在靠字符串槽名调 11 个私有槽，宿主改名 ⇒ **功能无声消失**。方案 §2.6 已承诺"后续公开部分槽"。做：提升为 `public slots:`（或正式清单 + 契约文档 + 启动期自检），同步更新 `HOST_CONTRACT.zh-CN.md` 与扩展 `DshHostBridge.cpp`。
+以下是**当时**的私有契约清单，仅作历史对照，**不要再照它写代码**（`misc/API_TAKEOVER_PLAN.zh-CN.md` §2.6）：`handleConnected` / `forwardMuxFrame` / `handleSessionSnapshot` / `handleSessionProjections` / `handleSessionControlBaseline` / `handleSessionProjectionChanged` / `handleWorkspaceSnapshot` / `handleWorkspaceUpserted` / `handleWorkspaceRemoved` / `handleWorkspaceReordered` / `handleWorkspaceArchiveChanged` / `handleTransportError` —— 对应现在的 `VirtualMain::HandleConnected` / `ForwardMuxFrame` / `HandleSessionSnapshot` / … （首字母大写，其余同）。
 
 **③ 给接管分支补自动化测试**
 把仓库外冒烟（假 `VirtualApiSink` + 直接链 `.obj` 的 28 项）整理成 `tests/TestDshApiTakeover.cpp`。基线变 209+N，记得同步更新文档里的数字。
@@ -144,7 +152,7 @@ build\appserver_smoke.exe --turn "hi"           # 无 GUI 验 app-server 协议
 | 不做 | 原因 |
 |---|---|
 | 改两个 IID / 在接口中间插虚方法 | 旧插件静默 nullptr / vtable 槽位错位 |
-| 用信号做插件↔宿主通讯 | 已定：公共虚接口 + 字符串 `invokeMethod` |
+| 用信号做插件↔宿主通讯 | 已定：**只两条信道** —— ① 公共虚接口（`VirtualMain` / `VirtualMessageHost` / `VirtualApiHost`…，`findObject` + `qobject_cast`）；② 信号登记表（有现成连接用 `TakeoverConnection` 匿名接管，要新增订阅只走 `ProtectedRegisterConnection` + 白名单）。**字符串 `invokeMethod` 已全面废弃** |
 | 把虚方法加进 `DshApiClient.h` | 该类 out-of-line，插件一碰 `LNK2019` |
 | 连"扩展管理"入口一起关 | 它是客户端扩展唯一的装载通道 |
 | 用 `FailCall` 打断启动链 | 拿不到数据应回"**成功 + 空 items**"，让宿主走"无会话→自动建会话" |
@@ -193,4 +201,4 @@ build\appserver_smoke.exe --turn "hi"           # 无 GUI 验 app-server 协议
 1. 用 MSBuild 重建 `x64\Release`（当前源码，含接管机制），顺手确认 `.vcxproj` 里加过的文件清单没问题。
 2. `cd ..\CodexBackendExtension; .\build.ps1 -Deploy "<仓库>\x64\Release\clientExtensions"`。
 3. 启动 `x64\Release\DSH Hub.exe`（记得带代理环境变量），按 §4 的日志判据验收接管生效。
-4. 接着做 ②（公开注入槽）—— 它决定这套东西算"正式契约"还是"靠私有槽名苟着"。
+4. 接着做 §3 的 ③（给接管分支补自动化测试）—— ② 已关闭，不用再动。
