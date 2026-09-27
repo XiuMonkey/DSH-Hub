@@ -1,7 +1,7 @@
 #include "core/DSHHub.h"
 #include "core/ServerManager.h"
-#include "core/ConnectionManager.h"
-#include "core/HostExports.h"
+#include "common/util/ConnectionManager.h"
+#include "ExtensionSystem/HostExports.h"
 #include "common/util/CommonRegistry.h"
 #include "common/session/SessionCommands.h"
 #include "common/appearance/ThemeManager.h"
@@ -47,6 +47,7 @@
 DSHHub::DSHHub(QWidget* parent, const QUrl& initialBaseUrl, QProcess* initialServerProcess)
 	: QMainWindow(parent)
 	, m_api(new DshApiClient(this))
+	, m_workplaces(this, m_api)
 {
 	qInfo().noquote() << QStringLiteral("[DSH Hub] constructor started");
 	TimingLogger::mark(QStringLiteral("DSHHub ctor enter"));
@@ -99,8 +100,7 @@ void DSHHub::installServer(const QUrl& initialBaseUrl, QProcess* initialServerPr
 		});
 	dshRegister("DSHHub.002", m_serverManager, &ServerManager::errorLine, this,
 		[this](const QString& line) {
-			if (m_messageHost && m_messageHost->current())
-				m_messageHost->addSystemMessage(qtTrId("server_status_fmt").arg(line));
+			pushServerNotice(qtTrId("server_status_fmt").arg(line));
 			// 移除扩展后服务端启动失败：清理 cordis.patch.yml 残留
 			if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
 				m_cleanupResidualsAfterServerError = false;
@@ -132,13 +132,14 @@ void DSHHub::installServer(const QUrl& initialBaseUrl, QProcess* initialServerPr
 				return;
 
 			if (m_api && !m_api->isConnected()) {
-				if (m_messageHost && m_messageHost->current())
-					m_messageHost->addSystemMessage(qtTrId("server_exited_fmt").arg(exitCode));
+				pushServerNotice(qtTrId("server_exited_fmt").arg(exitCode));
 				if (m_cleanupResidualsAfterServerError && m_extensionPopup) {
 					m_cleanupResidualsAfterServerError = false;
 					m_extensionPopup->cleanupResiduals();
 				}
-				if (exitCode != 0 && !isInitializationComplete())
+				// baseUrl 还没发布就退出 = 服务端没能起来，退出码 0 也算明确失败
+				const bool neverPublished = m_api->baseUrl().isEmpty();
+				if ((exitCode != 0 || neverPublished) && !isInitializationComplete())
 					finishInitialization();
 			}
 		});
@@ -228,6 +229,9 @@ void DSHHub::installSidebarWiring()
 // DshApiClient → DSHHub 的数据入口
 void DSHHub::installApiWiring()
 {
+	// 工作区基线活在 WorkplaceManager 里；它一变就把投影推给侧栏
+	m_workplaces.setOnChanged([this]() { applyWorkspaceState(); });
+
 	dshRegister("DSHHub.013", m_api, &DshApiClient::connected, this, &DSHHub::handleConnected);
 	dshRegister("DSHHub.014", m_api, &DshApiClient::muxFrameReceived, this, &DSHHub::forwardMuxFrame);
 	dshRegister("DSHHub.015", m_api, &DshApiClient::sessionSnapshotReady, this, &DSHHub::handleSessionSnapshot);
@@ -291,18 +295,18 @@ void DSHHub::installMessageWiring()
 	// 首屏上屏 -> 收掉启动遮罩
 	dshRegister("DSHHub.036", m_messageHost, &MessageHost::contentReady, this,
 		&DSHHub::finishInitialization);
+	// 首屏上屏 -> 补投消息区就绪前攒下的服务端错误
+	dshRegister("DSHHub.049", m_messageHost, &MessageHost::contentReady, this,
+		&DSHHub::flushPendingServerNotices);
 	// 整列表被替换 -> 先收面板再同步滚到底，避免先显示顶部再闪烁
 	dshRegister("DSHHub.037", m_messageHost, &MessageHost::contentReplaced, this,
 		[this]() {
 			m_messageHost->clearInteractionPanels();
 			m_messageHost->scrollToBottomNow();
 		});
-	// 对话收尾：刷新侧栏会话标题
+	// 对话收尾：刷新侧栏会话标题（与扩展那条路共用同一份实现）
 	dshRegister("DSHHub.038", m_messageHost, &MessageHost::turnFinished, this,
-		[this]() {
-			if (m_sidebar && m_api)
-				m_sidebar->workspaceList()->refreshTitles(m_api);
-		});
+		[this]() { refreshSessionTitles(); });
 
 	// 并发发一批 session/page，结果入库供"立即点亮"
 	m_prefetcher = new SessionPrefetcher(this);
@@ -427,8 +431,14 @@ void DSHHub::changeEvent(QEvent* event)
 
 void DSHHub::closeEvent(QCloseEvent* event)
 {
-	// 先广播再真正关：扩展可能要在这之后才等到 detachHost()，而宿主实测有不退、也不调它的情形
+	// 先广播：订阅了它的扩展能最早知道"要关了"，可以抢在下面这步之前做自己的事
 	emit aboutToClose();
+
+	// 再收尾：广播只保证"发出去了"（订阅方走队列连接时，退出路径上那条通知随时可能不执行），
+	// 真正收干净必须宿主自己同步做 —— 调 detachHost()、把插件 DLL 摘出退出卸载路径。
+	// 位置就在关窗这一刻：界面还完整、事件循环还活着，插件能正常停子进程（见 shutdownForExit 的注释）
+	ClientExtension::shutdownForExit();
+
 	QMainWindow::closeEvent(event);
 }
 
@@ -485,6 +495,25 @@ void DSHHub::finishInitialization()
 bool DSHHub::isInitializationComplete() const
 {
 	return m_initializationComplete;
+}
+
+// 服务端错误上屏：消息区没就绪（启动即失败）就先攒着，等首个会话视图 ready 再补投
+void DSHHub::pushServerNotice(const QString& text)
+{
+	if (m_messageHost && m_messageHost->current())
+		m_messageHost->addSystemMessage(text);
+	else
+		m_pendingServerNotices.append(text);
+}
+
+void DSHHub::flushPendingServerNotices()
+{
+	if (!m_messageHost || m_pendingServerNotices.isEmpty())
+		return;
+	const QStringList pending = m_pendingServerNotices;
+	m_pendingServerNotices.clear();
+	for (const QString& text : pending)
+		m_messageHost->addSystemMessage(text);
 }
 
 QUrl DSHHub::baseUrl() const
@@ -786,9 +815,8 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 			// 回包给的是完整归档集合，立刻更新侧栏，不必等 archived 帧
 			if (m_sidebar) {
 				const QSet<QString> archived = SessionCatalog::parseArchivedSessionIds(value);
-				m_workspaceArchived = QJsonArray::fromStringList(
-					QStringList(archived.cbegin(), archived.cend()));
-				applyWorkspaceState();
+				m_workplaces.setArchived(QJsonArray::fromStringList(
+					QStringList(archived.cbegin(), archived.cend())));
 			}
 
 			// archiveSession 只改归档状态，这里顺手删本地会话文件
@@ -858,7 +886,7 @@ void DSHHub::onClearConversationClicked()
 			}
 		},
 		[this]() {
-			callSessionCreate();
+			m_workplaces.deleteAllThen([this]() { callSessionCreate(); });
 		});
 }
 
@@ -873,13 +901,7 @@ QString DSHHub::preferredWorkspaceId()
 	}
 
 	// 退一步取基线里的第一个工作区
-	for (const auto& item : m_workspaceItems) {
-		const QString workspaceId = item.toObject()
-			.value(QStringLiteral("workspaceId")).toString();
-		if (!workspaceId.isEmpty())
-			return workspaceId;
-	}
-	return QString();
+	return m_workplaces.firstWorkspaceId();
 }
 
 void DSHHub::callSessionCreate()
@@ -888,10 +910,26 @@ void DSHHub::callSessionCreate()
 		return;
 
 	// 先恢复工作区分组再建：addSessionToWorkspace 要求分组已存在
-	const QString workspaceId = preferredWorkspaceId();
 	if (m_sidebar)
 		applyWorkspaceState();
 
+	resolveSessionWorkspace([this](const QString& workspaceId) { createSessionIn(workspaceId); });
+}
+
+void DSHHub::resolveSessionWorkspace(const std::function<void(const QString&)>& onResolved)
+{
+	const QString workspaceId = preferredWorkspaceId();
+	if (!workspaceId.isEmpty() || !m_serverManager) {
+		onResolved(workspaceId);
+		return;
+	}
+
+	// 路径与内置服务端的 cwd 同源（ServerManager::defaultWorkspacePath）
+	m_workplaces.ensureDefaultThen(m_serverManager->defaultWorkspacePath(), onResolved);
+}
+
+void DSHHub::createSessionIn(const QString& workspaceId)
+{
 	m_api->callMethod(QStringLiteral("session/create"), SessionCommands::sessionCreate(workspaceId),
 		[this, workspaceId](const QJsonObject& value) {
 			const QString sid = value.value(QStringLiteral("sessionId")).toString();
@@ -919,6 +957,15 @@ void DSHHub::handleConnected()
 		m_sidebar->refreshSessions(m_api);
 }
 
+void DSHHub::refreshSessionTitles()
+{
+	// 只重拉标题，**不重选会话**：refreshSessions 拿到列表后会 emit initialSessionReady（自动选中的是
+	// "第一个非 running 的会话"），接管态下重进这条路会把用户正在看的会话切走、还会打断流式输出。
+	// 两条路共用：回合收尾（MessageHost::turnFinished）与扩展的 ExternalRefreshSessionTitles()。
+	if (m_sidebar && m_api)
+		m_sidebar->workspaceList()->refreshTitles(m_api);
+}
+
 void DSHHub::onInitialSessionReady(const QString& sessionId, const QString& title)
 {
 	Q_UNUSED(title)
@@ -941,9 +988,12 @@ void DSHHub::onNoSessionAvailable()
 	if (!m_sidebar || !m_api)
 		return;
 
-	// 先按基线恢复分组再建（否则会退回"未分组"）
+	// 一个会话都没有时由侧栏发起新建。这里同样要走 resolveSessionWorkspace：直接调 Sidebar::createSession
+	// 在"一个分组都没有"时会绕过补建，新建出来的会话照样落到未分组。
 	applyWorkspaceState();
-	m_sidebar->createSession(m_api, preferredWorkspaceId());
+	resolveSessionWorkspace([this](const QString& workspaceId) {
+		m_sidebar->createSession(m_api, workspaceId);
+	});
 }
 
 void DSHHub::onSessionListError(const QString& code, const QString& message)
@@ -1080,90 +1130,31 @@ void DSHHub::applySessionProjections(const QString& sessionId, int asOfSeq, cons
 	m_chatInput->setSessionStats(stats);
 }
 
-// 全量工作区 + 归档集合
+// 工作区基线（全量快照 / upsert / remove / order / archived）由 WorkplaceManager 持有，本类的这几个槽
+// 只是服务端信号与扩展 VirtualMain 接口的入口，收到后原样转交。
 void DSHHub::handleWorkspaceSnapshot(const QJsonArray& items, const QJsonArray& archivedSessionIds)
 {
-	qInfo().noquote() << "[DSH Hub] workspace baseline items=" << items.size()
-		<< "archived=" << archivedSessionIds.size();
-	m_workspaceItems = items;
-	m_workspaceArchived = archivedSessionIds;
-	applyWorkspaceState();
+	m_workplaces.applySnapshot(items, archivedSessionIds);
 }
 
-// upsert：同 id 替换，否则追加
 void DSHHub::handleWorkspaceUpserted(const QJsonObject& workspace)
 {
-	const QString workspaceId = workspace.value(QStringLiteral("workspaceId")).toString();
-	if (workspaceId.isEmpty())
-		return;
-
-	bool replaced = false;
-	for (int i = 0; i < m_workspaceItems.size(); ++i) {
-		const QString existing = m_workspaceItems.at(i).toObject()
-			.value(QStringLiteral("workspaceId")).toString();
-		if (existing == workspaceId) {
-			m_workspaceItems.replace(i, workspace);
-			replaced = true;
-			break;
-		}
-	}
-	if (!replaced)
-		m_workspaceItems.append(workspace);
-
-	applyWorkspaceState();
+	m_workplaces.upsert(workspace);
 }
 
 void DSHHub::handleWorkspaceRemoved(const QString& workspaceId)
 {
-	if (workspaceId.isEmpty())
-		return;
-
-	QJsonArray kept;
-	for (const auto& item : m_workspaceItems) {
-		if (item.toObject().value(QStringLiteral("workspaceId")).toString() != workspaceId)
-			kept.append(item);
-	}
-	m_workspaceItems = kept;
-	applyWorkspaceState();
+	m_workplaces.remove(workspaceId);
 }
 
-// archived：归档集合整体替换
 void DSHHub::handleWorkspaceArchiveChanged(const QJsonArray& archivedSessionIds)
 {
-	m_workspaceArchived = archivedSessionIds;
-	applyWorkspaceState();
+	m_workplaces.setArchived(archivedSessionIds);
 }
 
-// order：按服务端给的完整顺序重排本地缓存
 void DSHHub::handleWorkspaceReordered(const QStringList& workspaceIds)
 {
-	if (workspaceIds.isEmpty())
-		return;
-
-	QJsonArray ordered;
-	QSet<QString> used;
-	for (const QString& workspaceId : workspaceIds) {
-		for (const auto& item : m_workspaceItems) {
-			const QJsonObject workspace = item.toObject();
-			if (workspace.value(QStringLiteral("workspaceId")).toString() != workspaceId)
-				continue;
-			ordered.append(workspace);
-			used.insert(workspaceId);
-			break;
-		}
-	}
-
-	// 服务端没点名的接在后面，避免丢工作区
-	for (const auto& item : m_workspaceItems) {
-		const QString workspaceId = item.toObject()
-			.value(QStringLiteral("workspaceId")).toString();
-		if (!used.contains(workspaceId))
-			ordered.append(item);
-	}
-
-	qInfo().noquote() << "[DSH Hub] workspace order update ids=" << workspaceIds.size();
-	m_workspaceItems = ordered;
-	applyWorkspaceState();
+	m_workplaces.reorder(workspaceIds);
 }
 
 // 把归档状态推给侧栏 catalog 并重建列表视图
@@ -1175,14 +1166,14 @@ void DSHHub::applyWorkspaceState()
 	SessionCatalog& catalog = m_sidebar->workspaceList()->catalog();
 
 	QSet<QString> archived;
-	for (const auto& value : m_workspaceArchived) {
+	for (const auto& value : m_workplaces.archivedSessionIds()) {
 		const QString sessionId = value.toString();
 		if (!sessionId.isEmpty())
 			archived.insert(sessionId);
 	}
 
 	catalog.setArchivedSessionIds(archived);
-	catalog.setWorkspaces(m_workspaceItems);
+	catalog.setWorkspaces(m_workplaces.items());
 	m_sidebar->workspaceList()->rebuildFromCatalog();
 
 	// 重建会丢选中态，按当前会话再标一次
@@ -1204,6 +1195,14 @@ void DSHHub::handleTransportError(const QString& context, const QString& message
 	// 服务端主动重启时旧连接断开是预期的，不刷到聊天区
 	if (m_serverManager && m_serverManager->isRestarting())
 		return;
+
+	// 初始化期连不上（如配置的服务地址 Connection refused）算明确错误：
+	// 收掉初始化遮罩让 UI 可操作，错误文案等消息区就绪后补投
+	if (!isInitializationComplete()) {
+		pushServerNotice(qtTrId("chat_transport_error_fmt").arg(context, message));
+		finishInitialization();
+		return;
+	}
 
 	m_messageHost->addSystemMessage(qtTrId("chat_transport_error_fmt").arg(context, message));
 }

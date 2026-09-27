@@ -147,6 +147,12 @@
     <message id="server_auth_token_missing">
         <translation>服务端未提供认证令牌，无法通过 /api 认证</translation>
     </message>
+    <message id="server_bundled_server_missing">
+        <translation>捆绑的内置服务端不完整，无法启动（缺少 node / server 文件，请检查安装目录）</translation>
+    </message>
+    <message id="server_proc_start_failed_fmt">
+        <translation>内置服务端进程启动失败：%1</translation>
+    </message>
     <message id="com_member_not_found_fmt">
         <translation>COM 成员不存在: %1 (hr=%2)</translation>
     </message>

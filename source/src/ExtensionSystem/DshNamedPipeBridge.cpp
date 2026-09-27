@@ -1,7 +1,7 @@
 // 命名管道桥接：单行 JSON + '\n'；请求 {id,tool,args}，响应 {id,ok,result|error}
 
 #include "ExtensionSystem/DshNamedPipeBridge.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 
 #include <QJsonDocument>
 #include <QJsonParseError>

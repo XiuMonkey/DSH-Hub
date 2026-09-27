@@ -5,8 +5,8 @@
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
 #include "common/util/CommonRegistry.h"
-#include "core/ConnectionManager.h"
-#include "core/HostExports.h"
+#include "common/util/ConnectionManager.h"
+#include "ExtensionSystem/HostExports.h"
 
 #include <QAbstractButton>
 #include <QCheckBox>

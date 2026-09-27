@@ -3,8 +3,8 @@
 #include "ui/LayoutUtils.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/util/CommonRegistry.h"
-#include "core/ConnectionManager.h"
-#include "core/HostExports.h"
+#include "common/util/ConnectionManager.h"
+#include "ExtensionSystem/HostExports.h"
 #include "network/DshApiClient.h"
 #include "common/session/SessionService.h"
 #include <QContextMenuEvent>
@@ -371,7 +371,12 @@ WorkspaceList::WorkspaceGroup* WorkspaceList::groupFor(const QString& workspaceI
 		if (group->workspaceId == workspaceId)
 			return group;
 	}
-	// 找不到归属工作区（含未分组）时统一落到“未分组”
+	// 找不到归属工作区（含未分组）时统一落到"未分组"。带 id 却查不到，说明分组清单里没有它 —— 这不是
+	// "本来就未分组"，值得留一行，否则这类问题在界面和日志里都是静默的。
+	if (!workspaceId.isEmpty()) {
+		qWarning().noquote() << QStringLiteral("[Sidebar] 会话归属的工作区不在分组清单里，已落到未分组:")
+			<< workspaceId;
+	}
 	return defaultGroup();
 }
 

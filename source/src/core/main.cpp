@@ -2,9 +2,10 @@
 #include "core/DSHHub.h"
 #include "common/util/Logger.h"
 #include "common/appearance/ThemeManager.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "common/util/CommonRegistry.h"
-#include "core/HostExports.h"
+#include "ExtensionSystem/HostExports.h"
+#include "ExtensionSystem/ClientExtension.h"
 #include "ui/Tooltip.h"
 #include "common/appearance/TranslationManager.h"
 
@@ -56,6 +57,12 @@ int main(int argc, char* argv[])
 	QFont font(QStringLiteral("Microsoft YaHei UI"));
 	font.setPointSize(10);
 	app.setFont(font);
+
+	// 退出兜底：不是每条退出路径都过主窗口的 closeEvent（扩展自己 quit()、会话注销、系统关机都不走）。
+	// 这里再收一次尾（幂等）——把客户端扩展同步退场、把插件 DLL 摘出退出卸载路径，见那个函数的说明。
+	QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, []() {
+		ClientExtension::shutdownForExit();
+	});
 
 	auto* window = new DSHHub;
 	window->show();

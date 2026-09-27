@@ -1,5 +1,5 @@
 #include "ui/ChatInputWidget.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "ui/ModelSelector.h"
 #include "ui/ShadowPanel.h"
 #include "common/appearance/ThemeManager.h"

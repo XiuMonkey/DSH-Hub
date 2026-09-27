@@ -1,6 +1,6 @@
 #include "ExtensionSystem/ClientExtension.h"
 #include "core/DshHostPlugin.h"
-#include "core/HostExports.h"
+#include "ExtensionSystem/HostExports.h"
 #include "common/util/CommonRegistry.h"
 #include "VirtualClass/VirtualApiTakeover.h"
 #include "ExtensionSystem/UiStage.h"
@@ -333,5 +333,50 @@ namespace ClientExtension
 		}
 
 		return loadOneImpl(dllPath, name, error);
+	}
+
+	// 退出路径的收尾，三件事的顺序不能换：先让插件自己退场（此刻宿主界面还完整、事件循环还活着），
+	// 再收它占的台，最后才把 loader 摘出 qApp —— 一摘就不能再指望插件做任何事了。
+	void shutdownForExit()
+	{
+		if (g_loaders.isEmpty())
+			return;
+
+		if (!onGuiThread()) {
+			qWarning("[ClientExtension] shutdownForExit() must be called on the GUI thread, skipped");
+			return;
+		}
+
+		// 先取快照再逐个 take：detachHost() 里插件可能回到宿主（重装扩展之类），不能边迭代边改表
+		const QStringList names = g_loaders.keys();
+		g_loadedNames.clear();
+
+		for (const QString& name : names) {
+			QPluginLoader* loader = g_loaders.take(name);
+			QObject* root = loader ? loader->instance() : nullptr;
+
+			if (root && root->metaObject()->indexOfMethod(kDetachSlot) >= 0) {
+				QMetaObject::invokeMethod(root, "detachHost", Qt::DirectConnection);
+				qInfo("[ClientExtension] exit: %s 已退场（detachHost 同步执行）", qPrintable(name));
+			}
+			else {
+				qInfo("[ClientExtension] exit: %s 没有 %s 槽，只摘出（插件未声明可安全退场）",
+					qPrintable(name), kDetachSlot);
+			}
+
+			// 摘掉接管登记：插件不再受宿主调度，留着它会让退出路径上还有代码去调插件对象
+			if (root)
+				CommonRegistry::instance().Destroy(DshHostIndex::kApiSink, root);
+
+			if (const int stages = UiStage::releaseForOwner(name); stages > 0)
+				qInfo("[ClientExtension] exit: %s 强制收回架空（%d 个窗口）", qPrintable(name), stages);
+
+			// 关键一步（理由见头文件）：摘出 qApp，~QApplication 就不会删它 ⇒ 不卸 dll、不析构插件根对象。
+			// 卸载留给进程终止 —— 那时内核直接回收映射，不跑 C++ 析构，也就不会卡在管道等待上。
+			if (loader)
+				loader->setParent(nullptr);
+		}
+
+		qInfo("[ClientExtension] 退出收尾：%d 个扩展已退场，dll 随进程终止回收", int(names.size()));
 	}
 }

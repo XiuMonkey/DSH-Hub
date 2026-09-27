@@ -2,7 +2,7 @@
 
 // 客户端扩展（QPlugin DLL）的 attach 入口，也是宿主 ↔ 插件之间唯一的 C++ 接口。
 // 必须全内联、无配套 .cpp（out-of-line 虚析构 ⇒ 真外部符号 ⇒ 插件链接期 LNK2019），且不能派生 QObject。
-// 插件 → 宿主方向见 core/HostExports.h（宿主 exe 导出 C ABI）。
+// 插件 → 宿主方向见 ExtensionSystem/HostExports.h（宿主 exe 导出 C ABI）。
 
 #include <QObject>
 

@@ -7,6 +7,8 @@
 #include "chat/CacheHistoryManager.h"
 // 小灰字（会话统计）的投影合并态：按块合并 + higher-seq-wins，纯 header
 #include "common/session/SessionProjectionState.h"
+// 工作区基线 + workspace/create、workspace/delete 的编排
+#include "common/workspace/WorkplaceManager.h"
 // 客户端扩展的全内联虚接口；插件按 index 取到本对象再 qobject_cast
 #include "VirtualClass/VirtualCommon.h"
 #include "ExtensionSystem/UiStage.h"
@@ -15,6 +17,7 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
+#include <functional>
 
 class DshApiClient;
 class DshNamedPipeBridge;
@@ -97,8 +100,13 @@ public:
 	}
 
 	// VirtualMain 的入站注入面（后端接管专用）：全部转发到下面那批同名私有槽，槽不对外
-	void HandleConnected() override { handleConnected(); }
-	void ForwardMuxFrame(const QJsonObject& frame) override { forwardMuxFrame(frame); }
+	void HandleConnected() override {
+		handleConnected();
+	}
+	void ForwardMuxFrame(const QJsonObject& frame) override
+	{
+		forwardMuxFrame(frame); 
+	}
 	void HandleTransportError(const QString& context, const QString& message) override
 	{
 		handleTransportError(context, message);
@@ -130,6 +138,8 @@ public:
 	{
 		handleWorkspaceArchiveChanged(archivedSessionIds);
 	}
+	// 只刷标题，逻辑在本类私有槽 refreshSessionTitles（与回合收尾那条路共用同一份实现）
+	void ExternalRefreshSessionTitles() override { refreshSessionTitles(); }
 
 signals:
 	void initializationComplete();
@@ -145,6 +155,8 @@ private slots:
 	void toggleTheme();
 
 	void handleConnected();
+	// 只刷标题，不重选会话（供 ExternalRefreshSessionTitles 与 turnFinished 两条路复用）
+	void refreshSessionTitles();
 	// 一帧 mux 消息：路由整体归 MessageHost，这里只转发
 	void forwardMuxFrame(const QJsonObject& frame);
 	void handleTransportError(const QString& context, const QString& message);
@@ -172,11 +184,15 @@ private slots:
 
 private:
 	void finishInitialization();
+	// 服务端错误上屏：消息区没就绪（启动即失败）就先攒着，等首个会话视图 ready 再补投
+	void pushServerNotice(const QString& text);
+	void flushPendingServerNotices();
 	void resizeEvent(QResizeEvent* event) override;
 	void moveEvent(QMoveEvent* event) override;
 	void showEvent(QShowEvent* event) override;
 	void changeEvent(QEvent* event) override;
-	// 只做一件事：广播 aboutToClose()（扩展自救的时机），然后转给基类
+	// 广播 aboutToClose()（扩展最早的知情点）→ 调 ClientExtension::shutdownForExit() 同步收尾
+	// （这一步是"宿主负责收干净"：插件退场 + 摘出退出卸载路径，详见那个函数的说明），然后转给基类
 	void closeEvent(QCloseEvent* event) override;
 	// 无边框窗口的原生消息全部转交 common/WindowFrame 判定
 	bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
@@ -208,6 +224,11 @@ private:
 	void applyTakeoverBypasses(bool takenover);
 
 	void callSessionCreate();
+	// 带 workspaceId 发 session/create（没分组时先补建默认工作区再进来，见实现）
+	void createSessionIn(const QString& workspaceId);
+	// 新会话该挂哪个工作区：优先现有分组；一个分组都没有就先补建默认工作区（接管态除外）。
+	// 回调拿到的 id 可能为空 —— 那表示确实没有可归属的工作区，只能落到未分组。
+	void resolveSessionWorkspace(const std::function<void(const QString&)>& onResolved);
 	// 新建会话挂到哪个工作区：服务端 session/create 响应里没有 workspaceId
 	QString preferredWorkspaceId();
 	// 把当前会话同步给输入区；控件那半边在 MessageHost
@@ -218,10 +239,6 @@ private:
 	void handlePipeRequest(int id, const QString& tool, const QJsonObject& args, QLocalSocket* socket);
 
 	QString m_sessionId;
-
-	// workspace/follow 的本地缓存：每次变化后整体推给侧栏 catalog（catalog 只认全量清单）
-	QJsonArray m_workspaceItems;
-	QJsonArray m_workspaceArchived;
 
 	CacheManager m_cacheManager;
 	SessionPrefetcher* m_prefetcher = nullptr;
@@ -250,9 +267,14 @@ private:
 	SessionProjectionState m_projectionState;
 
 	DshApiClient* m_api = nullptr;
+	// 工作区基线唯一持有者；基线一变就回调 applyWorkspaceState 把投影推给侧栏
+	WorkplaceManager m_workplaces;
 	ServerManager* m_serverManager = nullptr;
 	DshNamedPipeBridge* m_pipeBridge = nullptr;
 	DllCaller* m_dllCaller = nullptr;
 	QThreadPool* m_toolPool = nullptr;
 	bool m_cleanupResidualsAfterServerError = false;
+
+	// 消息区未就绪期间收到的服务端错误文案（启动即失败时 m_messageHost 还是空）
+	QStringList m_pendingServerNotices;
 };

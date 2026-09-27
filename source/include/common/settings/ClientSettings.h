@@ -1,9 +1,9 @@
 #pragma once
 
-// "运行目录里的客户端设置"统一入口：<exe>/ClientSetting/<名字>Setting.json（当前只有
-// AppearanceSetting.json = 界面语言 + 主题；server/url 仍在 QSettings，见 SettingsStore.h）。
-// 不用 QSettings 是因为它落在 Windows 注册表里，用户看不见、拷不走、不便随安装目录一起备份/搬移；
-// 外观这类"跟着这份客户端走"的设置更适合明文文件。
+// "运行目录里的客户端设置"统一入口：<exe>/ClientSetting/<名字>Setting.json（当前有
+// AppearanceSetting.json = 界面语言 + 主题；ServerSetting.json = server/url，见 SettingsStore.h）。
+// 明文文件而不是注册表：用户看得见、拷得走，能随安装目录一起备份/搬移；
+// 外观这类"跟着这份客户端走"的设置尤其适合。
 // 陷阱：目录首次写入时按需 mkpath、可被环境变量 DSHHUB_CLIENT_SETTING_DIR 覆盖（单测靠它指向临时
 // 目录）；写文件走 QSaveFile 原子替换，避免崩溃/掉电留下半截 JSON。
 

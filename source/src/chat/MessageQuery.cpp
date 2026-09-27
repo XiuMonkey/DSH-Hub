@@ -4,7 +4,7 @@
 #include "network/DshApiClient.h"
 #include "chat/CacheHistoryManager.h"
 #include "common/session/SessionCommands.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "ui/ShadowPanel.h"
 
 #include <QClipboard>

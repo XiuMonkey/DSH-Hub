@@ -1,4 +1,4 @@
-#include "core/HostExports.h"
+#include "ExtensionSystem/HostExports.h"
 
 #include "common/util/CommonRegistry.h"
 

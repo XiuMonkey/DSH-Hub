@@ -1,6 +1,6 @@
 #include "ui/PluginsManager.h"
 #include "ui/LayoutUtils.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
 #include "common/extension/PluginMarketClient.h"

@@ -1,7 +1,7 @@
 #include "ui/ModelSelector.h"
 
 #include "ui/LayoutUtils.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include <algorithm>
 #include "network/DshApiClient.h"
 #include "ui/ShadowPanel.h"

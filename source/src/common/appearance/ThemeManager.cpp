@@ -4,7 +4,7 @@
 #include "common/settings/ClientSettings.h"
 #include "common/util/CommonRegistry.h"
 #include "core/DSHHub.h"
-#include "core/HostExports.h"
+#include "ExtensionSystem/HostExports.h"
 #include "ui/ShadowPanel.h"
 #include "ui/SpinnerWidget.h"
 #include <QAbstractScrollArea>

@@ -1,24 +1,35 @@
 #include "common/settings/SettingsStore.h"
 
-#include <QSettings>
+#include "common/settings/ClientSettings.h"
+
+#include <QJsonObject>
 
 namespace
 {
-	const char* const kServerUrlKey = "server/url";
+	const char* const kServerFile = "ServerSetting.json";
+	const char* const kUrlKey = "url";
+}
+
+QString SettingsStore::fileName()
+{
+	return QLatin1String(kServerFile);
 }
 
 QString SettingsStore::serverUrl()
 {
-	QSettings settings;
-	return settings.value(QLatin1String(kServerUrlKey)).toString().trimmed();
+	return ClientSettings::read(kServerFile)
+		.value(QLatin1String(kUrlKey)).toString().trimmed();
 }
 
 void SettingsStore::setServerUrl(const QString& url)
 {
-	QSettings settings;
+	QJsonObject object = ClientSettings::read(kServerFile);
+
 	const QString trimmed = url.trimmed();
 	if (trimmed.isEmpty())
-		settings.remove(QLatin1String(kServerUrlKey));
+		object.remove(QLatin1String(kUrlKey));
 	else
-		settings.setValue(QLatin1String(kServerUrlKey), trimmed);
+		object.insert(QLatin1String(kUrlKey), trimmed);
+
+	ClientSettings::write(kServerFile, object);
 }

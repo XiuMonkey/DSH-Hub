@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -135,7 +135,7 @@
     <ClCompile Include="src\chat\AgentMessageUnit.cpp" />
     <ClCompile Include="src\chat\CodeBlockView.cpp" />
     <ClCompile Include="src\common\appearance\TopBarTools.cpp" />
-    <ClCompile Include="src\core\ConnectionManager.cpp" />
+    <ClCompile Include="src\common\util\ConnectionManager.cpp" />
     <ClCompile Include="src\ExtensionSystem\UiStage.cpp" />
     <ClCompile Include="src\ui\LoadMoreButton.cpp" />
     <ClCompile Include="src\ui\ChatInputWidget.cpp" />
@@ -156,7 +156,7 @@
     <ClCompile Include="src\core\MessageHost.cpp" />
     <ClCompile Include="src\core\ServerManager.cpp" />
     <ClCompile Include="src\core\main.cpp" />
-    <ClCompile Include="src\core\HostExports.cpp" />
+    <ClCompile Include="src\ExtensionSystem\HostExports.cpp" />
     <ClCompile Include="src\chat\MessageQuery.cpp" />
     <ClCompile Include="src\chat\SystemMessageUnit.cpp" />
     <ClCompile Include="src\common\util\CodeHighlighter.cpp" />
@@ -165,6 +165,7 @@
     <ClCompile Include="src\common\appearance\InteractionHandler.cpp" />
     <ClCompile Include="src\common\session\SessionCatalog.cpp" />
     <ClCompile Include="src\common\session\SessionService.cpp" />
+    <ClCompile Include="src\common\workspace\WorkplaceManager.cpp" />
     <ClCompile Include="src\common\settings\SettingsStore.cpp" />
     <ClCompile Include="src\common\settings\ClientSettings.cpp" />
     <ClCompile Include="src\common\session\AgentPresetService.cpp" />
@@ -233,7 +234,7 @@
   <ItemGroup>
     <QtMoc Include="include\chat\UserMessageUnit.h" />
     <QtMoc Include="include\chat\AgentMessageUnit.h" />
-    <QtMoc Include="include\core\ConnectionManager.h" />
+    <QtMoc Include="include\common\util\ConnectionManager.h" />
     <ClInclude Include="include\network\DshEventParser.h" />
     <ClInclude Include="include\ExtensionSystem\ExtensionLoader.h" />
     <ClInclude Include="include\ExtensionSystem\DllCaller.h" />
@@ -249,7 +250,7 @@
     <ClInclude Include="include\common\appearance\TopBarTools.h" />
     <ClInclude Include="include\VirtualClass\VirtualCommon.h" />
     <ClInclude Include="include\VirtualClass\VirtualApiTakeover.h" />
-    <ClInclude Include="include\core\HostExports.h" />
+    <ClInclude Include="include\ExtensionSystem\HostExports.h" />
     <ClInclude Include="include\core\DshHostPlugin.h" />
     <ClInclude Include="include\common\appearance\WindowFrame.h" />
     <ClInclude Include="include\common\util\Logger.h" />
@@ -264,6 +265,7 @@
     <ClInclude Include="include\common\extension\ExtensionRegistry.h" />
     <ClInclude Include="include\common\extension\ExtensionInstallTask.h" />
     <ClInclude Include="include\common\session\ModelSelectionService.h" />
+    <ClInclude Include="include\common\workspace\WorkplaceManager.h" />
     <QtMoc Include="include\common\appearance\ThemeManager.h" />
     <QtMoc Include="include\common\appearance\TranslationManager.h" />
     <QtTranslation Include="..\assets\translations\dshhub_en.ts" />

@@ -40,18 +40,29 @@ public:
 	// signal 是原生签名串（"2clearRequested()"），与白名单同一种串；index 只用来事后取消订阅。
 	void ProtectedRegisterConnection(QString index, const QObject* sender, QByteArray signal, const QObject* receiver, const char* slot) override
 	{
-		if (std::find(m_publicSignals.begin(), m_publicSignals.end(), signal) == m_publicSignals.end()) {
-			qWarning("ProtectedRegisterConnection(%s): 信号 %s 未公开，已拒绝", qPrintable(index), signal.constData());
+		const QByteArray signalName = EnsureSignalPrefix(signal);
+		if (std::find(m_publicSignals.begin(), m_publicSignals.end(), signalName) == m_publicSignals.end()) {
+			qWarning("ProtectedRegisterConnection(%s): 信号 %s 未公开，已拒绝", qPrintable(index), signalName.constData());
 			return;
 		}
-		RegisterConnection(index, sender, signal, receiver, slot);
+		// slotName 只活到本函数结束，但 constData() 只喂给同步返回的 RegisterConnection，不会存下来
+		const QByteArray slotName = EnsureSlotPrefix(QByteArray(slot));
+		RegisterConnection(index, sender, signalName, receiver, slotName.constData());
 	}
 
 	// 宿主内部登记（**不上虚接口**）：调用方自己提供 sender + signal，不做任何校验
 	void RegisterConnection(QString index, ConnectionGroup group)
 	{
 		PublicRemoveConnection(index);
+		group.mSignal = EnsureSignalPrefix(group.mSignal);
+		group.mSlot = EnsureSlotPrefix(group.mSlot);
 		const auto handle = QObject::connect(group.Sender, group.mSignal, group.Receiver, group.mSlot);
+		if (!handle) {
+			// 连不上就别登记：登记了只会让 Suspend / Reconnect 拿空 handle 空转，而调用方
+			// 拿不到返回值，只能靠这行日志 —— 少写它，故障就是彻底静默的
+			qWarning("RegisterConnection(%s): 连接未建立（signal=%s），未登记", qPrintable(index), group.mSignal.constData());
+			return;
+		}
 		ConnectionRegistry.insert(index, group);
 		HandleMap.insert(index, handle);
 	}
@@ -60,6 +71,10 @@ public:
 	{
 		PublicRemoveConnection(index);
 		const auto handle = QObject::connect(sender, signal, receiver, slot);
+		if (!handle) {
+			qWarning("RegisterConnection(%s): 连接未建立（signal=%s），未登记", qPrintable(index), signal.constData());
+			return;
+		}
 		ConnectionRegistry.insert(index, { const_cast<QObject*>(sender), const_cast<QObject*>(receiver), signal, "Lambda" });
 		HandleMap.insert(index, handle);
 	}
@@ -68,6 +83,10 @@ public:
 	{
 		PublicRemoveConnection(index);
 		const auto handle = QObject::connect(sender, signal, receiver, slot);
+		if (!handle) {
+			qWarning("RegisterConnection(%s): 连接未建立（成员函数指针形式），未登记", qPrintable(index));
+			return;
+		}
 		ConnectionRegistry.insert(index, { const_cast<Sender*>(sender), const_cast<QObject*>(receiver), QMetaMethod::fromSignal<Signal>(signal).methodSignature(), "Lambda" });
 		HandleMap.insert(index, handle);
 	}
@@ -149,6 +168,12 @@ public:
 	}
 
 private:
+	// Qt 字符串版 connect 靠首字符认类型：'2' = 信号、'1' = 槽。缺前缀**不报错**，只打一行
+	// "Use the SLOT or SIGNAL macro" 就返回空连接 —— 静默失效，插件从 void 接口看不出来。
+	// 只在登记入口补齐：调用方写裸名也照样连上（「清空会话」订阅就这么断过一整天）。
+	static QByteArray EnsureSignalPrefix(QByteArray signal);
+	static QByteArray EnsureSlotPrefix(QByteArray slot);
+
 	void PrivateRemoveConnection(ConnectionGroup group);
 	void PrivateRemoveConnection(QMetaObject::Connection handle);
 

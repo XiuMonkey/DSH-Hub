@@ -1,7 +1,7 @@
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 
 #include "common/util/CommonRegistry.h"
-#include "core/HostExports.h"
+#include "ExtensionSystem/HostExports.h"
 
 #include <utility>
 
@@ -10,6 +10,23 @@ ConnectionManager& ConnectionManager::instance()
 {
 	static ConnectionManager* const inst = new ConnectionManager();
 	return *inst;
+}
+
+// 补前缀：Qt 字符串版 connect 靠首字符认类型（'2' 信号 / '1' 槽），缺了不报错，
+// 只打一行警告就返回空连接 —— 插件侧看不出来，订阅会静默失效。
+QByteArray ConnectionManager::EnsureSignalPrefix(QByteArray signal)
+{
+	if (!signal.isEmpty() && signal.at(0) != '2')
+		signal.prepend('2');
+	return signal;
+}
+
+QByteArray ConnectionManager::EnsureSlotPrefix(QByteArray slot)
+{
+	// 首字符是 '2' 的不动：信号连信号时槽位本来就该带 '2'
+	if (!slot.isEmpty() && slot.at(0) != '1' && slot.at(0) != '2')
+		slot.prepend('1');
+	return slot;
 }
 
 ConnectionManager::~ConnectionManager() = default;

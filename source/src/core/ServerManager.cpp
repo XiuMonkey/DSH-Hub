@@ -1,5 +1,5 @@
 #include "core/ServerManager.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "common/extension/ExtensionRegistry.h"
 #include "common/settings/SettingsStore.h"
 
@@ -15,7 +15,6 @@
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QSaveFile>
-#include <QTcpSocket>
 #include <QUrlQuery>
 
 namespace
@@ -317,6 +316,11 @@ bool ServerManager::isRestarting() const
 	return m_restarting;
 }
 
+QString ServerManager::defaultWorkspacePath() const
+{
+	return QCoreApplication::applicationDirPath() + QStringLiteral("/resources/server/launch-root");
+}
+
 bool ServerManager::ensureFactorySettings(const QString& dshHome)
 {
 	if (dshHome.isEmpty())
@@ -350,17 +354,20 @@ void ServerManager::startBundledServer()
 	QString nodePath = appDir + QStringLiteral("/resources/server/node.exe");
 	QString entryPath = appDir + QStringLiteral("/resources/harness-node-entry.mjs");
 	QString dshEntry = appDir + QStringLiteral("/resources/server/node_modules/@deepseek-ai/dsh/lib/bin.js");
-	QString cwd = appDir + QStringLiteral("/resources/server/launch-root");
+	QString cwd = defaultWorkspacePath();
 	QString dshHome = appDir + QStringLiteral("/resources/server/harness");
 
 	qInfo().noquote() << QStringLiteral("[ServerManager] startBundledServer, dshHome=") << dshHome;
 	m_dshHome = dshHome;
 
 	if (!QFile::exists(nodePath) || !QFile::exists(entryPath) || !QFile::exists(dshEntry)) {
-		QUrl fallback = storedServerUrl();
-		if (fallback.isEmpty())
-			fallback = QUrl(QStringLiteral("http://127.0.0.1:3080"));
-		publishBaseUrl(fallback);
+		// 捆绑服务端不完整：不猜地址兜底（历史上这里会发布 127.0.0.1:3080）。
+		// 走到这里说明用户没有配置任何服务地址（两个调用点都先查过），不发布 baseUrl
+		// 就让连接层停在未连接；缺哪个文件写进日志，错误上屏走 errorLine 接线。
+		const QString missing = !QFile::exists(nodePath) ? nodePath
+			: !QFile::exists(entryPath) ? entryPath : dshEntry;
+		qWarning().noquote() << QStringLiteral("[ServerManager] 捆绑服务端文件缺失，无法启动: %1").arg(missing);
+		emit errorLine(qtTrId("server_bundled_server_missing"));
 		return;
 	}
 
@@ -572,7 +579,7 @@ void ServerManager::startBundledServer()
 	// 新装的行要等它重启才被读到
 	ensureBuiltinPlugins(dshHome + QStringLiteral("/profiles/web"));
 
-	launchBundledServer(nodePath, entryPath, dshEntry, cwd, dshHome, 0);
+	launchBundledServer(nodePath, entryPath, dshEntry, cwd, dshHome);
 }
 
 void ServerManager::ensureBuiltinPlugins(const QString& profileDir)
@@ -634,19 +641,10 @@ bool ServerManager::installBuiltinPlugin(const QString& profileDir, const QStrin
 }
 
 void ServerManager::launchBundledServer(const QString& nodePath, const QString& entryPath, const QString& dshEntry,
-	const QString& cwd, const QString& dshHome, int port)
+	const QString& cwd, const QString& dshHome)
 {
-	const int serverPort = port > 0 ? port : 3080;
-	{
-		QTcpSocket probe;
-		probe.connectToHost(QStringLiteral("127.0.0.1"), serverPort);
-		if (probe.waitForConnected(500)) {
-			qDebug().noquote() << "[ServerManager] using port:" << serverPort;
-			publishBaseUrl(QUrl(QStringLiteral("http://127.0.0.1:%1").arg(serverPort)));
-			return;
-		}
-	}
-
+	// 不探测、不挑端口：进程以 --port 0 起随机端口，真正的 baseUrl 由
+	// handleServerOutput() 从服务端打印的认证 URL 里解析出来再发布
 	m_serverProcess = new QProcess(this);
 	m_serverProcess->setProcessChannelMode(QProcess::MergedChannels);
 
@@ -690,6 +688,17 @@ void ServerManager::launchBundledServer(const QString& nodePath, const QString& 
 		this, &ServerManager::handleServerOutput);
 	dshRegister("ServerManager.002", m_serverProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
 		this, &ServerManager::handleServerFinished);
+	dshRegister("ServerManager.003", m_serverProcess, &QProcess::errorOccurred,
+		this, [this](QProcess::ProcessError error) {
+			// FailedToStart 不伴随 finished，不接这条初始化遮罩会永远挂着
+			if (error != QProcess::FailedToStart)
+				return;
+			qWarning().noquote() << QStringLiteral("[ServerManager] 服务端进程启动失败:")
+				<< m_serverProcess->errorString();
+			emit errorLine(qtTrId("server_proc_start_failed_fmt").arg(m_serverProcess->errorString()));
+		});
+	dshRegister("ServerManager.004", m_serverProcess, &QProcess::readyReadStandardError,
+		this, &ServerManager::handleServerErrorOutput);
 
 	m_serverProcess->start(nodePath, QStringList{ entryPath, dshEntry, QStringLiteral("web"),
 		QStringLiteral("--port"), QStringLiteral("0") });
@@ -741,4 +750,26 @@ void ServerManager::handleServerFinished(int exitCode, QProcess::ExitStatus exit
 {
 	qInfo().noquote() << QStringLiteral("[ServerManager] server finished, code=") << exitCode;
 	emit finished(exitCode, exitStatus);
+}
+
+void ServerManager::handleServerErrorOutput()
+{
+	if (!m_serverProcess)
+		return;
+
+	while (m_serverProcess->canReadLine()) {
+		const QString line = QString::fromUtf8(m_serverProcess->readLine()).trimmed();
+		if (line.isEmpty())
+			continue;
+		qWarning().noquote() << QStringLiteral("[DSH Server][stderr]") << line;
+		emit outputLine(line);
+		// 初始化期（baseUrl 还没发布）stderr 出现任何内容都算启动失败信号，转 errorLine
+		// 收掉初始化遮罩；跑起来之后只有错误关键词行才上报，免得正常 warning 刷系统消息
+		if (m_baseUrl.isEmpty()
+			|| line.contains(QStringLiteral("error"), Qt::CaseInsensitive)
+			|| line.contains(QStringLiteral("failed"), Qt::CaseInsensitive)
+			|| line.contains(QStringLiteral("uncaught"), Qt::CaseInsensitive)
+			|| line.contains(QStringLiteral("exception"), Qt::CaseInsensitive))
+			emit errorLine(line);
+	}
 }

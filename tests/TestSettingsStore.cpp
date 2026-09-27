@@ -1,28 +1,39 @@
 #include "TestSettingsStore.h"
 
+#include "common/settings/ClientSettings.h"
 #include "common/settings/SettingsStore.h"
 
-#include <QCoreApplication>
+#include <QFile>
 #include <QTest>
 
-// 注意：界面语言已迁到运行目录的 ClientSetting/AppearanceSetting.json
-//（见 ClientSettings.h / TestClientSettings）；
-// 默认 Agent 预设已归服务端设置文档（见 AgentPresetService），本类不再涉及。
+// server/url 现存在 ClientSetting/ServerSetting.json（经 ClientSettings 读写）；
+// 目录由 DSHHUB_CLIENT_SETTING_DIR 指到临时目录（见 TestClientSettings 同款做法）。
+
+namespace
+{
+	QString serverFilePath()
+	{
+		return ClientSettings::filePath(SettingsStore::fileName());
+	}
+}
 
 void TestSettingsStore::initTestCase()
 {
-	// QSettings 需要 organizationName + applicationName 才能定位存储路径
-	QCoreApplication::setOrganizationName(QStringLiteral("DSHHubTest"));
-	QCoreApplication::setApplicationName(QStringLiteral("UnitTest"));
+	QVERIFY(m_dir.isValid());
 
-	// 清理之前的测试数据
-	SettingsStore::setServerUrl(QString());
+	// 把设置根指到临时目录：必须在任何 ClientSettings 调用之前生效
+	qputenv("DSHHUB_CLIENT_SETTING_DIR", m_dir.path().toLocal8Bit());
 }
 
 void TestSettingsStore::cleanupTestCase()
 {
-	// 清理测试数据
-	SettingsStore::setServerUrl(QString());
+	qunsetenv("DSHHUB_CLIENT_SETTING_DIR");
+}
+
+void TestSettingsStore::init()
+{
+	// 每个用例从"文件不存在"的干净状态出发
+	QFile::remove(serverFilePath());
 }
 
 void TestSettingsStore::serverUrlDefault()

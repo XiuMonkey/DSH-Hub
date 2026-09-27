@@ -2,7 +2,7 @@
 
 #include "common/appearance/CardShadow.h"
 #include "common/appearance/ThemeManager.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "ui/ShadowPanel.h"
 #include <QApplication>
 #include <QCursor>

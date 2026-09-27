@@ -28,6 +28,7 @@ public:
 	static void refreshTitles(DshApiClient* api,
 		const std::function<void(const QString& sessionId, const QString& title)>& onTitle);
 
-	// 清空 DSH home 下的会话数据：sessions 目录 + storage domain 里的工作区清单
+	// 清空 DSH home 下的会话数据：sessions 目录 + storages/workspace.json。
+	// 默认工作区不在这里补建，由 DSHHub::resolveSessionWorkspace() 在缺分组时补。
 	static void clearAllSessionData(const QString& dshHome);
 };

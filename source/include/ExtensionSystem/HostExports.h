@@ -21,7 +21,7 @@
 #define DSHHUB_HOST_SYM_ABI_VERSION   "DshHubHostAbiVersion"
 #define DSHHUB_HOST_SYM_REGISTRY_FIND "DshHubHostRegistryFind"
 
-// C ABI 函数类型（定义在 src/core/HostExports.cpp）；返回的 void* = QObject*，不存在或已销毁时是 nullptr。
+// C ABI 函数类型（定义在 src/ExtensionSystem/HostExports.cpp）；返回的 void* = QObject*，不存在或已销毁时是 nullptr。
 using DshHostAbiVersionFn = unsigned int (*)(void);
 using DshHostRegistryFindFn = void* (*)(const char* index);
 

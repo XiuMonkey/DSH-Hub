@@ -1,7 +1,7 @@
 // DSHHub 主窗口 UI 搭建（见 DSHHub::buildUi）：外观由 Theme 从 styles/*.qss 统一安装，控件只提供 objectName。
 
 #include "core/DSHHub.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "ui/ChatInputWidget.h"
 #include "ui/LayoutUtils.h"
 #include "ui/LoadMoreButton.h"

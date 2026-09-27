@@ -147,6 +147,12 @@
     <message id="server_auth_token_missing">
         <translation>The server did not provide an auth token, so /api authentication is not possible</translation>
     </message>
+    <message id="server_bundled_server_missing">
+        <translation>The bundled built-in server is incomplete and cannot start (missing node / server files; check the install directory)</translation>
+    </message>
+    <message id="server_proc_start_failed_fmt">
+        <translation>Failed to launch the bundled server process: %1</translation>
+    </message>
     <message id="com_member_not_found_fmt">
         <translation>COM member not found: %1 (hr=%2)</translation>
     </message>

@@ -1,5 +1,5 @@
 #include "ui/ExtensionManagerPopup.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "ExtensionSystem/ClientExtension.h"
 
 #include <QAbstractItemView>

@@ -452,8 +452,8 @@
 
 ## `include/common/settings/`
 
-- `ClientSettings.h`：明文文件 vs 注册表的取舍、可被 `DSHHUB_CLIENT_SETTING_DIR` 覆盖、`QSaveFile` 原子替换 —— **手改坏一个字符只会丢设置，不会让客户端起不来**。
-- `SettingsStore.h`：键名**只允许出现在这里**；界面语言与主题**不在** QSettings；默认 Agent 预设归服务端设置、客户端刻意不留副本；`main.cpp` 未设 org/appName 所以 `server/url` 也存不住。
+- `ClientSettings.h`：明文文件（而非注册表）的取舍、可被 `DSHHUB_CLIENT_SETTING_DIR` 覆盖、`QSaveFile` 原子替换 —— **手改坏一个字符只会丢设置，不会让客户端起不来**。
+- `SettingsStore.h`：键名**只允许出现在这里**；`server/url` 落在 `ClientSetting/ServerSetting.json`（经 ClientSettings，2026-09-26 从 QSettings 迁出）；界面语言与主题在 `AppearanceSetting.json`；默认 Agent 预设归服务端设置、客户端刻意不留副本。
 
 ## `include/core/`（残留）
 

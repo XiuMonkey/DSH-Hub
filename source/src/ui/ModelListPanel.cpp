@@ -1,7 +1,7 @@
 #include "ui/ModelListPanel.h"
 
 #include "ui/LayoutUtils.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "network/DshApiClient.h"
 #include "common/appearance/ThemeManager.h"
 #include "ui/Tooltip.h"

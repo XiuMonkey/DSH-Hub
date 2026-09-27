@@ -55,6 +55,11 @@ public:
 	virtual void HandleWorkspaceRemoved(const QString& workspaceId) = 0;
 	virtual void HandleWorkspaceReordered(const QStringList& workspaceIds) = 0;
 	virtual void HandleWorkspaceArchiveChanged(const QJsonArray& archivedSessionIds) = 0;
+
+	// 侧栏会话标题刷新：回合收尾之外的另一条触发路。重拉标题但**不重选会话** —— refreshSessions
+	// 拿到列表后会 emit initialSessionReady（自动选中的是"第一个非 running 的会话"），接管态下再走
+	// 那条会把用户正在看的会话切走、还会打断流式输出。幂等、无副作用，可重复调。
+	virtual void ExternalRefreshSessionTitles() = 0;
 };
 
 // 架空原 UI：把宿主整个客户区让给扩展自绘；原生控件树不销毁，还台即恢复

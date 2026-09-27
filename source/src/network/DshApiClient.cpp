@@ -1,8 +1,8 @@
 ﻿// HTTP 请求 + mux WebSocket：生成 rpcId、拆信封后回调成败
 
 #include "network/DshApiClient.h"
-#include "core/ConnectionManager.h"
-#include "core/HostExports.h"
+#include "common/util/ConnectionManager.h"
+#include "ExtensionSystem/HostExports.h"
 #include "common/util/CommonRegistry.h"
 
 #include <QDateTime>

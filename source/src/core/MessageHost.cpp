@@ -11,7 +11,7 @@
 #include "common/session/SessionCommands.h"
 #include "ui/SmoothWheelScroller.h"
 #include "ui/SpinnerWidget.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "common/util/Logger.h"
 
 #include <QGraphicsOpacityEffect>

@@ -1,5 +1,5 @@
 #include "ui/Settings.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"
 #include "network/DshApiClient.h"

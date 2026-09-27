@@ -2,7 +2,7 @@
 // 按钮外观全走 QSS，本文件只建控件、换字形。
 
 #include "ui/TitleBar.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 
 #include "common/appearance/ThemeManager.h"
 

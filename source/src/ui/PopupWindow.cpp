@@ -1,6 +1,6 @@
 #include "ui/PopupWindow.h"
 #include "ui/LayoutUtils.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 #include "ui/ShadowPanel.h"
 #include "common/appearance/ThemeManager.h"
 #include "common/appearance/WindowFrame.h"

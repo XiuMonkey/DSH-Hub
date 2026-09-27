@@ -38,6 +38,18 @@ namespace SessionCommands
 		return args;
 	}
 
+	// workspace/delete -> args { request: { workspaceId } }；只把工作区从服务端注册表里移除（含写盘），
+	// 不碰它底下的会话。id 未知时服务端回 workspace/not-found。
+	inline QJsonObject workspaceDelete(const QString& workspaceId)
+	{
+		QJsonObject request;
+		request.insert(QStringLiteral("workspaceId"), workspaceId);
+
+		QJsonObject args;
+		args.insert(QStringLiteral("request"), request);
+		return args;
+	}
+
 	// session/create -> args { request: { workspaceId?, cwd?, sessionId?, agentPreset? } }
 	inline QJsonObject sessionCreate(const QString& workspaceId = QString(), const QString& agentPreset = QString())
 	{

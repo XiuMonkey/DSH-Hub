@@ -1,5 +1,5 @@
 #include "ui/SmoothWheelScroller.h"
-#include "core/ConnectionManager.h"
+#include "common/util/ConnectionManager.h"
 
 #include <QAbstractAnimation>
 #include <QAbstractScrollArea>

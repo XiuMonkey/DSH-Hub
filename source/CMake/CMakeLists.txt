@@ -212,7 +212,7 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/src/core/ServerManager.cpp"
 		# ServerManager.cpp 与 DshApiClient.cpp 都经 dshRegister 引用 ConnectionManager::instance()，
 		# 所以测试目标也必须编它，否则 LNK2019（理由同上一条）。
-		"${DSHHUB_ROOT}/src/core/ConnectionManager.cpp"
+		"${DSHHUB_ROOT}/src/common/util/ConnectionManager.cpp"
 		# DshApiClient.cpp 按 kApiSink 从公共注册表取"后端接管的接收端"（客户端扩展），
 		# 所以测试目标也要编 CommonRegistry.cpp，否则同样是 LNK2019。
 		"${DSHHUB_ROOT}/src/common/util/CommonRegistry.cpp"
@@ -237,7 +237,7 @@ if(DSHHUB_BUILD_TESTS)
 		"${DSHHUB_ROOT}/include/network/SessionPrefetcher.h"
 		"${DSHHUB_ROOT}/include/common/appearance/TranslationManager.h"
 		"${DSHHUB_ROOT}/include/core/ServerManager.h"
-		"${DSHHUB_ROOT}/include/core/ConnectionManager.h"
+		"${DSHHUB_ROOT}/include/common/util/ConnectionManager.h"
 		"${DSHHUB_ROOT}/include/common/util/CommonRegistry.h")
 
 	qt_add_executable(dshhub_tests
