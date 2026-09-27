@@ -141,8 +141,8 @@ void SessionStatsLine::clearStats()
 void SessionStatsLine::paintEvent(QPaintEvent* event)
 {
 	Q_UNUSED(event)
-	if (m_lineText.isEmpty())
-		return;
+		if (m_lineText.isEmpty())
+			return;
 
 	QPainter painter(this);
 	painter.setFont(font());
@@ -251,8 +251,8 @@ ChatInputWidget::ChatInputWidget(QWidget* parent)
 	m_editor->installEventFilter(this);
 
 	dshRegister("ChatInputWidget.001", m_editor->document(), &QTextDocument::contentsChanged, this, [this]() {
-			// 放到事件循环里再算，确保编辑器已用当前 viewport 宽度完成布局
-			QTimer::singleShot(0, this, [this]() { adjustHeight(); });
+		// 放到事件循环里再算，确保编辑器已用当前 viewport 宽度完成布局
+		QTimer::singleShot(0, this, [this]() { adjustHeight(); });
 		});
 
 	QTimer::singleShot(0, this, [this]() { adjustHeight(); });

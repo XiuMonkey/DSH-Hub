@@ -17,7 +17,7 @@ class QWidget;
 class ThemeManager : public QObject, public VirtualTheme
 {
 	Q_OBJECT
-	Q_INTERFACES(VirtualTheme)
+		Q_INTERFACES(VirtualTheme)
 
 public:
 	enum class Mode

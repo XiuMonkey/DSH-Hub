@@ -116,9 +116,9 @@ namespace
 						target = query->addAgentMessage(QString(), layout);
 					const QString html =
 						QStringLiteral("<pre style='white-space:pre-wrap;word-break:break-all;margin:0;'>%1</pre>")
-							.arg(QString::fromUtf8(
-								QJsonDocument(tool.arguments).toJson(QJsonDocument::Indented))
-								.toHtmlEscaped());
+						.arg(QString::fromUtf8(
+							QJsonDocument(tool.arguments).toJson(QJsonDocument::Indented))
+							.toHtmlEscaped());
 					target->appendToolCall(tool.name, html);
 				}
 			}
@@ -130,7 +130,7 @@ namespace
 						target = query->addAgentMessage(QString(), layout);
 					const QString html =
 						QStringLiteral("<pre style='white-space:pre-wrap;word-break:break-all;margin:0;'>%1</pre>")
-							.arg(result.message.toHtmlEscaped());
+						.arg(result.message.toHtmlEscaped());
 					target->appendToolResult(html);
 				}
 			}
@@ -594,24 +594,24 @@ void HistoryLoader::load(const QString& sessionId)
 			m_cursorWatchdog->setSingleShot(true);
 			dshRegister(QStringLiteral("HistoryLoader.watchdog.%1").arg(reinterpret_cast<quintptr>(this)),
 				m_cursorWatchdog, &QTimer::timeout, this, [this]() {
-				if (!m_loadPending || m_sessionId.isEmpty())
-					return;
-				if (m_fallbackCursor > 0) {
-					qWarning().noquote() << "[History] follow cursor timeout -> fallback throughSeq="
-						<< m_fallbackCursor << " sessionId=" << m_sessionId;
-					m_loadPending = false;
-					m_throughSeq = m_fallbackCursor;
-					m_seeded = true;
-					load(m_sessionId);
-					return;
-				}
+					if (!m_loadPending || m_sessionId.isEmpty())
+						return;
+					if (m_fallbackCursor > 0) {
+						qWarning().noquote() << "[History] follow cursor timeout -> fallback throughSeq="
+							<< m_fallbackCursor << " sessionId=" << m_sessionId;
+						m_loadPending = false;
+						m_throughSeq = m_fallbackCursor;
+						m_seeded = true;
+						load(m_sessionId);
+						return;
+					}
 
-				qWarning().noquote() << "[History] follow cursor timeout, no fallback sessionId=" << m_sessionId;
-				m_loadPending = false;
-				m_loading = false;
-				emit historyError(QStringLiteral("stream-timeout"),
-					qtTrId("chat_history_timeout"));
-			});
+					qWarning().noquote() << "[History] follow cursor timeout, no fallback sessionId=" << m_sessionId;
+					m_loadPending = false;
+					m_loading = false;
+					emit historyError(QStringLiteral("stream-timeout"),
+						qtTrId("chat_history_timeout"));
+				});
 		}
 		m_cursorWatchdog->start(2500);
 		return;

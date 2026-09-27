@@ -50,7 +50,7 @@ SmoothWheelScroller::SmoothWheelScroller(QAbstractScrollArea* area, QObject* par
 			m_target = static_cast<double>(bar->maximum());
 			animateToTarget();
 		}
-	});
+		});
 
 	if (QScrollBar* bar = m_area->verticalScrollBar()) {
 		// 明确的用户操作，补间立刻让位（程序 setValue 不发这两个信号）

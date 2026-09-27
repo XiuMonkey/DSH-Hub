@@ -29,7 +29,7 @@ class SmoothWheelScroller;
 class MessageHost : public QObject, public VirtualMessageHost
 {
 	Q_OBJECT
-	Q_INTERFACES(VirtualMessageHost)
+		Q_INTERFACES(VirtualMessageHost)
 
 public:
 	MessageHost(DshApiClient* api, CacheManager* cache, QScrollArea* scrollArea, QVBoxLayout* messagesLayout,

@@ -360,7 +360,7 @@ namespace ClientExtension
 				qInfo("[ClientExtension] exit: %s 已退场（detachHost 同步执行）", qPrintable(name));
 			}
 			else {
-			qInfo("[ClientExtension] exit: %s 没有 %s 槽，只摘出（插件未声明可安全退场）", qPrintable(name), kDetachSlot);
+				qInfo("[ClientExtension] exit: %s 没有 %s 槽，只摘出（插件未声明可安全退场）", qPrintable(name), kDetachSlot);
 			}
 
 			// 摘掉接管登记：插件不再受宿主调度，留着它会让退出路径上还有代码去调插件对象

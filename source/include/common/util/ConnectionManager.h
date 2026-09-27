@@ -21,15 +21,15 @@
 class ConnectionManager : public QObject, public VirtualConnectionManager
 {
 	Q_OBJECT
-	Q_INTERFACES(VirtualConnectionManager)
+		Q_INTERFACES(VirtualConnectionManager)
 
-	// 插件被允许新增订阅的信号白名单（QMetaObject 规范化签名）：Sidebar::clearRequested、
-	// DSHHub::aboutToClose、DshApiClient::takeoverChanged。
-	// 加条目 = 承诺该信号名稳定；存的是签名串不是 index（拿 index 比会全拒，踩过）。
-	std::vector<QByteArray> m_publicSignals = {
-		QByteArrayLiteral("2clearRequested()"),
-		QByteArrayLiteral("2aboutToClose()"),
-		QByteArrayLiteral("2takeoverChanged(bool)")
+		// 插件被允许新增订阅的信号白名单（QMetaObject 规范化签名）：Sidebar::clearRequested、
+		// DSHHub::aboutToClose、DshApiClient::takeoverChanged。
+		// 加条目 = 承诺该信号名稳定；存的是签名串不是 index（拿 index 比会全拒，踩过）。
+		std::vector<QByteArray> m_publicSignals = {
+			QByteArrayLiteral("2clearRequested()"),
+			QByteArrayLiteral("2aboutToClose()"),
+			QByteArrayLiteral("2takeoverChanged(bool)")
 	};
 
 public:

@@ -86,14 +86,14 @@ bool PluginMarketInstaller::ensureInstalled(const QString& appDir)
 			qInfo().noquote() << QStringLiteral("[market-installer]") << line;
 			emit installOutput(line);
 		}
-	});
+		});
 
 	const QString profileDir = QDir::toNativeSeparators(dshHome + QStringLiteral("/profiles/web"));
 
 	connect(m_installer, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
 		this, [this, profileDir](int exitCode, QProcess::ExitStatus exitStatus) {
 			Q_UNUSED(exitStatus)
-			m_installer->deleteLater();
+				m_installer->deleteLater();
 			m_installer = nullptr;
 
 			qInfo().noquote() << QStringLiteral("[market-installer] finished, exitCode=") << exitCode;

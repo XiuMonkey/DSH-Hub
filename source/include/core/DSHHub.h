@@ -50,7 +50,7 @@ class LoadMoreButton;
 class DSHHub : public QMainWindow, public VirtualMain, public VirtualShell
 {
 	Q_OBJECT
-	Q_INTERFACES(VirtualMain VirtualShell)
+		Q_INTERFACES(VirtualMain VirtualShell)
 
 public:
 	explicit DSHHub(QWidget* parent = nullptr, const QUrl& initialBaseUrl = QUrl(), QProcess* initialServerProcess = nullptr);
@@ -105,7 +105,7 @@ public:
 	}
 	void ForwardMuxFrame(const QJsonObject& frame) override
 	{
-		forwardMuxFrame(frame); 
+		forwardMuxFrame(frame);
 	}
 	void HandleTransportError(const QString& context, const QString& message) override
 	{

@@ -75,7 +75,7 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 	dshRegister("ExtensionManagerPopup.003", m_refreshButton, qOverload<bool>(&QPushButton::clicked), this,
 		&ExtensionManagerPopup::refresh);
 	dshRegister("ExtensionManagerPopup.004", m_listWidget, &QListWidget::itemSelectionChanged, this, [this]() {
-			m_removeButton->setEnabled(m_listWidget->currentItem() != nullptr);
+		m_removeButton->setEnabled(m_listWidget->currentItem() != nullptr);
 		});
 
 	m_installTimer = new QTimer(this);
@@ -85,7 +85,7 @@ ExtensionManagerPopup::ExtensionManagerPopup(const QString& serverProfilePath, Q
 
 	// 关闭弹窗前等异步安装结束，避免任务继续写已销毁的 this
 	dshRegister("ExtensionManagerPopup.006", this, &PopupWindow::closed, this, [this]() {
-			m_installTask.waitForFinished();
+		m_installTask.waitForFinished();
 		});
 
 	refresh();

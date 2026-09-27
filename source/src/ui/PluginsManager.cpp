@@ -142,8 +142,8 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	m_registryRefreshTimer = new QTimer(this);
 	m_registryRefreshTimer->setInterval(3000);
 	dshRegister("PluginsManager.001", m_registryRefreshTimer, &QTimer::timeout, this, [this]() {
-			if (m_registryLoaded)
-				refresh();
+		if (m_registryLoaded)
+			refresh();
 		});
 
 	// 状态栏（初始文案走 setStatus，保证按宽度省略号截断）
@@ -159,7 +159,7 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	dshRegister("PluginsManager.002", refreshButton, qOverload<bool>(&QPushButton::clicked),
 		this, &PluginsManager::refresh);
 	dshRegister("PluginsManager.003", m_restartButton, qOverload<bool>(&QPushButton::clicked), this, [this]() {
-			m_market->restartServer();
+		m_market->restartServer();
 		});
 	dshRegister("PluginsManager.004", m_searchEdit, qOverload<const QString&>(&QLineEdit::textChanged),
 		this, [this]() {
@@ -174,26 +174,26 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 	// 市场数据 / 操作结果全部来自 common 层客户端
 	dshRegister("PluginsManager.007",
 		m_market, &PluginMarketClient::registryLoaded, this, [this](const QJsonArray& plugins, const QString& source) {
-		m_plugins = PluginMarketModel::parsePlugins(plugins);
-		m_registryLoaded = true;
-		populateMarket();
+			m_plugins = PluginMarketModel::parsePlugins(plugins);
+			m_registryLoaded = true;
+			populateMarket();
 
-		if (source == QStringLiteral("snapshot")) {
-			// 快照不是最新数据，轮询直到后台刷新完成，让市场自动切换到最新列表
-			if (m_registryRefreshTimer && !m_registryRefreshTimer->isActive())
-				m_registryRefreshTimer->start();
-			setStatus(qtTrId("plugin_loaded_offline"));
-		}
-		else {
-			if (m_registryRefreshTimer)
-				m_registryRefreshTimer->stop();
-			if (source == QStringLiteral("cache")) {
-				setStatus(qtTrId("plugin_loaded_cached_fmt").arg(m_plugins.size()));
+			if (source == QStringLiteral("snapshot")) {
+				// 快照不是最新数据，轮询直到后台刷新完成，让市场自动切换到最新列表
+				if (m_registryRefreshTimer && !m_registryRefreshTimer->isActive())
+					m_registryRefreshTimer->start();
+				setStatus(qtTrId("plugin_loaded_offline"));
 			}
 			else {
-				setStatus(qtTrId("plugin_loaded_fmt").arg(m_plugins.size()));
+				if (m_registryRefreshTimer)
+					m_registryRefreshTimer->stop();
+				if (source == QStringLiteral("cache")) {
+					setStatus(qtTrId("plugin_loaded_cached_fmt").arg(m_plugins.size()));
+				}
+				else {
+					setStatus(qtTrId("plugin_loaded_fmt").arg(m_plugins.size()));
+				}
 			}
-		}
 		});
 	dshRegister("PluginsManager.008",
 		m_market, &PluginMarketClient::registryFailed, this, [this](const QString& error, int) {
@@ -208,8 +208,8 @@ PluginsManager::PluginsManager(const QUrl& baseUrl, QWidget* host)
 
 	// 市场包自动安装的进度与结果
 	dshRegister("PluginsManager.012", m_installer, &PluginMarketInstaller::installStarted, this, [this]() {
-			m_progressBar->show();
-			setStatus(qtTrId("plugin_auto_installing"));
+		m_progressBar->show();
+		setStatus(qtTrId("plugin_auto_installing"));
 		});
 	dshRegister("PluginsManager.013",
 		m_installer, &PluginMarketInstaller::installOutput, this, [this](const QString& line) {

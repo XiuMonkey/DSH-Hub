@@ -127,42 +127,42 @@ Settings::Settings(DshApiClient* api, QWidget* host)
 		m_agentPresetPopup->move(m_agentPresetButton->mapTo(this, QPoint(0, m_agentPresetButton->height() + 4)));
 		m_agentPresetPopup->show();
 		m_agentPresetPopup->raise();
-	});
+		});
 
 	dshRegister("Settings.003", m_agentPresetList, qOverload<QListWidgetItem*>(&QListWidget::itemClicked), this,
 		[this](QListWidgetItem* item) {
-		if (!item)
-			return;
+			if (!item)
+				return;
 
-		const QString presetId = item->data(Qt::UserRole).toString();
-		if (presetId.isEmpty())
-			return;
+			const QString presetId = item->data(Qt::UserRole).toString();
+			if (presetId.isEmpty())
+				return;
 
-		if (m_agentPresetPopup)
-			m_agentPresetPopup->hide();
+			if (m_agentPresetPopup)
+				m_agentPresetPopup->hide();
 
-		// 乐观显示：写入失败再退回原文字
-		const QString previousText = m_agentPresetButton ? m_agentPresetButton->text() : QString();
-		if (m_agentPresetButton) {
-			m_agentPresetButton->setText(item->text());
-			m_agentPresetButton->setToolTip(QString());
-		}
+			// 乐观显示：写入失败再退回原文字
+			const QString previousText = m_agentPresetButton ? m_agentPresetButton->text() : QString();
+			if (m_agentPresetButton) {
+				m_agentPresetButton->setText(item->text());
+				m_agentPresetButton->setToolTip(QString());
+			}
 
-		// "设为默认" = 一次服务端写入（settings/update，"agent-presets" + {default: id}），
-		// 与原版 web 同通道；只影响此后新建的会话，所以这里不碰当前会话
-		AgentPresetService::persistDefault(m_api, presetId,
-			[this, presetId](const QString& savedId) {
-				emit agentPresetChanged(savedId);
-			},
-			[this, previousText](const DshApiClient::RpcError& error) {
-				qWarning().noquote() << QStringLiteral("[Settings] default agent preset write failed:")
-					<< error.code << error.message;
-				if (m_agentPresetButton) {
-					m_agentPresetButton->setText(previousText);
-					m_agentPresetButton->setToolTip(qtTrId("common_load_failed_fmt").arg(error.code, error.message));
-				}
-			});
-	});
+			// "设为默认" = 一次服务端写入（settings/update，"agent-presets" + {default: id}），
+			// 与原版 web 同通道；只影响此后新建的会话，所以这里不碰当前会话
+			AgentPresetService::persistDefault(m_api, presetId,
+				[this, presetId](const QString& savedId) {
+					emit agentPresetChanged(savedId);
+				},
+				[this, previousText](const DshApiClient::RpcError& error) {
+					qWarning().noquote() << QStringLiteral("[Settings] default agent preset write failed:")
+						<< error.code << error.message;
+					if (m_agentPresetButton) {
+						m_agentPresetButton->setText(previousText);
+						m_agentPresetButton->setToolTip(qtTrId("common_load_failed_fmt").arg(error.code, error.message));
+					}
+				});
+		});
 
 	auto* serverPanel = new QWidget(content);
 	auto* serverLayout = new QVBoxLayout(serverPanel);

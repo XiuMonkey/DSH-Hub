@@ -73,7 +73,7 @@ DshApiClient::DshApiClient(QObject* parent)
 			m_sessionStreamId.clear();
 			followSession(sessionId);
 		}
-	});
+		});
 	dshRegister("DshApiClient.004", m_stream, &QWebSocket::disconnected, this, [this] {
 		const int code = static_cast<int>(m_stream->closeCode());
 		const QString reason = m_stream->closeReason();
@@ -85,7 +85,7 @@ DshApiClient::DshApiClient(QObject* parent)
 		// 必须自愈：服务端遇重复 streamId 会 close(1008) 关掉整条 mux
 		if (wasConnected)
 			scheduleReconnect();
-	});
+		});
 
 	// 接管态回填超时扫描：扩展不回填时唯一能让调用方脱身的机制
 	m_takeoverSweep = new QTimer(this);
@@ -723,7 +723,7 @@ void DshApiClient::sweepTakeoverTimeouts()
 	for (const QString& rpcId : expired) {
 		failPending(rpcId, QStringLiteral("takenover-timeout"),
 			QStringLiteral("backend extension did not answer within %1 ms")
-				.arg(kTakeoverCallTimeoutMs));
+			.arg(kTakeoverCallTimeoutMs));
 	}
 }
 

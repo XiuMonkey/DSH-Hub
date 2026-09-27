@@ -155,7 +155,7 @@ void WorkplaceManager::deleteAllThen(const std::function<void()>& onDone)
 			return;
 		*called = true;
 		onDone();
-	};
+		};
 	auto remaining = std::make_shared<int>(static_cast<int>(ids.size()));
 	for (const QString& workspaceId : ids) {
 		m_api->callMethod(QStringLiteral("workspace/delete"), SessionCommands::workspaceDelete(workspaceId),

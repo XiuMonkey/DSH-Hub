@@ -82,7 +82,7 @@ MessageHost::MessageHost(DshApiClient* api, CacheManager* cache, QScrollArea* sc
 	// loader 的信号全部在这里落地——DSHHub 不再需要知道分页与构建的细节
 	dshRegister("MessageHost.006", m_loader, &HistoryLoader::firstHistoryArrived, this, [this]() {
 		emit contentReady();
-	});
+		});
 	dshRegister("MessageHost.007", m_loader, &HistoryLoader::loadMoreButtonVisibleChanged, this,
 		&MessageHost::setLoadMoreVisible);
 	dshRegister("MessageHost.008", m_loader, &HistoryLoader::historyError, this,
@@ -96,7 +96,7 @@ MessageHost::MessageHost(DshApiClient* api, CacheManager* cache, QScrollArea* sc
 	dshRegister("MessageHost.010", m_loader, &HistoryLoader::noMoreHistory, this, [this]() {
 		// 弹“没有更多了”toast；按钮保持原样不隐藏不改文案，避免 hide/显隐造成整列消息重排重绘
 		showNoMoreToast();
-	});
+		});
 	if (m_loadMoreButton)
 		dshRegister("MessageHost.011", m_loadMoreButton, qOverload<bool>(&QPushButton::clicked),
 			m_loader, &HistoryLoader::loadMore);
@@ -516,8 +516,8 @@ void MessageHost::showNoMoreToast()
 					m_toastLabel->hide();
 				});
 			fadeOut->start(QAbstractAnimation::DeleteWhenStopped);
+			});
 		});
-	});
 	fadeIn->start(QAbstractAnimation::DeleteWhenStopped);
 }
 

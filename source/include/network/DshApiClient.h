@@ -32,8 +32,8 @@ class QWebSocket;
 class DshApiClient : public QObject, public VirtualApiHost
 {
 	Q_OBJECT
-	// 不能漏：qobject_cast<VirtualApiHost*> 只认这里列出的 IID，漏了就永远 cast 出 nullptr 且不报错
-	Q_INTERFACES(VirtualApiHost)
+		// 不能漏：qobject_cast<VirtualApiHost*> 只认这里列出的 IID，漏了就永远 cast 出 nullptr 且不报错
+		Q_INTERFACES(VirtualApiHost)
 
 public:
 	// HTTP 成功但 result.ok == false 时使用
@@ -130,9 +130,9 @@ public:
 			if (parseError.error != QJsonParseError::NoError) {
 				qWarning().noquote() << "[DshApi] CompleteCall: resultJson 不是合法 JSON rpcId=" << id
 					<< "error=" << parseError.errorString();
-			if (pending.onError)
-				pending.onError(RpcError{ QStringLiteral("takenover-bad-result"), parseError.errorString() });
-			return;
+				if (pending.onError)
+					pending.onError(RpcError{ QStringLiteral("takenover-bad-result"), parseError.errorString() });
+				return;
 			}
 			doc = wrapped;
 			unwrapScalar = true;

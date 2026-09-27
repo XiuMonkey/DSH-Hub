@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
 	// 这里再收一次尾（幂等）——把客户端扩展同步退场、把插件 DLL 摘出退出卸载路径，见那个函数的说明。
 	QObject::connect(&app, &QCoreApplication::aboutToQuit, &app, []() {
 		ClientExtension::shutdownForExit();
-	});
+		});
 
 	auto* window = new DSHHub;
 	window->show();

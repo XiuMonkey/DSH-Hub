@@ -990,7 +990,7 @@ void DSHHub::onNoSessionAvailable()
 	applyWorkspaceState();
 	resolveSessionWorkspace([this](const QString& workspaceId) {
 		m_sidebar->createSession(m_api, workspaceId);
-	});
+		});
 }
 
 void DSHHub::onSessionListError(const QString& code, const QString& message)

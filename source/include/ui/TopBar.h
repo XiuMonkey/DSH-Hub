@@ -135,7 +135,7 @@ private:
 class TopBar : public QWidget, public VirtualTopBar
 {
 	Q_OBJECT
-	Q_INTERFACES(VirtualTopBar)
+		Q_INTERFACES(VirtualTopBar)
 
 public:
 	explicit TopBar(QWidget* parent = nullptr);

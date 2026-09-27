@@ -36,10 +36,10 @@ void ConnectionManager::PrivateRemoveConnection(ConnectionGroup group)
 	QObject::disconnect(group.Sender, group.mSignal, group.Receiver, group.mSlot);
 	for (auto it = ConnectionRegistry.begin(); it != ConnectionRegistry.end(); ++it)
 	{
-		if (it.value().mSignal==group.mSignal &&
-			it.value().mSlot==group.mSlot &&
-			it.value().Sender==group.Sender &&
-			it.value().Receiver==group.Receiver)
+		if (it.value().mSignal == group.mSignal &&
+			it.value().mSlot == group.mSlot &&
+			it.value().Sender == group.Sender &&
+			it.value().Receiver == group.Receiver)
 		{
 			ConnectionRegistry.remove(it.key());
 			HandleMap.remove(it.key());

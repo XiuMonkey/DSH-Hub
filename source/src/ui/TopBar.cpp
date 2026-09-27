@@ -63,7 +63,7 @@ namespace
 			const auto bar = [&](qreal x1, qreal x2, qreal y) {
 				const QRectF rect(originX + dev(x1), originY + dev(y), dev(x2) - dev(x1), dev(2.0));
 				painter.drawRoundedRect(rect, rect.height() / 2.0, rect.height() / 2.0);
-			};
+				};
 			// 三根都以 x=10 居中：宽度 14 / 10 / 4
 			bar(3.0, 17.0, 6.0);
 			bar(5.0, 15.0, 10.0);

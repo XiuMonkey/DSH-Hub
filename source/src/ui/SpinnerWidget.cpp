@@ -29,7 +29,7 @@ void SpinnerWidget::paintEvent(QPaintEvent* event)
 {
 	Q_UNUSED(event)
 
-	QPainter painter(this);
+		QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 
 	const int side = qMin(width(), height());
