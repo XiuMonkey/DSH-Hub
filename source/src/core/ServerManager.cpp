@@ -697,8 +697,7 @@ void ServerManager::launchBundledServer(const QString& nodePath, const QString& 
 				<< m_serverProcess->errorString();
 			emit errorLine(qtTrId("server_proc_start_failed_fmt").arg(m_serverProcess->errorString()));
 		});
-	dshRegister("ServerManager.004", m_serverProcess, &QProcess::readyReadStandardError,
-		this, &ServerManager::handleServerErrorOutput);
+	dshRegister("ServerManager.004", m_serverProcess, &QProcess::readyReadStandardError, this, &ServerManager::handleServerErrorOutput);
 
 	m_serverProcess->start(nodePath, QStringList{ entryPath, dshEntry, QStringLiteral("web"),
 		QStringLiteral("--port"), QStringLiteral("0") });

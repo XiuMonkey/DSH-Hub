@@ -36,19 +36,12 @@ namespace ClientExtension
 	// 失败原因写进 error（可选）。
 	bool loadOne(const QString& dllPath, const QString& name, QString* error = nullptr);
 
-	// 退出路径的收尾（幂等）。主窗口关窗（DSHHub::closeEvent）与 QCoreApplication::aboutToQuit 各调一次 ——
-	// 前者覆盖"用户关窗"这条最常见的路，后者兜住扩展自己 quit()、系统关机那些不经窗口的退出。
-	//
-	// 做三件事：
-	//   ① 同步调每个插件的 detachHost()（元对象槽，DirectConnection）：插件在这里复位接管、停自己的子进程。
-	//      只"通知"不"收尾"是不够的 —— 插件通常靠订阅关窗信号自救，而那条路要经事件循环投递（队列连接），
-	//      退出时事件循环随时会停，投出去的通知可能永远不执行。
-	//   ② 兜底收回插件占的架空台（幂等；插件崩了或忘了 release 会留下 vtable 已解映射的控件）。
-	//   ③ 把 loader 从 qApp 的 children 里摘出去（setParent(nullptr)，**故意不析构**）。
-	//
-	// ③ 是本函数存在的理由：只要 loader 还挂在 qApp 下，进程退出时 ~QApplication 就会删它 → 卸插件 DLL →
-	// 析构插件根对象 → 插件里 QProcess 的析构卡在管道取消上。而那一刻事件循环已经停了、loader lock 还在
-	// 手里，这个等待永远不返回 —— 实测症状就是"窗口没了、线程掉到 1 个、进程不退、DLL 还被锁着"的僵尸进程。
-	// 退出阶段本来也不需要做插件的析构：DLL 交给 OS 在进程终止时回收。
+	// 退出收尾（幂等）：关窗（DSHHub::closeEvent）与 aboutToQuit 各调一次，前者覆盖关窗、后者兜住
+	// 不经窗口的退出（扩展自己 quit、系统关机）。做三件事：
+	// (1) 同步调每个插件的 detachHost()（DirectConnection）复位接管、停子进程 —— 队列连接的通知
+	//     要经事件循环投递，退出时随时停摆，不能当唯一自救路；(2) 兜底收回插件占的架空台；
+	// (3) 把 loader 从 qApp 摘出去（setParent(nullptr)，故意不析构）：留着它 ~QApplication 就会
+	//     卸 DLL、析构插件根对象，其 QProcess 析构卡死在已停的事件循环 + loader lock 上（实测的
+	//     僵尸进程根因）。退出阶段不需要插件析构，DLL 交给 OS 回收。
 	void shutdownForExit();
 }

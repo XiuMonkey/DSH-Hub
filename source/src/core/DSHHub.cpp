@@ -293,11 +293,9 @@ void DSHHub::installMessageWiring()
 	dshRegister("DSHHub.035", m_messageHost, &MessageHost::sendWithoutSession, this,
 		&DSHHub::createSessionAndSend);
 	// 首屏上屏 -> 收掉启动遮罩
-	dshRegister("DSHHub.036", m_messageHost, &MessageHost::contentReady, this,
-		&DSHHub::finishInitialization);
+	dshRegister("DSHHub.036", m_messageHost, &MessageHost::contentReady, this, &DSHHub::finishInitialization);
 	// 首屏上屏 -> 补投消息区就绪前攒下的服务端错误
-	dshRegister("DSHHub.049", m_messageHost, &MessageHost::contentReady, this,
-		&DSHHub::flushPendingServerNotices);
+	dshRegister("DSHHub.049", m_messageHost, &MessageHost::contentReady, this, &DSHHub::flushPendingServerNotices);
 	// 整列表被替换 -> 先收面板再同步滚到底，避免先显示顶部再闪烁
 	dshRegister("DSHHub.037", m_messageHost, &MessageHost::contentReplaced, this,
 		[this]() {
@@ -815,8 +813,7 @@ void DSHHub::onDeleteSessionRequested(const QString& sessionId)
 			// 回包给的是完整归档集合，立刻更新侧栏，不必等 archived 帧
 			if (m_sidebar) {
 				const QSet<QString> archived = SessionCatalog::parseArchivedSessionIds(value);
-				m_workplaces.setArchived(QJsonArray::fromStringList(
-					QStringList(archived.cbegin(), archived.cend())));
+				m_workplaces.setArchived(QJsonArray::fromStringList(QStringList(archived.cbegin(), archived.cend())));
 			}
 
 			// archiveSession 只改归档状态，这里顺手删本地会话文件

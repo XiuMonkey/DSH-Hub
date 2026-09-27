@@ -191,8 +191,7 @@ void WorkplaceManager::ensureDefaultThen(const QString& path, const std::functio
 			const QString created = value.value(QStringLiteral("workspace")).toObject()
 				.value(QStringLiteral("workspaceId")).toString();
 			if (created.isEmpty()) {
-				qWarning().noquote() << QStringLiteral(
-					"[DSH Hub] workspace/create 回包没有 workspaceId，新会话将落到未分组");
+				qWarning().noquote() << QStringLiteral("[DSH Hub] workspace/create 回包没有 workspaceId，新会话将落到未分组");
 				onResolved(QString());
 				return;
 			}

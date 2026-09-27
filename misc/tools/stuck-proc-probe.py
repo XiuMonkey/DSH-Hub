@@ -78,7 +78,7 @@ class M128A(ctypes.Structure):
     _fields_ = [("Low", ctypes.c_ulonglong), ("High", ctypes.c_longlong)]
 
 
-# ⚠️ x64 CONTEXT 的前 6 个字段是 6 个独立的 ULONGLONG（不是 3 对），写错一位
+# x64 CONTEXT 的前 6 个字段是 6 个独立的 ULONGLONG（不是 3 对），写错一位
 #    整个结构就错位，RIP 会读出 0 —— 踩过。
 class CONTEXT(ctypes.Structure):
     _fields_ = [("P1Home", ctypes.c_ulonglong), ("P2Home", ctypes.c_ulonglong),
