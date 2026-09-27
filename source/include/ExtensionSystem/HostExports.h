@@ -32,8 +32,13 @@ namespace DshHostIndex
 	inline constexpr const char* kMainWindow = "mainWindow";
 	inline constexpr const char* kSidebar = "sidebar";
 	inline constexpr const char* kTopBar = "topbar";
-	// 样式表管理单例（ThemeManager），init() 末尾登记；插件转成 VirtualTheme* 调 ExternalApplyToWindow / ExternalReloadStyles。
+	// 样式表管理单例（ThemeManager），init() 末尾登记；插件转成 VirtualTheme* 调
+	// ExternalApplyToWindow / ExternalReloadStyles，以及末尾追加的 ExternalIsDarkMode /
+	// ExternalSwitchTheme（后者与侧栏主题按钮同一条路：会重建主窗口，扩展要重挂自己的 UI）。
 	inline constexpr const char* kThemeManager = "themeManager";
+	// 多语言单例（TranslationNotifier），Translation::init() 里登记；插件转成 VirtualTranslation*
+	// 读/改当前语言（与宿主设置窗口「外观」页那个语言下拉框同一套实现，切换免重启）。
+	inline constexpr const char* kTranslationNotifier = "translationNotifier";
 	// 信号槽登记表单例（ConnectionManager），启动期登记；插件只能匿名接管（TakeoverConnection）
 	// 或订阅白名单内信号（ProtectedRegisterConnection），宿主内部的 RegisterConnection 不在其上。
 	inline constexpr const char* kConnectionManager = "connectionManager";

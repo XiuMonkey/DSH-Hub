@@ -108,10 +108,8 @@ namespace ClientExtension
 			if (!root) {
 				// Qt 会在这里拦掉不兼容的插件（版本不符、debug/release 混用），做法补在原因后面
 				QString reason = loader->errorString();
-				if (reason.contains(QStringLiteral("debug and release"), Qt::CaseInsensitive)) {
-					reason += QStringLiteral(" —— 插件必须与宿主同一档编译"
-						"（宿主是 Debug 就用 -DCMAKE_BUILD_TYPE=Debug 重编插件）");
-				}
+				if (reason.contains(QStringLiteral("debug and release"), Qt::CaseInsensitive))
+					reason += qtTrId("ext_build_config_mismatch_hint");
 				if (error)
 					*error = reason;
 				qWarning("[ClientExtension] not a Qt plugin (or load failed): %s -- %s",
@@ -258,10 +256,8 @@ namespace ClientExtension
 		qInfo("[ClientExtension] removed (files still locked): %s leftovers=[%s] dir=%s",
 			qPrintable(name), qPrintable(leftovers), qPrintable(dir));
 		if (error) {
-			*error = QStringLiteral("%1 仍被本进程占用，当次删不掉（残留在 %2）；"
-				"扩展已卸载，残留会在下次启动客户端时自动清掉。"
-				"（插件若声明 %3 槽，移除时就能当场卸载并删干净）")
-				.arg(leftovers.isEmpty() ? QStringLiteral("部分文件") : leftovers, dir,
+			*error = qtTrId("ext_delete_locked_fmt")
+				.arg(leftovers.isEmpty() ? qtTrId("ext_delete_locked_some_files") : leftovers, dir,
 					QLatin1String(kDetachSlot));
 		}
 		return false;

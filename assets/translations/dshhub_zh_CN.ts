@@ -144,6 +144,12 @@
     <message id="session_auto_creating">
         <translation>还没有可用会话，正在自动创建...</translation>
     </message>
+    <message id="chat_no_model_hint">
+        <translation>还没有可用的模型配置，请先在设置中添加模型后再发送</translation>
+    </message>
+    <message id="chat_empty_reply_hint">
+        <translation>本轮没有收到任何回复，请检查模型配置或服务端日志</translation>
+    </message>
     <message id="server_auth_token_missing">
         <translation>服务端未提供认证令牌，无法通过 /api 认证</translation>
     </message>
@@ -304,6 +310,22 @@
     </message>
     <message id="ext_residue_cleaned_fmt">
         <translation>已清理残留扩展: %1</translation>
+    </message>
+    <message id="ext_build_config_mismatch_hint">
+        <comment>作为 QPluginLoader::errorString() 的补充片段追加在末尾，前置分隔符 " —— " 必须保留；本身是完整句，不是拼接残片。</comment>
+        <translation> —— 插件必须与宿主同一档编译（宿主是 Debug 就用 -DCMAKE_BUILD_TYPE=Debug 重编插件）</translation>
+    </message>
+    <message id="ext_delete_locked_fmt">
+        <comment>%3 是插件可选槽的名字（如 detachHost()）。</comment>
+        <translation>%1 仍被本进程占用，当次删不掉（残留在 %2）；扩展已卸载，残留会在下次启动客户端时自动清掉。（插件若声明 %3 槽，移除时就能当场卸载并删干净）</translation>
+    </message>
+    <message id="ext_delete_locked_some_files">
+        <comment>作为上一条 %1 的兜底值，仅当残留清单为空时使用，故不用整句。</comment>
+        <translation>部分文件</translation>
+    </message>
+    <message id="ext_copy_file_failed_fmt">
+        <comment>原文是英中混排（英文前缀 + 中文提示），key 化时合并成一条，否则译文里只剩半句。</comment>
+        <translation>无法复制客户端扩展文件: %1（若该扩展正在运行，其 dll 被本进程占用，请重启客户端后再安装）</translation>
     </message>
     <message id="app_initializing">
         <translation>DSH Hub 正在初始化...</translation>

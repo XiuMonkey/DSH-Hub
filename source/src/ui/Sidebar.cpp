@@ -518,17 +518,19 @@ Sidebar::Sidebar(QWidget* parent)
 	m_layout->addWidget(m_newWorkspaceButton);
 	m_layout->addWidget(m_workspaceScroll, 1);
 
-	auto* bottomRow = new QHBoxLayout;
-	bottomRow->setContentsMargins(0, 0, 0, 0);
-	bottomRow->setSpacing(0);
-	bottomRow->addWidget(m_settingsButton);
-	bottomRow->addWidget(m_pluginsButton);
-	bottomRow->addWidget(m_themeButton);
-	bottomRow->addWidget(m_extensionButton);
-	bottomRow->addSpacing(15);
-	bottomRow->addStretch(1);
+	// 底排：宿主自己的四颗图标按钮 + 给扩展留的位置（扩展经 VirtualSidebar::GetNavLayout()
+	// 把按钮 addWidget 进来 → 落在 stretch 之后、贴最右）
+	m_navLayout = new QHBoxLayout;
+	m_navLayout->setContentsMargins(0, 0, 0, 0);
+	m_navLayout->setSpacing(0);
+	m_navLayout->addWidget(m_settingsButton);
+	m_navLayout->addWidget(m_pluginsButton);
+	m_navLayout->addWidget(m_themeButton);
+	m_navLayout->addWidget(m_extensionButton);
+	m_navLayout->addSpacing(15);
+	m_navLayout->addStretch(1);
 
-	m_layout->addLayout(bottomRow);
+	m_layout->addLayout(m_navLayout);
 
 	dshRegister("Sidebar.006", m_clearButton, qOverload<bool>(&QPushButton::clicked), this,
 		&Sidebar::clearRequested);

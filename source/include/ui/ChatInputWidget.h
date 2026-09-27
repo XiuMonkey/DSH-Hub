@@ -97,6 +97,9 @@ public:
 	// 用该会话记录过的模型选择覆盖 chip；provider/model 为空表示服务端还没记录，保持目录给的部署默认值
 	void applySessionModelSelection(const QString& provider, const QString& model, const QString& reasoningEffort);
 
+	// 服务端明确无可用模型（模型目录已加载且为空）；目录未加载返回 false（未知，不该拦发送）
+	bool modelCatalogMissing() const;
+
 	// 卡片下方的小灰字统计行（控件只认数据，怎么取数据在 DSHHub 里）
 	void setSessionStats(const SessionUsageStats& stats);
 	void clearSessionStats();

@@ -144,6 +144,12 @@
     <message id="session_auto_creating">
         <translation>No session is available; creating one automatically...</translation>
     </message>
+    <message id="chat_no_model_hint">
+        <translation>No model is configured yet. Add a model in Settings before sending.</translation>
+    </message>
+    <message id="chat_empty_reply_hint">
+        <translation>No reply was produced this turn. Check the model configuration or the server logs.</translation>
+    </message>
     <message id="server_auth_token_missing">
         <translation>The server did not provide an auth token, so /api authentication is not possible</translation>
     </message>
@@ -304,6 +310,22 @@
     </message>
     <message id="ext_residue_cleaned_fmt">
         <translation>Cleaned up leftover extension: %1</translation>
+    </message>
+    <message id="ext_build_config_mismatch_hint">
+        <comment>作为 QPluginLoader::errorString() 的补充片段追加在末尾，前置分隔符 " — " 必须保留；本身是完整句，不是拼接残片。</comment>
+        <translation> — the plugin must be built in the same configuration as the host (if the host is Debug, rebuild the plugin with -DCMAKE_BUILD_TYPE=Debug)</translation>
+    </message>
+    <message id="ext_delete_locked_fmt">
+        <comment>%3 是插件可选槽的名字（如 detachHost()）。</comment>
+        <translation>%1 is still locked by this process and cannot be deleted now (leftovers in %2). The extension has been uninstalled; the leftovers are cleaned up automatically the next time the client starts. (If the plugin declares the %3 slot, it can unload and clean up on the spot when removed.)</translation>
+    </message>
+    <message id="ext_delete_locked_some_files">
+        <comment>作为上一条 %1 的兜底值，仅当残留清单为空时使用，故不用整句。</comment>
+        <translation>some files</translation>
+    </message>
+    <message id="ext_copy_file_failed_fmt">
+        <comment>原文是英中混排（英文前缀 + 中文提示），key 化时合并成一条，否则译文里只剩半句。</comment>
+        <translation>Could not copy the client extension file: %1 (if the extension is running, its DLL is held by this process; restart the client and install again)</translation>
     </message>
     <message id="app_initializing">
         <translation>DSH Hub is initializing...</translation>

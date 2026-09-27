@@ -72,6 +72,20 @@ public:
 	// 删除 styles 目录中的默认模板副本，重新从 qrc 释放并重载
 	void resetStyles();
 
+	// VirtualTheme 末尾追加的两条：查询当前是否深色、按"用户显式选主题"那条路切换
+	bool ExternalIsDarkMode() override
+	{
+		return isDark();
+	}
+
+	void ExternalSwitchTheme(QWidget* currentWindow) override
+	{
+		// 与侧栏主题按钮同一条路（DSHHub::toggleTheme 也是这么调的）：
+		// 过渡弹窗 → 重建主窗口 → 写进 AppearanceSetting.json。
+		// ⚠️ 传空窗口时 switchTheme 里的几何/状态接管会退化，但不崩；调用方应传当前主窗口。
+		switchTheme(currentWindow);
+	}
+
 	bool isDark() const;
 
 	// 代码只引用语义 key，颜色值只出现在 theme-*.json

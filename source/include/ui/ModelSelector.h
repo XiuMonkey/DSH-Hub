@@ -71,6 +71,9 @@ public:
 	// 用该会话记录过的选择覆盖 chip；provider/model 为空表示服务端还没记录，保持目录给的部署默认值
 	void overrideCurrentSelection(const QString& provider, const QString& model, const QString& reasoningEffort);
 
+	// 目录已加载但一个可用模型都没有（服务端明确无配置）；目录未加载返回 false（未知，不该拦发送）
+	bool isCatalogEmpty() const { return m_hasDirectory && m_directory.groups.isEmpty(); }
+
 signals:
 	// 用户换了模型（服务端已接受）
 	void modelChanged(const QString& provider, const QString& model);

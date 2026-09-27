@@ -1,5 +1,7 @@
 #include "common/appearance/TranslationManager.h"
 #include "common/settings/ClientSettings.h"
+#include "common/util/CommonRegistry.h"
+#include "ExtensionSystem/HostExports.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -125,6 +127,44 @@ TranslationNotifier& TranslationNotifier::instance()
 
 void TranslationNotifier::notifyLanguageChanged()
 {
+}
+
+// ---------------------------------------------------------------------------
+// VirtualTranslation：插件侧读/改语言的入口
+//
+// 这里刻意**只转发**到下面 Translation 命名空间的自由函数 —— 宿主设置窗口「外观」页那个语言
+// 下拉框用的也是它们（setSavedLanguageCode + apply），所以扩展自绘的设置界面与宿主行为一致：
+// apply() 内部已经做完整套时序（换 translator 前先给界面文案拍快照 → 装新包 → 就地换固定文案
+// → 通知非控件对象），调用方不需要自己再补步骤。
+// ---------------------------------------------------------------------------
+QString TranslationNotifier::ExternalLanguage()
+{
+	return Translation::savedLanguageCode();
+}
+
+QStringList TranslationNotifier::ExternalLanguageCodes()
+{
+	QStringList codes;
+	for (const LanguageInfo& language : Translation::availableLanguages())
+		codes.append(language.code);
+	return codes;
+}
+
+QString TranslationNotifier::ExternalLanguageName(const QString& code)
+{
+	for (const LanguageInfo& language : Translation::availableLanguages()) {
+		if (language.code == code)
+			return language.name;
+	}
+	return QString();
+}
+
+bool TranslationNotifier::ExternalSetLanguage(const QString& code)
+{
+	// 顺序与 Settings.cpp 里那条一模一样：先落盘再 apply（apply 失败时设置里留的是用户的选择，
+	// 界面按"语言包缺失"提示 —— 与宿主同样的语义，不在这里偷偷回滚）。
+	Translation::setSavedLanguageCode(code);
+	return Translation::apply(code);
 }
 
 namespace Translation
@@ -292,6 +332,11 @@ namespace Translation
 		const QString wanted = resolvedCodeFor(savedLanguageCode(), systemCode);
 
 		g_activeCode = wanted;
+
+		// 登记进全局注册表：插件按 kTranslationNotifier 取到本单例，转成 VirtualTranslation* 读/改语言。
+		// 必须排在下面那些 return 之前（默认语言那条分支会提前返回）。
+		CommonRegistry::instance().AddToRegistry(DshHostIndex::kTranslationNotifier,
+			&TranslationNotifier::instance());
 
 		const QString dir = translationsDir();
 		QDir().mkpath(dir);

@@ -361,16 +361,20 @@ MessageQuery::StreamFrameResult MessageQuery::applyStreamEvent(
 		const QString chunk = extractEventText(event);
 		const QString chunkType = extractChunkType(event);
 
+		// 空内容不值得建气泡：先建后填会留下一行永远没有内容的"空行"
+		if (chunk.isEmpty())
+			return result;
+
+		// chunk.type 缺失时按正文处理（服务端只给 {chunk:"..."} 的形状也至少能把内容显示出来）；
+		// 已知类型之外的显式类型才丢弃
+		const bool thinking = chunkType == QStringLiteral("reasoning-delta");
+		if (!chunkType.isEmpty() && !thinking && chunkType != QStringLiteral("text-delta"))
+			return result;
+
 		AgentMessageUnit* streamTarget = lastAgentUnitIfLast();
 		if (!streamTarget)
 			streamTarget = addAgentMessage(QString(), layout);
-
-		if (chunkType == QStringLiteral("reasoning-delta") && !chunk.isEmpty()) {
-			streamTarget->appendStreamChunk(StreamSegment::Thinking, chunk);
-		}
-		else if (chunkType == QStringLiteral("text-delta") && !chunk.isEmpty()) {
-			streamTarget->appendStreamChunk(StreamSegment::Reply, chunk);
-		}
+		streamTarget->appendStreamChunk(thinking ? StreamSegment::Thinking : StreamSegment::Reply, chunk);
 		result.kind = StreamFrameResult::Streaming;
 		return result;
 	}
@@ -378,21 +382,23 @@ MessageQuery::StreamFrameResult MessageQuery::applyStreamEvent(
 	if (eventType == QStringLiteral("text-chunks") || eventType == QStringLiteral("reasoning-chunks")) {
 		const QJsonObject eventData = event.value(QStringLiteral("data")).toObject();
 		const QJsonArray texts = eventData.value(QStringLiteral("texts")).toArray();
-		if (texts.isEmpty())
-			return result;
-
-		AgentMessageUnit* target = lastAgentUnitIfLast();
-		if (!target)
-			target = addAgentMessage(QString(), layout);
-
 		const bool thinking = eventType == QStringLiteral("reasoning-chunks");
+
+		// 惰性建气泡：全是没有文本的块时不留空壳
+		AgentMessageUnit* target = nullptr;
 		for (const auto& value : texts) {
 			const QString chunk = value.toString();
 			if (chunk.isEmpty())
 				continue;
+			if (!target) {
+				target = lastAgentUnitIfLast();
+				if (!target)
+					target = addAgentMessage(QString(), layout);
+			}
 			target->appendStreamChunk(thinking ? StreamSegment::Thinking : StreamSegment::Reply, chunk);
 		}
-		result.kind = StreamFrameResult::Streaming;
+		if (target)
+			result.kind = StreamFrameResult::Streaming;
 		return result;
 	}
 

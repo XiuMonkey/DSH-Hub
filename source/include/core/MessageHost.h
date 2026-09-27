@@ -148,6 +148,10 @@ private:
 	QTimer* m_streamTimer = nullptr;
 	bool m_scrollToBottomScheduled = false;
 
+	// 本轮（自最近一次 sendPrompt 起）是否已有可见输出；turn 收尾仍无输出时补一条兜底提示，
+	// 避免用户对着自己的消息发呆（无模型 / 模型空回复 / 事件内容解析不出）
+	bool m_turnHadOutput = false;
+
 	// 滚轮平滑由滚动区持有、这里只借用：钉滚动位置前先 stop()，并借 isAnimating() 判断用户正在滚
 	SmoothWheelScroller* m_wheelScroller = nullptr;
 	// 用户"意图"上是否跟随底部；光看滚动位置不行 —— 流式输出时底部会从脚下溜走

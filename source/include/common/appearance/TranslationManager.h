@@ -9,6 +9,8 @@
 // 覆盖）；切换立即生效（免重启）：apply() 换掉 translator 后 Qt 给所有控件发 QEvent::LanguageChange，
 // 不是控件、收不到该事件的对象接 TranslationNotifier::languageChanged。
 
+#include "VirtualClass/VirtualCommon.h"
+
 #include <QHash>
 #include <QObject>
 #include <QString>
@@ -28,15 +30,25 @@ struct TranslationSource
 	QString id;  // 查表主键：qtTrId("...") 的参数
 };
 
-// 语言切换通知：不是控件、收不到 QEvent::LanguageChange 的对象接这个信号
-class TranslationNotifier : public QObject
+// 语言切换通知：不是控件、收不到 QEvent::LanguageChange 的对象接这个信号；
+// 同时它也是插件侧的多语言入口（VirtualTranslation 的宿主实现，登记名 kTranslationNotifier）。
+class TranslationNotifier : public QObject, public VirtualTranslation
 {
 	Q_OBJECT
+		Q_INTERFACES(VirtualTranslation)
 
 public:
 	static TranslationNotifier& instance();
 
 	void notifyLanguageChanged();
+
+	// VirtualTranslation：转发到下面 Translation 命名空间里的自由函数（与宿主设置窗口「外观」页
+	// 那个语言下拉框走同一套实现）。实现在 .cpp —— 这些方法要用到下面才声明的自由函数，
+	// 而插件只经虚表调用它们，不需要这些符号（不会 LNK2019）。
+	QString ExternalLanguage() override;
+	QStringList ExternalLanguageCodes() override;
+	QString ExternalLanguageName(const QString& code) override;
+	bool ExternalSetLanguage(const QString& code) override;
 
 signals:
 

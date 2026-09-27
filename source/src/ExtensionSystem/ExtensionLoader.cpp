@@ -2,6 +2,7 @@
 
 #include "ExtensionSystem/ClientExtension.h"
 #include "common/extension/ExtensionRegistry.h"
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
@@ -308,8 +309,7 @@ bool ExtensionLoader::loadAndInstall(const QString& extFilePath, const QString& 
 				if (!QFile::copy(entry.absoluteFilePath(), dest)) {
 					// 最常见的成因：这个扩展**正在运行**、它的 dll 被本进程映射着，Windows 不允许覆盖同名
 					// 文件 —— 只能重启客户端之后再装。
-					m_errorString = QStringLiteral("cannot copy client extension file: %1"
-						"（若该扩展正在运行，其 dll 被本进程占用，请重启客户端后再安装）")
+					m_errorString = qtTrId("ext_copy_file_failed_fmt")
 						.arg(entry.absoluteFilePath());
 					if (error)
 						*error = m_errorString;

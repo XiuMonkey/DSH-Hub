@@ -386,6 +386,11 @@ void ChatInputWidget::applySessionModelSelection(const QString& provider, const 
 		m_modelSelector->overrideCurrentSelection(provider, model, reasoningEffort);
 }
 
+bool ChatInputWidget::modelCatalogMissing() const
+{
+	return m_modelSelector && m_modelSelector->isCatalogEmpty();
+}
+
 QString ChatInputWidget::text() const
 {
 	return m_editor ? m_editor->toPlainText() : QString();

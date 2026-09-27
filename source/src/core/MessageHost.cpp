@@ -645,6 +645,14 @@ void MessageHost::sendPrompt(const QString& text)
 	if (m_sessionId.isEmpty() || !current())
 		return;
 
+	// 自动建会话链（sendWithoutSession -> createSessionAndSend）也会走到这里：
+	// 目录已加载且无模型时同样拦下，用户气泡还没上屏，正好一笔不发
+	if (m_chatInput && m_chatInput->modelCatalogMissing()) {
+		addSystemMessage(qtTrId("chat_no_model_hint"));
+		return;
+	}
+
+	m_turnHadOutput = false;
 	m_streaming = false;
 	if (m_streamTimer)
 		m_streamTimer->stop();
@@ -790,6 +798,13 @@ void MessageHost::onSendClicked()
 	if (text.isEmpty())
 		return;
 
+	// 模型目录已加载且确认无可用模型时直接拦下：消息发出去也只会石沉大海，
+	// 与其让用户看到空行，不如明确告诉他缺什么
+	if (m_chatInput->modelCatalogMissing()) {
+		addSystemMessage(qtTrId("chat_no_model_hint"));
+		return;
+	}
+
 	if (m_sessionId.isEmpty()) {
 		addSystemMessage(qtTrId("session_auto_creating"));
 		// 建会话要动侧边栏与会话列表（DSHHub 的活），这里只把要发的内容交出去；
@@ -822,6 +837,18 @@ MessageHost::StreamOutcome MessageHost::onStreamEvent(const QJsonObject& event)
 	if (streamResult.kind == MessageQuery::StreamFrameResult::FinalMessage) {
 		// assistant/message 收尾：结束流式渲染状态（内容已在内部合并/封存）
 		stopStreaming();
+		// 一轮收尾却没有任何可见输出（模型空回复 / chunk 内容解析不出 / 服务端静默失败）：
+		// 不补一条提示，用户只能对着自己刚发的消息发呆
+		bool hadOutput = m_turnHadOutput;
+		if (!hadOutput && current()) {
+			if (AgentMessageUnit* last = current()->lastAgentUnitIfLast())
+				hadOutput = last->hasContent();
+		}
+		if (!hadOutput) {
+			addSystemMessage(qtTrId("chat_empty_reply_hint"));
+			scrollToBottomNow();
+		}
+		m_turnHadOutput = false;
 		return StreamOutcome::Finished;
 	}
 	if (streamResult.kind == MessageQuery::StreamFrameResult::Streaming) {
@@ -830,6 +857,12 @@ MessageHost::StreamOutcome MessageHost::onStreamEvent(const QJsonObject& event)
 		if (m_streamTimer && !m_streamTimer->isActive())
 			m_streamTimer->start();
 		updateStreamingUi();
+		// 只认"真的有内容上屏"：chunk 可能只带来空/未知内容（此时不建气泡），
+		// 那不算本轮输出
+		if (current()) {
+			if (AgentMessageUnit* last = current()->lastAgentUnitIfLast(); last && last->hasContent())
+				m_turnHadOutput = true;
+		}
 		return StreamOutcome::Streaming;
 	}
 	return StreamOutcome::Ignored;

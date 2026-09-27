@@ -3,6 +3,7 @@
 // 左侧边栏控件：Logo、功能按钮、WorkspaceList 与 Sidebar 本体；数据与 RPC 逻辑在 common，本文件只画。
 
 #include "common/session/SessionCatalog.h"
+#include "VirtualClass/VirtualCommon.h"
 
 #include <QLabel>
 #include <QPushButton>
@@ -11,6 +12,7 @@
 #include <functional>
 #include <vector>
 
+class QHBoxLayout;
 class QScrollArea;
 class QVBoxLayout;
 class QEnterEvent;
@@ -177,9 +179,10 @@ private:
 };
 
 // 左侧边栏：统筹 Logo、按钮与 WorkspaceList，并转发会话相关信号
-class Sidebar : public QWidget
+class Sidebar : public QWidget, public VirtualSidebar
 {
 	Q_OBJECT
+		Q_INTERFACES(VirtualSidebar)
 
 public:
 	explicit Sidebar(QWidget* parent = nullptr);
@@ -197,6 +200,16 @@ public:
 
 	// 只管市场那一颗按钮：扩展管理（extensionsRequested）是扩展的装载通道，接管时绝不能跟着关
 	void setPluginsEntryEnabled(bool enabled);
+
+	// 交出侧栏底部那排图标按钮的横向布局（不转移所有权，插入的控件随后归侧栏所有）。
+	// 跨 DLL 只能走 qt_metacast(IID) 或接口虚函数（别用 dynamic_cast，跨模块静默 nullptr；
+	// 也别 qobject_cast<Sidebar*>，宿主符号零导出会 LNK2019）。指针只在侧栏存活期间有效。
+	// 顺序为「设置 | 插件 | 主题 | 扩展 | 间距 | stretch」：addWidget 落在 stretch 之后（贴最右），
+	// 想插进那排图标之间就自己 indexOf 定位。
+	QHBoxLayout* GetNavLayout() override
+	{
+		return m_navLayout;
+	}
 
 signals:
 	void newWorkspaceRequested();
@@ -229,4 +242,7 @@ private:
 	SidebarThemeButton* m_themeButton = nullptr;
 	SidebarExtensionButton* m_extensionButton = nullptr;
 	QVBoxLayout* m_layout = nullptr;
+	// 底部图标行。**必须是类级成员**：扩展经 VirtualSidebar::GetNavLayout() 拿它挂按钮
+	// （写成构造里的局部变量时外面拿不到 —— TopBar 那边踩过同一个坑）
+	QHBoxLayout* m_navLayout = nullptr;
 };
